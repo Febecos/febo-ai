@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   CircleUserRound,
   Filter,
+  Inbox,
   KeyRound,
   LogOut,
   MessageSquareText,
@@ -87,12 +88,19 @@ export function InboxApp({
         <Metric label="Calientes" value={stats.hot} />
       </section>
 
-      {currentUser.role === "admin" ? <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} /> : null}
-
-      <section className="workspace-grid">
-        <InboxList conversations={conversations} currentUser={currentUser} users={users} />
-        <AgentTester />
-      </section>
+      {currentUser.role === "admin" ? (
+        <AdminToolWorkspace
+          adminUsers={adminUsers}
+          conversations={conversations}
+          currentUser={currentUser}
+          users={users}
+        />
+      ) : (
+        <section className="workspace-grid">
+          <InboxList conversations={conversations} currentUser={currentUser} users={users} />
+          <AgentTester />
+        </section>
+      )}
     </main>
   );
 }
@@ -164,6 +172,51 @@ function Metric({ label, value }: { label: string; value: number }) {
       <strong>{value.toLocaleString("es-AR")}</strong>
       <span>{label}</span>
     </div>
+  );
+}
+
+function AdminToolWorkspace({
+  adminUsers,
+  conversations,
+  currentUser,
+  users
+}: {
+  adminUsers: UserAdminSummary[];
+  conversations: ConversationSummary[];
+  currentUser: AppUser;
+  users: AppUser[];
+}) {
+  const [activeTool, setActiveTool] = useState<"conversations" | "users" | "ai">("conversations");
+
+  return (
+    <section className="admin-workspace">
+      <nav className="tool-sidebar" aria-label="Herramientas de administrador">
+        <button
+          className={activeTool === "conversations" ? "active" : ""}
+          onClick={() => setActiveTool("conversations")}
+          type="button"
+        >
+          <Inbox size={18} />
+          Conversaciones
+        </button>
+        <button className={activeTool === "users" ? "active" : ""} onClick={() => setActiveTool("users")} type="button">
+          <ShieldCheck size={18} />
+          Usuarios y accesos
+        </button>
+        <button className={activeTool === "ai" ? "active" : ""} onClick={() => setActiveTool("ai")} type="button">
+          <Bot size={18} />
+          Probar IA
+        </button>
+      </nav>
+
+      <div className="tool-content">
+        {activeTool === "conversations" ? (
+          <InboxList conversations={conversations} currentUser={currentUser} users={users} />
+        ) : null}
+        {activeTool === "users" ? <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} /> : null}
+        {activeTool === "ai" ? <AgentTester /> : null}
+      </div>
+    </section>
   );
 }
 

@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   const media = await getMessageMediaByMessageId(parsed.data.messageId);
 
   if (!media) {
-    return NextResponse.json({ error: "Audio no encontrado." }, { status: 404 });
+    return NextResponse.json({ error: "Archivo no encontrado." }, { status: 404 });
   }
 
   return new NextResponse(Buffer.from(media.data_base64, "base64"), {

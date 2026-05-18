@@ -201,7 +201,7 @@ export async function uploadWhatsAppMedia(file: File) {
   });
 
   if (!response.ok) {
-    throw new Error(`WhatsApp Cloud API no pudo subir el audio (${response.status}): ${await response.text()}`);
+    throw new Error(`WhatsApp Cloud API no pudo subir el archivo (${response.status}): ${await response.text()}`);
   }
 
   return (await response.json()) as { id: string };
@@ -224,6 +224,65 @@ export async function sendWhatsAppAudio(to: string, mediaId: string) {
       type: "audio",
       audio: {
         id: mediaId
+      }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`WhatsApp Cloud API respondio ${response.status}: ${await response.text()}`);
+  }
+
+  return response.json();
+}
+
+export async function sendWhatsAppImage(to: string, mediaId: string, caption?: string) {
+  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
+  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+
+  const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "image",
+      image: {
+        id: mediaId,
+        ...(caption ? { caption } : {})
+      }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`WhatsApp Cloud API respondio ${response.status}: ${await response.text()}`);
+  }
+
+  return response.json();
+}
+
+export async function sendWhatsAppDocument(to: string, mediaId: string, filename: string, caption?: string) {
+  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
+  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+
+  const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "document",
+      document: {
+        id: mediaId,
+        filename,
+        ...(caption ? { caption } : {})
       }
     })
   });

@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { getConversationReplyTarget, listConversationMessages, recordManualOutboundMessage, saveMessageMedia } from "@/lib/crm";
-import { sendWhatsAppAudio, sendWhatsAppText, uploadWhatsAppMedia } from "@/lib/whatsapp";
+import {
+  sendWhatsAppAudio,
+  sendWhatsAppDocument,
+  sendWhatsAppImage,
+  sendWhatsAppText,
+  uploadWhatsAppMedia
+} from "@/lib/whatsapp";
 
 const schema = z.object({
   conversationId: z.string().uuid()
@@ -12,12 +18,25 @@ const sendSchema = schema.extend({
   text: z.string().trim().min(1).max(4000)
 });
 
+const supportedImageMimeTypes = ["image/jpeg", "image/png", "image/webp"];
+
 const supportedAudioMimeTypes = [
   "audio/aac",
   "audio/amr",
   "audio/mp4",
   "audio/mpeg",
   "audio/ogg"
+];
+
+const supportedDocumentMimeTypes = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain"
 ];
 
 export async function GET(request: NextRequest) {
@@ -49,7 +68,7 @@ export async function POST(request: NextRequest) {
 
   const contentType = request.headers.get("content-type") ?? "";
   const parsed = contentType.includes("multipart/form-data")
-    ? await parseAudioRequest(request)
+    ? await parseAttachmentRequest(request)
     : sendSchema.safeParse(await request.json());
 
   if (!parsed.success) {
@@ -63,23 +82,34 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    if ("audio" in parsed.data) {
-      const uploaded = await uploadWhatsAppMedia(parsed.data.audio);
-      await sendWhatsAppAudio(target.phone, uploaded.id);
+    if ("file" in parsed.data) {
+      const file = parsed.data.file;
+      const caption = parsed.data.caption;
+      const uploaded = await uploadWhatsAppMedia(file);
+      const mediaKind = getMediaKind(file.type);
+
+      if (mediaKind === "audio") {
+        await sendWhatsAppAudio(target.phone, uploaded.id);
+      } else if (mediaKind === "image") {
+        await sendWhatsAppImage(target.phone, uploaded.id, caption);
+      } else {
+        await sendWhatsAppDocument(target.phone, uploaded.id, file.name || "archivo", caption);
+      }
+
       const messageId = await recordManualOutboundMessage({
         conversationId: parsed.data.conversationId,
         contactId: target.contact_id,
         userId: user.id,
-        body: "Audio enviado"
+        body: buildAttachmentBody(file, caption)
       });
-      const buffer = Buffer.from(await parsed.data.audio.arrayBuffer());
+      const buffer = Buffer.from(await file.arrayBuffer());
 
       await saveMessageMedia({
         messageId,
         waMediaId: uploaded.id,
-        mimeType: parsed.data.audio.type || "audio/mpeg",
-        filename: parsed.data.audio.name || "audio",
-        fileSize: parsed.data.audio.size,
+        mimeType: file.type || "application/octet-stream",
+        filename: file.name || "archivo",
+        fileSize: file.size,
         dataBase64: buffer.toString("base64")
       });
     } else {
@@ -104,21 +134,24 @@ export async function POST(request: NextRequest) {
   });
 }
 
-async function parseAudioRequest(request: NextRequest) {
+async function parseAttachmentRequest(request: NextRequest) {
   const formData = await request.formData();
-  const audio = formData.get("audio");
+  const file = formData.get("file") ?? formData.get("audio");
+  const caption = formData.get("caption");
 
   return z
     .object({
       conversationId: z.string().uuid(),
-      audio: z
+      caption: z.string().trim().max(1024).optional(),
+      file: z
         .instanceof(File)
-        .refine((file) => file.size > 0 && file.size <= 16 * 1024 * 1024)
-        .refine((file) => isSupportedWhatsAppAudio(file.type))
+        .refine((inputFile) => inputFile.size > 0 && inputFile.size <= 16 * 1024 * 1024)
+        .refine((inputFile) => isSupportedWhatsAppAttachment(inputFile.type))
     })
     .safeParse({
       conversationId: formData.get("conversationId"),
-      audio
+      caption: typeof caption === "string" && caption.trim() ? caption.trim() : undefined,
+      file
     });
 }
 
@@ -127,11 +160,48 @@ function isSupportedWhatsAppAudio(mimeType: string) {
   return supportedAudioMimeTypes.includes(normalized);
 }
 
-function getSendValidationError(error: z.ZodError) {
-  const audioErrors = error.flatten().fieldErrors.audio ?? [];
+function isSupportedWhatsAppAttachment(mimeType: string) {
+  const normalized = mimeType.split(";")[0].trim().toLowerCase();
+  return supportedImageMimeTypes.includes(normalized) || supportedAudioMimeTypes.includes(normalized) || supportedDocumentMimeTypes.includes(normalized);
+}
 
-  if (audioErrors.length) {
-    return "Formato de audio no compatible con WhatsApp. Proba con Audio desde el celu para generar m4a/mp4 u ogg.";
+function getMediaKind(mimeType: string) {
+  const normalized = mimeType.split(";")[0].trim().toLowerCase();
+
+  if (supportedAudioMimeTypes.includes(normalized)) {
+    return "audio";
+  }
+
+  if (supportedImageMimeTypes.includes(normalized)) {
+    return "image";
+  }
+
+  return "document";
+}
+
+function buildAttachmentBody(file: File, caption?: string) {
+  const mediaKind = getMediaKind(file.type);
+
+  if (caption) {
+    return caption;
+  }
+
+  if (mediaKind === "audio") {
+    return "Audio enviado";
+  }
+
+  if (mediaKind === "image") {
+    return `Imagen enviada: ${file.name || "imagen"}`;
+  }
+
+  return `Archivo enviado: ${file.name || "archivo"}`;
+}
+
+function getSendValidationError(error: z.ZodError) {
+  const fileErrors = error.flatten().fieldErrors.file ?? [];
+
+  if (fileErrors.length) {
+    return "Formato no compatible con WhatsApp o archivo demasiado grande. Proba con imagen, PDF, Office o audio compatible.";
   }
 
   return "Mensaje invalido.";

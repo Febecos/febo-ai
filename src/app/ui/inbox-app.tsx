@@ -4,12 +4,15 @@ import {
   Bot,
   ChevronLeft,
   CircleUserRound,
+  FileText,
   Filter,
+  ImageIcon,
   Inbox,
   KeyRound,
   LogOut,
   MessageSquareText,
   Mic,
+  Paperclip,
   RefreshCcw,
   Save,
   Search,
@@ -18,9 +21,10 @@ import {
   Smartphone,
   Square,
   UserCheck,
-  UserPlus
+  UserPlus,
+  X
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { AppUser, ConversationMessage, ConversationSummary, UserAdminSummary } from "@/lib/crm";
 
 type Stats = {
@@ -493,12 +497,14 @@ function InboxList({
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageError, setMessageError] = useState("");
   const [replyText, setReplyText] = useState("");
-  const [replyAudio, setReplyAudio] = useState<File | null>(null);
+  const [replyFile, setReplyFile] = useState<File | null>(null);
   const [sendingReply, setSendingReply] = useState(false);
   const [replyError, setReplyError] = useState("");
+  const [draggingFile, setDraggingFile] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingStreamRef = useRef<MediaStream | null>(null);
@@ -652,25 +658,28 @@ function InboxList({
   async function sendManualReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!selected?.id || (!replyText.trim() && !replyAudio)) {
+    if (!selected?.id || (!replyText.trim() && !replyFile)) {
       return;
     }
 
     setSendingReply(true);
     setReplyError("");
     const body =
-      replyAudio ?
+      replyFile ?
         (() => {
           const formData = new FormData();
           formData.append("conversationId", selected.id);
-          formData.append("audio", replyAudio);
+          formData.append("file", replyFile);
+          if (replyText.trim()) {
+            formData.append("caption", replyText.trim());
+          }
           return formData;
         })()
       : JSON.stringify({ conversationId: selected.id, text: replyText.trim() });
 
     const response = await fetch("/api/conversation-messages", {
       method: "POST",
-      headers: replyAudio ? undefined : { "content-type": "application/json" },
+      headers: replyFile ? undefined : { "content-type": "application/json" },
       body
     });
     const payload = await readJsonResponse(response);
@@ -683,9 +692,36 @@ function InboxList({
     }
 
     setReplyText("");
-    setReplyAudio(null);
+    setReplyFile(null);
     setMessages(payload?.messages ?? []);
     await refreshConversations();
+  }
+
+  function setAttachment(file?: File | null) {
+    setReplyError("");
+
+    if (!file) {
+      setReplyFile(null);
+      return;
+    }
+
+    if (!isSupportedClientAttachment(file)) {
+      setReplyError("Formato no compatible. Usa imagen, PDF, Office o audio compatible.");
+      return;
+    }
+
+    if (file.size > 16 * 1024 * 1024) {
+      setReplyError("El archivo supera 16 MB.");
+      return;
+    }
+
+    setReplyFile(file);
+  }
+
+  function handleDrop(event: DragEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setDraggingFile(false);
+    setAttachment(event.dataTransfer.files?.[0] ?? null);
   }
 
   async function startRecording() {
@@ -723,7 +759,7 @@ function InboxList({
 
         if (blob.size > 0) {
           const extension = audioExtensionForMime(blob.type);
-          setReplyAudio(new File([blob], `audio-febo-${Date.now()}.${extension}`, { type: blob.type }));
+          setAttachment(new File([blob], `audio-febo-${Date.now()}.${extension}`, { type: blob.type }));
           setReplyText("");
         }
 
@@ -918,9 +954,7 @@ function InboxList({
                   {messages.map((message) => (
                     <article className={`chat-bubble ${message.direction}`} key={message.id}>
                       <p>{message.body}</p>
-                      {message.media_id ? (
-                        <audio controls preload="metadata" src={`/api/message-media?messageId=${message.id}`} />
-                      ) : null}
+                      {message.media_id ? <MessageMedia message={message} /> : null}
                       <small>
                         {message.direction === "inbound" ? "Cliente" : "Febo AI"} · {formatMessageTime(message.created_at)}
                       </small>
@@ -934,23 +968,51 @@ function InboxList({
               ) : null}
             </div>
 
-            <form className="reply-composer" onSubmit={sendManualReply}>
+            <form
+              className={`reply-composer ${draggingFile ? "dragging" : ""}`}
+              onDragLeave={() => setDraggingFile(false)}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setDraggingFile(true);
+              }}
+              onDrop={handleDrop}
+              onSubmit={sendManualReply}
+            >
               <input
                 accept="audio/*,.aac,.amr,.mp3,.m4a,.ogg"
                 capture="user"
                 hidden
-                onChange={(event) => setReplyAudio(event.target.files?.[0] ?? null)}
+                onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
                 ref={audioInputRef}
                 type="file"
               />
+              <input
+                accept="image/png,image/jpeg,image/webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                hidden
+                onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
+                ref={attachmentInputRef}
+                type="file"
+              />
+              <div className="drop-zone">
+                <Paperclip size={18} />
+                <span>Solta aca una imagen, PDF o archivo</span>
+              </div>
               <textarea
-                disabled={sendingReply || Boolean(replyAudio)}
+                disabled={sendingReply}
                 onChange={(event) => setReplyText(event.target.value)}
-                placeholder={replyAudio ? replyAudio.name : "Escribir respuesta"}
+                placeholder={replyFile ? "Mensaje opcional para acompanar el archivo" : "Escribir respuesta"}
                 value={replyText}
               />
               {recording ? <div className="recording-pill">Grabando {formatRecordingSeconds(recordingSeconds)}</div> : null}
-              {replyAudio ? <div className="audio-draft">Audio listo: {replyAudio.name}</div> : null}
+              {replyFile ? (
+                <div className="attachment-draft">
+                  {replyFile.type.startsWith("image/") ? <ImageIcon size={16} /> : <FileText size={16} />}
+                  <span>{replyFile.name}</span>
+                  <button aria-label="Quitar archivo" onClick={() => setReplyFile(null)} type="button">
+                    <X size={15} />
+                  </button>
+                </div>
+              ) : null}
               <div className="composer-actions">
                 {recording ? (
                   <button className="secondary recording-stop" disabled={sendingReply} onClick={stopRecording} type="button">
@@ -971,14 +1033,18 @@ function InboxList({
                 >
                   Audio
                 </button>
-                {replyAudio ? (
-                  <button className="secondary" disabled={sendingReply} onClick={() => setReplyAudio(null)} type="button">
-                    Quitar
-                  </button>
-                ) : null}
-                <button className="primary" disabled={sendingReply || (!replyText.trim() && !replyAudio)} type="submit">
+                <button
+                  className="secondary"
+                  disabled={sendingReply || recording}
+                  onClick={() => attachmentInputRef.current?.click()}
+                  type="button"
+                >
+                  <Paperclip size={18} />
+                  Adjuntar
+                </button>
+                <button className="primary" disabled={sendingReply || (!replyText.trim() && !replyFile)} type="submit">
                   <SendHorizonal size={18} />
-                  {sendingReply ? "Enviando" : replyAudio ? "Enviar audio" : "Enviar"}
+                  {sendingReply ? "Enviando" : replyFile ? getAttachmentSendLabel(replyFile) : "Enviar"}
                 </button>
               </div>
               {replyError ? <span className="warn">{replyError}</span> : null}
@@ -999,6 +1065,60 @@ function formatMessageTime(value: string) {
     minute: "2-digit",
     month: "2-digit"
   }).format(new Date(value));
+}
+
+function MessageMedia({ message }: { message: ConversationMessage }) {
+  const src = `/api/message-media?messageId=${message.id}`;
+  const mimeType = message.media_mime_type ?? "";
+  const filename = message.media_filename ?? "archivo";
+
+  if (mimeType.startsWith("image/")) {
+    return <img alt={filename} className="message-image" src={src} />;
+  }
+
+  if (mimeType.startsWith("audio/")) {
+    return <audio controls preload="metadata" src={src} />;
+  }
+
+  return (
+    <a className="message-file" href={src} rel="noreferrer" target="_blank">
+      <FileText size={17} />
+      <span>{filename}</span>
+    </a>
+  );
+}
+
+function isSupportedClientAttachment(file: File) {
+  const mimeType = file.type.split(";")[0].trim().toLowerCase();
+  const supportedImages = ["image/jpeg", "image/png", "image/webp"];
+  const supportedDocuments = [
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain"
+  ];
+
+  return supportedImages.includes(mimeType) || isSupportedClientAudio(mimeType) || supportedDocuments.includes(mimeType);
+}
+
+function isSupportedClientAudio(mimeType: string) {
+  return ["audio/aac", "audio/amr", "audio/mp4", "audio/mpeg", "audio/ogg"].includes(mimeType);
+}
+
+function getAttachmentSendLabel(file: File) {
+  if (file.type.startsWith("audio/")) {
+    return "Enviar audio";
+  }
+
+  if (file.type.startsWith("image/")) {
+    return "Enviar imagen";
+  }
+
+  return "Enviar archivo";
 }
 
 function getPreferredRecordingMimeType() {

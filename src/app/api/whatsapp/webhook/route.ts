@@ -45,6 +45,10 @@ export async function POST(request: NextRequest) {
       contactName: message.contactName
     });
 
+    if (stored.duplicate) {
+      continue;
+    }
+
     if (isWhatsAppAudioMessage(message) && stored.messageId) {
       try {
         const media = await downloadWhatsAppMedia(message.mediaId);

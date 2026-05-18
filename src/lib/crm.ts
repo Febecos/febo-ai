@@ -250,10 +250,36 @@ export async function recordIncomingMessage(input: {
   contactName?: string;
 }) {
   if (!isDbConfigured()) {
-    return { contactId: null, threadId: null, messageId: null, aiEnabled: false };
+    return { contactId: null, threadId: null, messageId: null, aiEnabled: false, duplicate: false };
   }
 
   const sql = getSql();
+
+  if (input.waMessageId) {
+    const existingMessage = (await sql`
+      select
+        m.id::text as message_id,
+        c.id::text as thread_id,
+        c.ai_enabled,
+        ct.id::text as contact_id
+      from messages m
+      join conversations c on c.id = m.conversation_id
+      left join contacts ct on ct.id = m.contact_id
+      where m.wa_message_id = ${input.waMessageId}
+      limit 1
+    `) as Array<{ message_id: string; thread_id: string; ai_enabled: boolean; contact_id: string | null }>;
+
+    if (existingMessage[0]) {
+      return {
+        contactId: existingMessage[0].contact_id,
+        threadId: existingMessage[0].thread_id,
+        messageId: existingMessage[0].message_id,
+        aiEnabled: existingMessage[0].ai_enabled,
+        duplicate: true
+      };
+    }
+  }
+
   const phone = normalizePhone(input.phone);
   const contacts = (await sql`
     insert into contacts (phone, display_name, platform, last_seen_at)
@@ -290,8 +316,20 @@ export async function recordIncomingMessage(input: {
   const inserted = (await sql`
     insert into messages (conversation_id, contact_id, direction, wa_message_id, body)
     values (${threadId}, ${contactId}, 'inbound', ${input.waMessageId ?? null}, ${input.text})
+    on conflict (wa_message_id) where wa_message_id is not null do nothing
     returning id::text
   `) as Array<{ id: string }>;
+
+  if (!inserted[0] && input.waMessageId) {
+    const existingMessage = (await sql`
+      select id::text
+      from messages
+      where wa_message_id = ${input.waMessageId}
+      limit 1
+    `) as Array<{ id: string }>;
+
+    return { contactId, threadId, messageId: existingMessage[0]?.id ?? null, aiEnabled, duplicate: true };
+  }
 
   await sql`
     update conversations
@@ -299,7 +337,7 @@ export async function recordIncomingMessage(input: {
     where id = ${threadId}
   `;
 
-  return { contactId, threadId, messageId: inserted[0].id, aiEnabled };
+  return { contactId, threadId, messageId: inserted[0].id, aiEnabled, duplicate: false };
 }
 
 export async function updateMessageBody(messageId: string | null | undefined, body: string) {

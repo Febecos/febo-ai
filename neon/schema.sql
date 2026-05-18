@@ -82,6 +82,7 @@ create table if not exists messages (
 );
 
 create index if not exists messages_conversation_created_idx on messages(conversation_id, created_at);
+create unique index if not exists messages_wa_message_unique_idx on messages(wa_message_id) where wa_message_id is not null;
 
 create table if not exists message_media (
   id uuid primary key default gen_random_uuid(),

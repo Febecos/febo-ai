@@ -42,6 +42,9 @@ export type ConversationMessage = {
   consultype: string | null;
   needs_human: boolean;
   created_at: string;
+  media_id: string | null;
+  media_mime_type: string | null;
+  media_filename: string | null;
 };
 
 export type ConversationFilters = {
@@ -284,10 +287,11 @@ export async function recordIncomingMessage(input: {
   const threadId = created.id;
   const aiEnabled = created.ai_enabled;
 
-  await sql`
+  const inserted = (await sql`
     insert into messages (conversation_id, contact_id, direction, wa_message_id, body)
     values (${threadId}, ${contactId}, 'inbound', ${input.waMessageId ?? null}, ${input.text})
-  `;
+    returning id::text
+  `) as Array<{ id: string }>;
 
   await sql`
     update conversations
@@ -295,7 +299,7 @@ export async function recordIncomingMessage(input: {
     where id = ${threadId}
   `;
 
-  return { contactId, threadId, aiEnabled };
+  return { contactId, threadId, messageId: inserted[0].id, aiEnabled };
 }
 
 export async function recordAgentReply(input: {
@@ -410,15 +414,25 @@ export async function listConversationMessages(conversationId: string, limit = 1
 
   return (await sql`
     select
-      id::text,
-      direction,
-      body,
-      consultype,
-      needs_human,
-      created_at::text
-    from messages
-    where conversation_id = ${conversationId}
-    order by created_at asc
+      m.id::text,
+      m.direction,
+      m.body,
+      m.consultype,
+      m.needs_human,
+      m.created_at::text,
+      mm.id::text as media_id,
+      mm.mime_type as media_mime_type,
+      mm.filename as media_filename
+    from messages m
+    left join lateral (
+      select id, mime_type, filename
+      from message_media
+      where message_id = m.id
+      order by created_at desc
+      limit 1
+    ) mm on true
+    where m.conversation_id = ${conversationId}
+    order by m.created_at asc
     limit ${safeLimit}
   `) as ConversationMessage[];
 }
@@ -451,7 +465,7 @@ export async function recordManualOutboundMessage(input: {
 }) {
   const sql = getSql();
 
-  await sql`
+  const rows = (await sql`
     insert into messages (conversation_id, contact_id, direction, body, created_by, metadata)
     values (
       ${input.conversationId},
@@ -461,7 +475,8 @@ export async function recordManualOutboundMessage(input: {
       ${input.userId},
       '{"source":"manual"}'::jsonb
     )
-  `;
+    returning id::text
+  `) as Array<{ id: string }>;
 
   await sql`
     update conversations
@@ -471,6 +486,53 @@ export async function recordManualOutboundMessage(input: {
         updated_at = now()
     where id = ${input.conversationId}
   `;
+
+  return rows[0].id;
+}
+
+export async function saveMessageMedia(input: {
+  messageId: string;
+  waMediaId?: string | null;
+  mimeType: string;
+  filename?: string | null;
+  fileSize?: number | null;
+  sha256?: string | null;
+  dataBase64: string;
+}) {
+  const sql = getSql();
+
+  const rows = (await sql`
+    insert into message_media (message_id, wa_media_id, mime_type, filename, file_size, sha256, data_base64)
+    values (
+      ${input.messageId},
+      ${input.waMediaId ?? null},
+      ${input.mimeType},
+      ${input.filename ?? null},
+      ${input.fileSize ?? null},
+      ${input.sha256 ?? null},
+      ${input.dataBase64}
+    )
+    returning id::text
+  `) as Array<{ id: string }>;
+
+  return rows[0].id;
+}
+
+export async function getMessageMediaByMessageId(messageId: string) {
+  if (!isDbConfigured()) {
+    return null;
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    select id::text, mime_type, filename, data_base64
+    from message_media
+    where message_id = ${messageId}
+    order by created_at desc
+    limit 1
+  `) as Array<{ id: string; mime_type: string; filename: string | null; data_base64: string }>;
+
+  return rows[0] ?? null;
 }
 
 export async function getDashboardStats() {

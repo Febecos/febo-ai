@@ -83,6 +83,20 @@ create table if not exists messages (
 
 create index if not exists messages_conversation_created_idx on messages(conversation_id, created_at);
 
+create table if not exists message_media (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null references messages(id) on delete cascade,
+  wa_media_id text,
+  mime_type text not null,
+  filename text,
+  file_size integer,
+  sha256 text,
+  data_base64 text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists message_media_message_idx on message_media(message_id);
+
 create table if not exists conversation_notes (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references conversations(id) on delete cascade,

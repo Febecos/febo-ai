@@ -9,6 +9,7 @@ import {
   KeyRound,
   LogOut,
   MessageSquareText,
+  Mic,
   RefreshCcw,
   Save,
   Search,
@@ -18,7 +19,7 @@ import {
   UserCheck,
   UserPlus
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { AppUser, ConversationMessage, ConversationSummary, UserAdminSummary } from "@/lib/crm";
 
 type Stats = {
@@ -491,8 +492,10 @@ function InboxList({
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageError, setMessageError] = useState("");
   const [replyText, setReplyText] = useState("");
+  const [replyAudio, setReplyAudio] = useState<File | null>(null);
   const [sendingReply, setSendingReply] = useState(false);
   const [replyError, setReplyError] = useState("");
+  const audioInputRef = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState({
     query: "",
     consultype: "all",
@@ -596,17 +599,26 @@ function InboxList({
   async function sendManualReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!selected?.id || !replyText.trim()) {
+    if (!selected?.id || (!replyText.trim() && !replyAudio)) {
       return;
     }
 
     setSendingReply(true);
     setReplyError("");
+    const body =
+      replyAudio ?
+        (() => {
+          const formData = new FormData();
+          formData.append("conversationId", selected.id);
+          formData.append("audio", replyAudio);
+          return formData;
+        })()
+      : JSON.stringify({ conversationId: selected.id, text: replyText.trim() });
 
     const response = await fetch("/api/conversation-messages", {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ conversationId: selected.id, text: replyText.trim() })
+      headers: replyAudio ? undefined : { "content-type": "application/json" },
+      body
     });
     const payload = await readJsonResponse(response);
 
@@ -618,6 +630,7 @@ function InboxList({
     }
 
     setReplyText("");
+    setReplyAudio(null);
     setMessages(payload?.messages ?? []);
     await refreshConversations();
   }
@@ -773,6 +786,9 @@ function InboxList({
                   {messages.map((message) => (
                     <article className={`chat-bubble ${message.direction}`} key={message.id}>
                       <p>{message.body}</p>
+                      {message.media_id ? (
+                        <audio controls preload="metadata" src={`/api/message-media?messageId=${message.id}`} />
+                      ) : null}
                       <small>
                         {message.direction === "inbound" ? "Cliente" : "Febo AI"} · {formatMessageTime(message.created_at)}
                       </small>
@@ -786,16 +802,40 @@ function InboxList({
             </div>
 
             <form className="reply-composer" onSubmit={sendManualReply}>
+              <input
+                accept="audio/aac,audio/amr,audio/mpeg,audio/mp4,audio/ogg,.aac,.amr,.mp3,.m4a,.ogg"
+                capture
+                hidden
+                onChange={(event) => setReplyAudio(event.target.files?.[0] ?? null)}
+                ref={audioInputRef}
+                type="file"
+              />
               <textarea
-                disabled={sendingReply}
+                disabled={sendingReply || Boolean(replyAudio)}
                 onChange={(event) => setReplyText(event.target.value)}
-                placeholder="Escribir respuesta"
+                placeholder={replyAudio ? replyAudio.name : "Escribir respuesta"}
                 value={replyText}
               />
-              <button className="primary" disabled={sendingReply || !replyText.trim()} type="submit">
-                <SendHorizonal size={18} />
-                {sendingReply ? "Enviando" : "Enviar"}
-              </button>
+              <div className="composer-actions">
+                <button
+                  className="secondary"
+                  disabled={sendingReply}
+                  onClick={() => audioInputRef.current?.click()}
+                  type="button"
+                >
+                  <Mic size={18} />
+                  Audio
+                </button>
+                {replyAudio ? (
+                  <button className="secondary" disabled={sendingReply} onClick={() => setReplyAudio(null)} type="button">
+                    Quitar
+                  </button>
+                ) : null}
+                <button className="primary" disabled={sendingReply || (!replyText.trim() && !replyAudio)} type="submit">
+                  <SendHorizonal size={18} />
+                  {sendingReply ? "Enviando" : replyAudio ? "Enviar audio" : "Enviar"}
+                </button>
+              </div>
               {replyError ? <span className="warn">{replyError}</span> : null}
             </form>
           </>

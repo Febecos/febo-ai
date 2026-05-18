@@ -542,6 +542,11 @@ button:disabled {
   white-space: pre-wrap;
 }
 
+.chat-bubble audio {
+  max-width: 100%;
+  width: 280px;
+}
+
 .chat-bubble.inbound {
   background: white;
   justify-self: start;
@@ -642,6 +647,14 @@ select {
 
 .reply-composer button {
   justify-self: end;
+}
+
+.composer-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .answer-box {

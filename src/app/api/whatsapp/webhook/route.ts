@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runFebecosAgent } from "@/lib/agent";
 import { config } from "@/lib/config";
-import { recordAgentReply, recordIncomingMessage } from "@/lib/crm";
-import { extractTextMessages, sendWhatsAppText, verifyMetaSignature } from "@/lib/whatsapp";
+import { recordAgentReply, recordIncomingMessage, saveMessageMedia } from "@/lib/crm";
+import {
+  downloadWhatsAppMedia,
+  extractInboundMessages,
+  isWhatsAppAudioMessage,
+  isWhatsAppTextMessage,
+  sendWhatsAppText,
+  verifyMetaSignature
+} from "@/lib/whatsapp";
 
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams;
@@ -25,17 +32,34 @@ export async function POST(request: NextRequest) {
   }
 
   const body = JSON.parse(rawBody);
-  const messages = extractTextMessages(body);
+  const messages = extractInboundMessages(body);
 
   for (const message of messages) {
     const stored = await recordIncomingMessage({
       phone: message.from,
       waMessageId: message.id,
-      text: message.text,
+      text: isWhatsAppTextMessage(message) ? message.text : "Audio recibido",
       contactName: message.contactName
     });
 
+    if (isWhatsAppAudioMessage(message) && stored.messageId) {
+      const media = await downloadWhatsAppMedia(message.mediaId);
+
+      await saveMessageMedia({
+        messageId: stored.messageId,
+        waMediaId: media.waMediaId,
+        mimeType: media.mimeType,
+        fileSize: media.fileSize,
+        sha256: media.sha256 ?? message.sha256,
+        dataBase64: media.dataBase64
+      });
+    }
+
     if (!stored.aiEnabled) {
+      continue;
+    }
+
+    if (!isWhatsAppTextMessage(message)) {
       continue;
     }
 

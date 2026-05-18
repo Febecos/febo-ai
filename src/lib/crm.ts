@@ -247,7 +247,7 @@ export async function recordIncomingMessage(input: {
   contactName?: string;
 }) {
   if (!isDbConfigured()) {
-    return { contactId: null, threadId: null };
+    return { contactId: null, threadId: null, aiEnabled: false };
   }
 
   const sql = getSql();
@@ -264,23 +264,25 @@ export async function recordIncomingMessage(input: {
   const contactId = contacts[0].id;
 
   const existing = (await sql`
-    select id
+    select id, ai_enabled
     from conversations
     where contact_id = ${contactId}
       and status in ('open', 'waiting', 'quoted', 'hot', 'handoff')
     order by last_message_at desc
     limit 1
-  `) as Array<{ id: string }>;
+  `) as Array<{ id: string; ai_enabled: boolean }>;
 
-  const threadId =
-    existing[0]?.id ??
+  const created =
+    existing[0] ??
     (
       (await sql`
-        insert into conversations (contact_id, status, last_message_at)
+        insert into conversations (contact_id, status, last_message_at, ai_enabled)
         values (${contactId}, 'open', now())
-        returning id
-      `) as Array<{ id: string }>
-    )[0].id;
+        returning id, ai_enabled
+      `) as Array<{ id: string; ai_enabled: boolean }>
+    )[0];
+  const threadId = created.id;
+  const aiEnabled = created.ai_enabled;
 
   await sql`
     insert into messages (conversation_id, contact_id, direction, wa_message_id, body)
@@ -293,7 +295,7 @@ export async function recordIncomingMessage(input: {
     where id = ${threadId}
   `;
 
-  return { contactId, threadId };
+  return { contactId, threadId, aiEnabled };
 }
 
 export async function recordAgentReply(input: {
@@ -419,6 +421,56 @@ export async function listConversationMessages(conversationId: string, limit = 1
     order by created_at asc
     limit ${safeLimit}
   `) as ConversationMessage[];
+}
+
+export async function getConversationReplyTarget(conversationId: string) {
+  if (!isDbConfigured()) {
+    return null;
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    select
+      c.id::text as conversation_id,
+      c.contact_id::text,
+      ct.phone
+    from conversations c
+    join contacts ct on ct.id = c.contact_id
+    where c.id = ${conversationId}
+    limit 1
+  `) as Array<{ conversation_id: string; contact_id: string; phone: string }>;
+
+  return rows[0] ?? null;
+}
+
+export async function recordManualOutboundMessage(input: {
+  conversationId: string;
+  contactId: string;
+  userId: string;
+  body: string;
+}) {
+  const sql = getSql();
+
+  await sql`
+    insert into messages (conversation_id, contact_id, direction, body, created_by, metadata)
+    values (
+      ${input.conversationId},
+      ${input.contactId},
+      'outbound',
+      ${input.body},
+      ${input.userId},
+      '{"source":"manual"}'::jsonb
+    )
+  `;
+
+  await sql`
+    update conversations
+    set last_message_at = now(),
+        ai_enabled = false,
+        assigned_to = coalesce(assigned_to, ${input.userId}::uuid),
+        updated_at = now()
+    where id = ${input.conversationId}
+  `;
 }
 
 export async function getDashboardStats() {

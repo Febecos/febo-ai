@@ -35,6 +35,10 @@ export async function POST(request: NextRequest) {
       contactName: message.contactName
     });
 
+    if (!stored.aiEnabled) {
+      continue;
+    }
+
     const result = await runFebecosAgent({
       phone: message.from,
       message: message.text,

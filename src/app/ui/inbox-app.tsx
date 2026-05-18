@@ -490,6 +490,9 @@ function InboxList({
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageError, setMessageError] = useState("");
+  const [replyText, setReplyText] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+  const [replyError, setReplyError] = useState("");
   const [filters, setFilters] = useState({
     query: "",
     consultype: "all",
@@ -588,6 +591,35 @@ function InboxList({
       const payload = await readJsonResponse(messagesResponse);
       setMessages(payload?.messages ?? []);
     }
+  }
+
+  async function sendManualReply(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selected?.id || !replyText.trim()) {
+      return;
+    }
+
+    setSendingReply(true);
+    setReplyError("");
+
+    const response = await fetch("/api/conversation-messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ conversationId: selected.id, text: replyText.trim() })
+    });
+    const payload = await readJsonResponse(response);
+
+    setSendingReply(false);
+
+    if (!response.ok) {
+      setReplyError(payload?.error ?? "No pudimos enviar el mensaje.");
+      return;
+    }
+
+    setReplyText("");
+    setMessages(payload?.messages ?? []);
+    await refreshConversations();
   }
 
   return (
@@ -752,6 +784,20 @@ function InboxList({
                 <div className="empty-state">Contacto importado sin historial de conversacion.</div>
               ) : null}
             </div>
+
+            <form className="reply-composer" onSubmit={sendManualReply}>
+              <textarea
+                disabled={sendingReply}
+                onChange={(event) => setReplyText(event.target.value)}
+                placeholder="Escribir respuesta"
+                value={replyText}
+              />
+              <button className="primary" disabled={sendingReply || !replyText.trim()} type="submit">
+                <SendHorizonal size={18} />
+                {sendingReply ? "Enviando" : "Enviar"}
+              </button>
+              {replyError ? <span className="warn">{replyError}</span> : null}
+            </form>
           </>
         ) : (
           <div className="empty-state">Selecciona una conversacion.</div>

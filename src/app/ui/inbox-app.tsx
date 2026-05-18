@@ -663,8 +663,14 @@ function InboxList({
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = getPreferredRecordingMimeType();
+
+      if (!mimeType) {
+        setReplyError("Este navegador graba en un formato que WhatsApp no acepta. Usa Audio para grabar con el celu.");
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       recordingChunksRef.current = [];
       recordingStreamRef.current = stream;
@@ -966,7 +972,7 @@ function getPreferredRecordingMimeType() {
     return "";
   }
 
-  const candidates = ["audio/mp4", "audio/aac", "audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/webm"];
+  const candidates = ["audio/mp4", "audio/aac", "audio/mpeg", "audio/ogg;codecs=opus"];
   return candidates.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? "";
 }
 

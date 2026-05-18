@@ -12,6 +12,14 @@ const sendSchema = schema.extend({
   text: z.string().trim().min(1).max(4000)
 });
 
+const supportedAudioMimeTypes = [
+  "audio/aac",
+  "audio/amr",
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/ogg"
+];
+
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
@@ -45,7 +53,7 @@ export async function POST(request: NextRequest) {
     : sendSchema.safeParse(await request.json());
 
   if (!parsed.success) {
-    return NextResponse.json({ error: "Mensaje invalido." }, { status: 400 });
+    return NextResponse.json({ error: getSendValidationError(parsed.error) }, { status: 400 });
   }
 
   const target = await getConversationReplyTarget(parsed.data.conversationId);
@@ -103,10 +111,28 @@ async function parseAudioRequest(request: NextRequest) {
   return z
     .object({
       conversationId: z.string().uuid(),
-      audio: z.instanceof(File).refine((file) => file.size > 0 && file.size <= 16 * 1024 * 1024)
+      audio: z
+        .instanceof(File)
+        .refine((file) => file.size > 0 && file.size <= 16 * 1024 * 1024)
+        .refine((file) => isSupportedWhatsAppAudio(file.type))
     })
     .safeParse({
       conversationId: formData.get("conversationId"),
       audio
     });
+}
+
+function isSupportedWhatsAppAudio(mimeType: string) {
+  const normalized = mimeType.split(";")[0].trim().toLowerCase();
+  return supportedAudioMimeTypes.includes(normalized);
+}
+
+function getSendValidationError(error: z.ZodError) {
+  const audioErrors = error.flatten().fieldErrors.audio ?? [];
+
+  if (audioErrors.length) {
+    return "Formato de audio no compatible con WhatsApp. Proba con Audio desde el celu para generar m4a/mp4 u ogg.";
+  }
+
+  return "Mensaje invalido.";
 }

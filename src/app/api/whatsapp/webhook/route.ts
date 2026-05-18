@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runFebecosAgent } from "@/lib/agent";
+import { runFebecosAgent, transcribeAudio } from "@/lib/agent";
 import { config } from "@/lib/config";
-import { recordAgentReply, recordIncomingMessage, saveMessageMedia } from "@/lib/crm";
+import { recordAgentReply, recordIncomingMessage, saveMessageMedia, updateMessageBody } from "@/lib/crm";
 import {
   downloadWhatsAppMedia,
   extractInboundMessages,
@@ -35,37 +35,68 @@ export async function POST(request: NextRequest) {
   const messages = extractInboundMessages(body);
 
   for (const message of messages) {
+    const isText = isWhatsAppTextMessage(message);
+    let agentMessage = isText ? message.text : "";
+
     const stored = await recordIncomingMessage({
       phone: message.from,
       waMessageId: message.id,
-      text: isWhatsAppTextMessage(message) ? message.text : "Audio recibido",
+      text: agentMessage || "Audio recibido",
       contactName: message.contactName
     });
 
     if (isWhatsAppAudioMessage(message) && stored.messageId) {
-      const media = await downloadWhatsAppMedia(message.mediaId);
+      try {
+        const media = await downloadWhatsAppMedia(message.mediaId);
 
-      await saveMessageMedia({
-        messageId: stored.messageId,
-        waMediaId: media.waMediaId,
-        mimeType: media.mimeType,
-        fileSize: media.fileSize,
-        sha256: media.sha256 ?? message.sha256,
-        dataBase64: media.dataBase64
-      });
+        await saveMessageMedia({
+          messageId: stored.messageId,
+          waMediaId: media.waMediaId,
+          mimeType: media.mimeType,
+          fileSize: media.fileSize,
+          sha256: media.sha256 ?? message.sha256,
+          dataBase64: media.dataBase64
+        });
+
+        const transcript = await transcribeAudio({
+          dataBase64: media.dataBase64,
+          mimeType: media.mimeType,
+          filename: `whatsapp-audio-${stored.messageId}.${audioExtensionForMime(media.mimeType)}`
+        });
+
+        if (transcript) {
+          agentMessage = `Audio transcripto: ${transcript}`;
+          await updateMessageBody(stored.messageId, agentMessage);
+        }
+      } catch (error) {
+        console.error("No pudimos procesar audio de WhatsApp.", error);
+        await updateMessageBody(stored.messageId, "Audio recibido (no pudimos transcribirlo).");
+      }
     }
 
     if (!stored.aiEnabled) {
       continue;
     }
 
-    if (!isWhatsAppTextMessage(message)) {
+    if (!agentMessage) {
+      const fallbackAnswer = "Recibi tu audio, pero no pude leerlo bien. Me lo podes mandar por escrito?";
+
+      await sendWhatsAppText(message.from, fallbackAnswer);
+
+      await recordAgentReply({
+        contactId: stored.contactId,
+        threadId: stored.threadId,
+        answer: fallbackAnswer,
+        intent: "otro",
+        needsHuman: false
+      });
+
       continue;
     }
 
     const result = await runFebecosAgent({
       phone: message.from,
-      message: message.text,
+      message: agentMessage,
       contactName: message.contactName
     });
 
@@ -81,4 +112,28 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+function audioExtensionForMime(mimeType: string) {
+  if (mimeType.includes("mpeg")) {
+    return "mp3";
+  }
+
+  if (mimeType.includes("mp4")) {
+    return "m4a";
+  }
+
+  if (mimeType.includes("ogg")) {
+    return "ogg";
+  }
+
+  if (mimeType.includes("wav")) {
+    return "wav";
+  }
+
+  if (mimeType.includes("webm")) {
+    return "webm";
+  }
+
+  return "ogg";
 }

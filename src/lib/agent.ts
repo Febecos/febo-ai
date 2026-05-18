@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import { z } from "zod";
 import { config, requireEnv } from "./config";
 import { createLead, createSupportTicket, getProfileByPhone, platformFallbackContext, recordPlatformEvent } from "./febecos";
@@ -45,6 +45,30 @@ function getOpenAI() {
   return openai;
 }
 
+function audioExtensionForMime(mimeType: string) {
+  if (mimeType.includes("mpeg")) {
+    return "mp3";
+  }
+
+  if (mimeType.includes("mp4")) {
+    return "m4a";
+  }
+
+  if (mimeType.includes("ogg")) {
+    return "ogg";
+  }
+
+  if (mimeType.includes("wav")) {
+    return "wav";
+  }
+
+  if (mimeType.includes("webm")) {
+    return "webm";
+  }
+
+  return "ogg";
+}
+
 function normalizeJson(text: string) {
   const trimmed = text.trim();
   const match = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -57,6 +81,25 @@ async function getOperatingPrompt() {
   }
 
   return operatingPrompt;
+}
+
+export async function transcribeAudio(input: {
+  dataBase64: string;
+  mimeType: string;
+  filename?: string | null;
+}) {
+  const buffer = Buffer.from(input.dataBase64, "base64");
+  const extension = audioExtensionForMime(input.mimeType);
+  const file = await toFile(buffer, input.filename ?? `audio.${extension}`, { type: input.mimeType });
+
+  const transcription = await getOpenAI().audio.transcriptions.create({
+    file,
+    language: "es",
+    model: "gpt-4o-mini-transcribe",
+    prompt: "Audio de WhatsApp en espanol rioplatense sobre bombas de agua, perforaciones, FEBECOS y consultas comerciales."
+  });
+
+  return transcription.text.trim();
 }
 
 export async function runFebecosAgent(input: {

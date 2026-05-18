@@ -250,7 +250,7 @@ export async function recordIncomingMessage(input: {
   contactName?: string;
 }) {
   if (!isDbConfigured()) {
-    return { contactId: null, threadId: null, aiEnabled: false };
+    return { contactId: null, threadId: null, messageId: null, aiEnabled: false };
   }
 
   const sql = getSql();
@@ -300,6 +300,20 @@ export async function recordIncomingMessage(input: {
   `;
 
   return { contactId, threadId, messageId: inserted[0].id, aiEnabled };
+}
+
+export async function updateMessageBody(messageId: string | null | undefined, body: string) {
+  if (!isDbConfigured() || !messageId) {
+    return;
+  }
+
+  const sql = getSql();
+
+  await sql`
+    update messages
+    set body = ${body}
+    where id = ${messageId}
+  `;
 }
 
 export async function recordAgentReply(input: {

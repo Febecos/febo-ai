@@ -503,6 +503,7 @@ function InboxList({
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingTimerRef = useRef<number | null>(null);
+  const threadEndRef = useRef<HTMLDivElement>(null);
   const [filters, setFilters] = useState({
     query: "",
     consultype: "all",
@@ -554,6 +555,10 @@ function InboxList({
       clearRecordingTimer();
     };
   }, []);
+
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.length, selected?.id]);
 
   async function refreshConversations(nextFilters = filters) {
     const params = new URLSearchParams();
@@ -881,6 +886,7 @@ function InboxList({
                       </small>
                     </article>
                   ))}
+                  <div ref={threadEndRef} />
                 </div>
               ) : null}
               {!loadingMessages && !messageError && !messages.length ? (

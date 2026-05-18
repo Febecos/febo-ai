@@ -6,6 +6,8 @@ create table if not exists app_users (
   email text not null unique,
   role text not null check (role in ('admin', 'vendedor')),
   login_code_hash text,
+  sales_group boolean not null default false,
+  sales_priority integer not null default 100,
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -14,13 +16,19 @@ create table if not exists app_users (
 alter table app_users
   add column if not exists login_code_hash text;
 
-insert into app_users (full_name, email, role)
+alter table app_users
+  add column if not exists sales_group boolean not null default false,
+  add column if not exists sales_priority integer not null default 100;
+
+insert into app_users (full_name, email, role, sales_group, sales_priority)
 values
-  ('Guillermo Sandler', 'guille.aol@gmail.com', 'admin'),
-  ('Rodrigo Fernandez', 'fernandezn.rodrigo@gmail.com', 'vendedor')
+  ('Guillermo Sandler', 'guille.aol@gmail.com', 'admin', false, 100),
+  ('Rodrigo Fernandez', 'fernandezn.rodrigo@gmail.com', 'vendedor', true, 10)
 on conflict (email) do update
 set full_name = excluded.full_name,
     role = excluded.role,
+    sales_group = excluded.sales_group,
+    sales_priority = excluded.sales_priority,
     active = true,
     updated_at = now();
 

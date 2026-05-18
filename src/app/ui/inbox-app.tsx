@@ -232,6 +232,7 @@ function AdminUsersPanel({
     full_name: "",
     email: "",
     role: "vendedor" as AppUser["role"],
+    sales_group: true,
     active: true
   });
   const [newCode, setNewCode] = useState("");
@@ -242,6 +243,8 @@ function AdminUsersPanel({
     fullName: string;
     email: string;
     role: AppUser["role"];
+    salesGroup: boolean;
+    salesPriority?: number;
     active: boolean;
     code?: string;
   }) {
@@ -269,12 +272,13 @@ function AdminUsersPanel({
       fullName: newUser.full_name,
       email: newUser.email,
       role: newUser.role,
+      salesGroup: newUser.sales_group,
       active: newUser.active,
       code: newCode
     });
 
     if (ok) {
-      setNewUser({ full_name: "", email: "", role: "vendedor", active: true });
+      setNewUser({ full_name: "", email: "", role: "vendedor", sales_group: true, active: true });
       setNewCode("");
     }
   }
@@ -335,6 +339,14 @@ function AdminUsersPanel({
               />
             </label>
           </div>
+          <label className="check-field">
+            <input
+              checked={newUser.sales_group}
+              onChange={(event) => setNewUser({ ...newUser, sales_group: event.target.checked })}
+              type="checkbox"
+            />
+            Grupo de ventas
+          </label>
           <button className="primary" type="submit">
             <UserPlus size={18} />
             Crear
@@ -357,6 +369,8 @@ function UserEditor({
     fullName: string;
     email: string;
     role: AppUser["role"];
+    salesGroup: boolean;
+    salesPriority?: number;
     active: boolean;
     code?: string;
   }) => Promise<boolean>;
@@ -365,6 +379,8 @@ function UserEditor({
   const [fullName, setFullName] = useState(user.full_name);
   const [email, setEmail] = useState(user.email);
   const [role, setRole] = useState<AppUser["role"]>(user.role);
+  const [salesGroup, setSalesGroup] = useState(user.sales_group);
+  const [salesPriority, setSalesPriority] = useState(user.sales_priority);
   const [active, setActive] = useState(user.active);
   const [code, setCode] = useState("");
   const [saving, setSaving] = useState(false);
@@ -377,6 +393,8 @@ function UserEditor({
       fullName,
       email,
       role,
+      salesGroup,
+      salesPriority,
       active,
       code: code.trim() || undefined
     });
@@ -394,7 +412,8 @@ function UserEditor({
         <strong>{user.full_name}</strong>
       </div>
       <span className="user-meta">
-        {user.role} - {user.has_login_code ? "codigo propio" : "codigo global"} - {user.active ? "activo" : "pausado"}
+        {user.role} - {user.sales_group ? "grupo ventas" : "sin grupo"} -{" "}
+        {user.has_login_code ? "codigo propio" : "codigo global"} - {user.active ? "activo" : "pausado"}
       </span>
       <label className="field">
         Nombre
@@ -420,6 +439,22 @@ function UserEditor({
             type="password"
             value={code}
             onChange={(event) => setCode(event.target.value)}
+          />
+        </label>
+      </div>
+      <div className="form-grid">
+        <label className="check-field">
+          <input checked={salesGroup} onChange={(event) => setSalesGroup(event.target.checked)} type="checkbox" />
+          Grupo de ventas
+        </label>
+        <label className="field">
+          Prioridad
+          <input
+            min={1}
+            max={999}
+            type="number"
+            value={salesPriority}
+            onChange={(event) => setSalesPriority(Number(event.target.value) || 100)}
           />
         </label>
       </div>

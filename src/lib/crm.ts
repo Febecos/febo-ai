@@ -5,6 +5,7 @@ export type AppUser = {
   full_name: string;
   email: string;
   role: "admin" | "vendedor";
+  sales_group: boolean;
 };
 
 export type AuthUserRecord = AppUser & {
@@ -14,6 +15,7 @@ export type AuthUserRecord = AppUser & {
 export type UserAdminSummary = AppUser & {
   active: boolean;
   has_login_code: boolean;
+  sales_priority: number;
 };
 
 export type ConversationSummary = {
@@ -126,7 +128,7 @@ export async function findUserByEmail(email: string) {
 
   const sql = getSql();
   const rows = (await sql`
-    select id, full_name, email, role, login_code_hash
+    select id, full_name, email, role, sales_group, login_code_hash
     from app_users
     where lower(email) = lower(${email}) and active = true
     limit 1
@@ -142,23 +144,35 @@ export async function getUsers() {
 
   const sql = getSql();
   return (await sql`
-    select id, full_name, email, role
+    select id, full_name, email, role, sales_group
     from app_users
     where active = true
-    order by role, full_name
+    order by sales_group desc, role, full_name
   `) as AppUser[];
 }
 
-async function getActiveUserIdByEmail(email: string) {
+async function getHotLeadAssigneeId() {
   const sql = getSql();
   const rows = (await sql`
     select id::text
     from app_users
-    where lower(email) = lower(${email}) and active = true
+    where active = true and sales_group = true
+    order by sales_priority, created_at, full_name
     limit 1
   `) as Array<{ id: string }>;
 
-  return rows[0]?.id ?? null;
+  if (rows[0]?.id) {
+    return rows[0].id;
+  }
+
+  const fallback = (await sql`
+    select id::text
+    from app_users
+    where lower(email) = lower(${hotLeadAssigneeEmail}) and active = true
+    limit 1
+  `) as Array<{ id: string }>;
+
+  return fallback[0]?.id ?? null;
 }
 
 export async function getAdminUsers() {
@@ -168,9 +182,9 @@ export async function getAdminUsers() {
 
   const sql = getSql();
   return (await sql`
-    select id, full_name, email, role, active, (login_code_hash is not null) as has_login_code
+    select id, full_name, email, role, sales_group, sales_priority, active, (login_code_hash is not null) as has_login_code
     from app_users
-    order by active desc, role, full_name
+    order by active desc, sales_group desc, sales_priority, role, full_name
   `) as UserAdminSummary[];
 }
 
@@ -179,6 +193,8 @@ export async function upsertAppUser(input: {
   fullName: string;
   email: string;
   role: "admin" | "vendedor";
+  salesGroup: boolean;
+  salesPriority?: number;
   active: boolean;
   loginCodeHash?: string | null;
 }) {
@@ -186,14 +202,17 @@ export async function upsertAppUser(input: {
   const id = input.id || null;
   const loginCodeHash = input.loginCodeHash ?? null;
   const shouldChangeCode = input.loginCodeHash !== undefined;
+  const salesPriority = input.salesPriority ?? 100;
 
   const rows = (await sql`
-    insert into app_users (id, full_name, email, role, active, login_code_hash)
+    insert into app_users (id, full_name, email, role, sales_group, sales_priority, active, login_code_hash)
     values (
       coalesce(${id}::uuid, gen_random_uuid()),
       ${input.fullName},
       lower(${input.email}),
       ${input.role},
+      ${input.salesGroup},
+      ${salesPriority},
       ${input.active},
       ${loginCodeHash}
     )
@@ -201,10 +220,12 @@ export async function upsertAppUser(input: {
     set full_name = excluded.full_name,
         email = excluded.email,
         role = excluded.role,
+        sales_group = excluded.sales_group,
+        sales_priority = excluded.sales_priority,
         active = excluded.active,
         login_code_hash = case when ${shouldChangeCode} then excluded.login_code_hash else app_users.login_code_hash end,
         updated_at = now()
-    returning id, full_name, email, role, active, (login_code_hash is not null) as has_login_code
+    returning id, full_name, email, role, sales_group, sales_priority, active, (login_code_hash is not null) as has_login_code
   `) as UserAdminSummary[];
 
   return rows[0];
@@ -279,7 +300,7 @@ export async function recordAgentReply(input: {
 
   const sql = getSql();
   const consultype = normalizeConsultype(input.intent);
-  const hotLeadAssigneeId = consultype === "caliente" ? await getActiveUserIdByEmail(hotLeadAssigneeEmail) : null;
+  const hotLeadAssigneeId = consultype === "caliente" ? await getHotLeadAssigneeId() : null;
 
   await sql`
     insert into messages (conversation_id, contact_id, direction, body, consultype, needs_human)

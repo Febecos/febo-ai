@@ -8,6 +8,8 @@ const userSchema = z.object({
   fullName: z.string().min(2),
   email: z.string().email(),
   role: z.enum(["admin", "vendedor"]),
+  salesGroup: z.boolean().optional(),
+  salesPriority: z.number().int().min(1).max(999).optional(),
   active: z.boolean().default(true),
   code: z.string().optional()
 });
@@ -60,6 +62,8 @@ export async function PATCH(request: NextRequest) {
     fullName: parsed.data.fullName.trim(),
     email: parsed.data.email.trim(),
     role: parsed.data.role,
+    salesGroup: parsed.data.salesGroup ?? parsed.data.role === "vendedor",
+    salesPriority: parsed.data.salesPriority,
     active: parsed.data.active,
     loginCodeHash: code ? hashLoginCode(code) : undefined
   });

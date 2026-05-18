@@ -1,0 +1,306 @@
+import { getSql, isDbConfigured } from "./db";
+
+export type AppUser = {
+  id: string;
+  full_name: string;
+  email: string;
+  role: "admin" | "vendedor";
+};
+
+export type ConversationSummary = {
+  id: string;
+  status: string;
+  ai_enabled: boolean;
+  last_message_at: string;
+  contact_id: string;
+  phone: string;
+  display_name: string | null;
+  sentiment: string;
+  consultype: string;
+  assigned_to: string | null;
+  assigned_name: string | null;
+  last_message: string | null;
+  last_direction: string | null;
+  unread_count: number;
+};
+
+export const seedUsers = [
+  {
+    full_name: "Guillermo Sandler",
+    email: "guille.aol@gmail.com",
+    role: "admin"
+  },
+  {
+    full_name: "Rodrigo Fernandez",
+    email: "fernandezn.rodrigo@gmail.com",
+    role: "vendedor"
+  }
+] as const;
+
+export function normalizePhone(phone: string) {
+  return phone.replace(/\D/g, "");
+}
+
+export function normalizeConsultype(value: string | null | undefined) {
+  const normalized = (value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "-");
+
+  if (!normalized) {
+    return "otro";
+  }
+
+  if (normalized === "comprador") {
+    return "caliente";
+  }
+
+  if (normalized === "proyecto-futuro" || normalized === "sin-perforacion") {
+    return normalized;
+  }
+
+  const allowed = new Set([
+    "saludo",
+    "informacion",
+    "disponibilidad",
+    "accion",
+    "problema",
+    "seguimiento",
+    "caliente",
+    "comparador",
+    "reserva-7-dias",
+    "tecnico-revendedor",
+    "otro"
+  ]);
+
+  return allowed.has(normalized) ? normalized : "otro";
+}
+
+export function normalizeSentiment(value: string | null | undefined) {
+  const normalized = (value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (normalized === "muy-positivo" || normalized === "positivo") {
+    return "positivo";
+  }
+
+  if (normalized === "negativo") {
+    return "preocupado";
+  }
+
+  if (normalized === "muy-negativo" || normalized === "molesto") {
+    return "molesto";
+  }
+
+  return "neutral";
+}
+
+export async function findUserByEmail(email: string) {
+  if (!isDbConfigured()) {
+    return null;
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    select id, full_name, email, role
+    from app_users
+    where lower(email) = lower(${email}) and active = true
+    limit 1
+  `) as AppUser[];
+
+  return rows[0] ?? null;
+}
+
+export async function getUsers() {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  return (await sql`
+    select id, full_name, email, role
+    from app_users
+    where active = true
+    order by role, full_name
+  `) as AppUser[];
+}
+
+export async function recordIncomingMessage(input: {
+  phone: string;
+  waMessageId?: string;
+  text: string;
+  contactName?: string;
+}) {
+  if (!isDbConfigured()) {
+    return { contactId: null, threadId: null };
+  }
+
+  const sql = getSql();
+  const phone = normalizePhone(input.phone);
+  const contacts = (await sql`
+    insert into contacts (phone, display_name, platform, last_seen_at)
+    values (${phone}, ${input.contactName ?? null}, 'whatsapp', now())
+    on conflict (phone) do update
+    set display_name = coalesce(excluded.display_name, contacts.display_name),
+        last_seen_at = now(),
+        updated_at = now()
+    returning id
+  `) as Array<{ id: string }>;
+  const contactId = contacts[0].id;
+
+  const existing = (await sql`
+    select id
+    from conversations
+    where contact_id = ${contactId}
+      and status in ('open', 'waiting', 'quoted', 'hot', 'handoff')
+    order by last_message_at desc
+    limit 1
+  `) as Array<{ id: string }>;
+
+  const threadId =
+    existing[0]?.id ??
+    (
+      (await sql`
+        insert into conversations (contact_id, status, last_message_at)
+        values (${contactId}, 'open', now())
+        returning id
+      `) as Array<{ id: string }>
+    )[0].id;
+
+  await sql`
+    insert into messages (conversation_id, contact_id, direction, wa_message_id, body)
+    values (${threadId}, ${contactId}, 'inbound', ${input.waMessageId ?? null}, ${input.text})
+  `;
+
+  await sql`
+    update conversations
+    set last_message_at = now()
+    where id = ${threadId}
+  `;
+
+  return { contactId, threadId };
+}
+
+export async function recordAgentReply(input: {
+  contactId?: string | null;
+  threadId?: string | null;
+  answer: string;
+  intent: string;
+  needsHuman: boolean;
+}) {
+  if (!isDbConfigured() || !input.contactId || !input.threadId) {
+    return;
+  }
+
+  const sql = getSql();
+
+  await sql`
+    insert into messages (conversation_id, contact_id, direction, body, consultype, needs_human)
+    values (${input.threadId}, ${input.contactId}, 'outbound', ${input.answer}, ${input.intent}, ${input.needsHuman})
+  `;
+
+  await sql`
+    update conversations
+    set last_message_at = now(),
+        status = case when ${input.needsHuman} then 'handoff' else status end
+    where id = ${input.threadId}
+  `;
+
+  if (input.needsHuman) {
+    await sql`
+      insert into handoffs (conversation_id, contact_id, reason, status)
+      values (${input.threadId}, ${input.contactId}, ${input.intent}, 'pending')
+    `;
+  }
+}
+
+export async function listConversations() {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  return (await sql`
+    select
+      c.id,
+      c.status,
+      c.ai_enabled,
+      c.last_message_at::text,
+      ct.id as contact_id,
+      ct.phone,
+      ct.display_name,
+      ct.sentiment,
+      ct.consultype,
+      c.assigned_to::text,
+      u.full_name as assigned_name,
+      lm.body as last_message,
+      lm.direction as last_direction,
+      0::int as unread_count
+    from conversations c
+    join contacts ct on ct.id = c.contact_id
+    left join app_users u on u.id = c.assigned_to
+    left join lateral (
+      select body, direction
+      from messages m
+      where m.conversation_id = c.id
+      order by m.created_at desc
+      limit 1
+    ) lm on true
+    order by c.last_message_at desc
+    limit 100
+  `) as ConversationSummary[];
+}
+
+export async function getDashboardStats() {
+  if (!isDbConfigured()) {
+    return {
+      conversations: 0,
+      contacts: 0,
+      handoffs: 0,
+      hot: 0
+    };
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    select
+      (select count(*)::int from conversations) as conversations,
+      (select count(*)::int from contacts) as contacts,
+      (select count(*)::int from conversations where status = 'handoff') as handoffs,
+      (select count(*)::int from contacts where consultype = 'caliente') as hot
+  `) as Array<{
+      conversations: number;
+      contacts: number;
+      handoffs: number;
+      hot: number;
+    }>;
+
+  return rows[0];
+}
+
+export async function updateConversation(input: {
+  conversationId: string;
+  status?: string;
+  aiEnabled?: boolean;
+  assignedTo?: string | null;
+}) {
+  const sql = getSql();
+  const status = input.status ?? null;
+  const aiEnabled = input.aiEnabled ?? null;
+  const assignedTo = input.assignedTo === undefined ? null : input.assignedTo;
+  const changeAssigned = input.assignedTo !== undefined;
+
+  await sql`
+    update conversations
+    set status = coalesce(${status}, status),
+        ai_enabled = coalesce(${aiEnabled}, ai_enabled),
+        assigned_to = case when ${changeAssigned} then ${assignedTo}::uuid else assigned_to end,
+        updated_at = now()
+    where id = ${input.conversationId}
+  `;
+}

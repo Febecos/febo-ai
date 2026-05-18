@@ -1,0 +1,12 @@
+.env
+.env.local
+.env*.local
+.next
+node_modules
+dist
+coverage
+*.tsbuildinfo
+*.log
+Hariaz/
+.git-broken-old/
+.git-sandbox-old/

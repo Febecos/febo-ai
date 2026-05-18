@@ -119,7 +119,7 @@ export async function downloadWhatsAppMedia(mediaId: string) {
   });
 
   if (!metadataResponse.ok) {
-    throw new Error(`No pudimos obtener el audio de WhatsApp (${metadataResponse.status}).`);
+    throw new Error(await getWhatsAppErrorMessage(metadataResponse, "obtener el archivo de WhatsApp"));
   }
 
   const metadata = (await metadataResponse.json()) as {
@@ -141,7 +141,7 @@ export async function downloadWhatsAppMedia(mediaId: string) {
   });
 
   if (!mediaResponse.ok) {
-    throw new Error(`No pudimos descargar el audio de WhatsApp (${mediaResponse.status}).`);
+    throw new Error(await getWhatsAppErrorMessage(mediaResponse, "descargar el archivo de WhatsApp"));
   }
 
   const buffer = Buffer.from(await mediaResponse.arrayBuffer());
@@ -178,7 +178,7 @@ export async function sendWhatsAppText(to: string, body: string) {
   });
 
   if (!response.ok) {
-    throw new Error(`WhatsApp Cloud API respondio ${response.status}: ${await response.text()}`);
+    throw new Error(await getWhatsAppErrorMessage(response, "enviar el mensaje"));
   }
 
   return response.json();
@@ -201,7 +201,7 @@ export async function uploadWhatsAppMedia(file: File) {
   });
 
   if (!response.ok) {
-    throw new Error(`WhatsApp Cloud API no pudo subir el archivo (${response.status}): ${await response.text()}`);
+    throw new Error(await getWhatsAppErrorMessage(response, "subir el archivo"));
   }
 
   return (await response.json()) as { id: string };
@@ -229,7 +229,7 @@ export async function sendWhatsAppAudio(to: string, mediaId: string) {
   });
 
   if (!response.ok) {
-    throw new Error(`WhatsApp Cloud API respondio ${response.status}: ${await response.text()}`);
+    throw new Error(await getWhatsAppErrorMessage(response, "enviar el audio"));
   }
 
   return response.json();
@@ -258,7 +258,7 @@ export async function sendWhatsAppImage(to: string, mediaId: string, caption?: s
   });
 
   if (!response.ok) {
-    throw new Error(`WhatsApp Cloud API respondio ${response.status}: ${await response.text()}`);
+    throw new Error(await getWhatsAppErrorMessage(response, "enviar la imagen"));
   }
 
   return response.json();
@@ -288,8 +288,25 @@ export async function sendWhatsAppDocument(to: string, mediaId: string, filename
   });
 
   if (!response.ok) {
-    throw new Error(`WhatsApp Cloud API respondio ${response.status}: ${await response.text()}`);
+    throw new Error(await getWhatsAppErrorMessage(response, "enviar el archivo"));
   }
 
   return response.json();
+}
+
+async function getWhatsAppErrorMessage(response: Response, action: string) {
+  const body = await response.text();
+  let metaError: { message?: string; code?: number; type?: string } | null = null;
+
+  try {
+    metaError = (JSON.parse(body) as { error?: { message?: string; code?: number; type?: string } }).error ?? null;
+  } catch {
+    metaError = null;
+  }
+
+  if (response.status === 401 || metaError?.code === 190 || metaError?.type === "OAuthException") {
+    return "Token de WhatsApp vencido o invalido. Actualiza WHATSAPP_ACCESS_TOKEN en Vercel con un token vigente de Meta y redeploya.";
+  }
+
+  return `WhatsApp Cloud API no pudo ${action} (${response.status}): ${metaError?.message ?? body}`;
 }

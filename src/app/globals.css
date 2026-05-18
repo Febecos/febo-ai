@@ -160,7 +160,8 @@ button:disabled {
 .check-field,
 .user-meta,
 .info-cell small,
-.message-preview small {
+.thread-title,
+.chat-bubble small {
   color: var(--muted);
   font-size: 13px;
 }
@@ -480,7 +481,7 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
-.message-preview,
+.thread-panel,
 .answer-box {
   background: #f8faf8;
   border: 1px solid var(--line);
@@ -488,10 +489,69 @@ button:disabled {
   padding: 14px;
 }
 
-.message-preview p,
 .answer-box p {
   margin: 6px 0 0;
   white-space: pre-wrap;
+}
+
+.thread-panel {
+  display: grid;
+  gap: 12px;
+  max-height: 520px;
+  min-height: 220px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.thread-title {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  font-weight: 700;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
+}
+
+.thread-title span {
+  background: #eef1ef;
+  border-radius: 999px;
+  margin-left: auto;
+  padding: 3px 8px;
+}
+
+.message-thread {
+  display: grid;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 0 14px 14px;
+}
+
+.chat-bubble {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  max-width: 82%;
+  padding: 10px 12px;
+}
+
+.chat-bubble p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.chat-bubble.inbound {
+  background: white;
+  justify-self: start;
+}
+
+.chat-bubble.outbound,
+.chat-bubble.internal {
+  background: var(--green-soft);
+  border-color: #c8e6d5;
+  justify-self: end;
 }
 
 .toolbar {

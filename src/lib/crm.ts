@@ -35,6 +35,15 @@ export type ConversationSummary = {
   unread_count: number;
 };
 
+export type ConversationMessage = {
+  id: string;
+  direction: "inbound" | "outbound" | "internal";
+  body: string;
+  consultype: string | null;
+  needs_human: boolean;
+  created_at: string;
+};
+
 export type ConversationFilters = {
   query?: string;
   consultype?: string;
@@ -387,6 +396,29 @@ export async function listConversations(filters: ConversationFilters = {}) {
     order by c.last_message_at desc, c.created_at desc, ct.display_name asc nulls last, c.id
     limit ${limit}
   `) as ConversationSummary[];
+}
+
+export async function listConversationMessages(conversationId: string, limit = 120) {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  const safeLimit = Math.min(Math.max(limit, 20), 500);
+
+  return (await sql`
+    select
+      id::text,
+      direction,
+      body,
+      consultype,
+      needs_human,
+      created_at::text
+    from messages
+    where conversation_id = ${conversationId}
+    order by created_at asc
+    limit ${safeLimit}
+  `) as ConversationMessage[];
 }
 
 export async function getDashboardStats() {

@@ -18,8 +18,8 @@ import {
   UserCheck,
   UserPlus
 } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
-import type { AppUser, ConversationSummary, UserAdminSummary } from "@/lib/crm";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import type { AppUser, ConversationMessage, ConversationSummary, UserAdminSummary } from "@/lib/crm";
 
 type Stats = {
   conversations: number;
@@ -487,6 +487,9 @@ function InboxList({
   const [items, setItems] = useState(conversations);
   const [selectedId, setSelectedId] = useState(conversations[0]?.id ?? "");
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messageError, setMessageError] = useState("");
   const [filters, setFilters] = useState({
     query: "",
     consultype: "all",
@@ -494,6 +497,43 @@ function InboxList({
     assignedTo: "all"
   });
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadMessages() {
+      if (!selected?.id) {
+        setMessages([]);
+        return;
+      }
+
+      setLoadingMessages(true);
+      setMessageError("");
+
+      const response = await fetch(`/api/conversation-messages?conversationId=${selected.id}`);
+      const payload = await readJsonResponse(response);
+
+      if (!active) {
+        return;
+      }
+
+      setLoadingMessages(false);
+
+      if (!response.ok) {
+        setMessages([]);
+        setMessageError(payload?.error ?? "No pudimos cargar la conversacion.");
+        return;
+      }
+
+      setMessages(payload?.messages ?? []);
+    }
+
+    void loadMessages();
+
+    return () => {
+      active = false;
+    };
+  }, [selected?.id]);
 
   async function refreshConversations(nextFilters = filters) {
     const params = new URLSearchParams();
@@ -543,6 +583,11 @@ function InboxList({
     }
 
     await refreshConversations();
+    if (conversationId === selected?.id) {
+      const messagesResponse = await fetch(`/api/conversation-messages?conversationId=${conversationId}`);
+      const payload = await readJsonResponse(messagesResponse);
+      setMessages(payload?.messages ?? []);
+    }
   }
 
   return (
@@ -683,9 +728,29 @@ function InboxList({
               <Info label="IA" value={selected.ai_enabled ? "Activa" : "Pausada"} />
             </div>
 
-            <div className="message-preview">
-              <small>Ultimo mensaje</small>
-              <p>{selected.last_message || "Contacto importado sin historial de conversacion."}</p>
+            <div className="thread-panel">
+              <div className="thread-title">
+                <MessageSquareText size={17} />
+                Conversacion
+                <span>{messages.length}</span>
+              </div>
+              {loadingMessages ? <div className="empty-state">Cargando mensajes...</div> : null}
+              {messageError ? <div className="empty-state warn">{messageError}</div> : null}
+              {!loadingMessages && !messageError && messages.length ? (
+                <div className="message-thread">
+                  {messages.map((message) => (
+                    <article className={`chat-bubble ${message.direction}`} key={message.id}>
+                      <p>{message.body}</p>
+                      <small>
+                        {message.direction === "inbound" ? "Cliente" : "Febo AI"} · {formatMessageTime(message.created_at)}
+                      </small>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+              {!loadingMessages && !messageError && !messages.length ? (
+                <div className="empty-state">Contacto importado sin historial de conversacion.</div>
+              ) : null}
             </div>
           </>
         ) : (
@@ -694,6 +759,15 @@ function InboxList({
       </div>
     </div>
   );
+}
+
+function formatMessageTime(value: string) {
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "2-digit"
+  }).format(new Date(value));
 }
 
 function Info({ label, value }: { label: string; value: string }) {

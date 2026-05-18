@@ -7,6 +7,7 @@ import {
   sendWhatsAppDocument,
   sendWhatsAppImage,
   sendWhatsAppText,
+  sendWhatsAppVideo,
   uploadWhatsAppMedia
 } from "@/lib/whatsapp";
 
@@ -19,6 +20,7 @@ const sendSchema = schema.extend({
 });
 
 const supportedImageMimeTypes = ["image/jpeg", "image/png", "image/webp"];
+const supportedVideoMimeTypes = ["video/mp4", "video/3gpp", "video/3gp"];
 
 const supportedAudioMimeTypes = [
   "audio/aac",
@@ -92,6 +94,8 @@ export async function POST(request: NextRequest) {
         await sendWhatsAppAudio(target.phone, uploaded.id);
       } else if (mediaKind === "image") {
         await sendWhatsAppImage(target.phone, uploaded.id, caption);
+      } else if (mediaKind === "video") {
+        await sendWhatsAppVideo(target.phone, uploaded.id, caption);
       } else {
         await sendWhatsAppDocument(target.phone, uploaded.id, file.name || "archivo", caption);
       }
@@ -162,7 +166,12 @@ function isSupportedWhatsAppAudio(mimeType: string) {
 
 function isSupportedWhatsAppAttachment(mimeType: string) {
   const normalized = mimeType.split(";")[0].trim().toLowerCase();
-  return supportedImageMimeTypes.includes(normalized) || supportedAudioMimeTypes.includes(normalized) || supportedDocumentMimeTypes.includes(normalized);
+  return (
+    supportedImageMimeTypes.includes(normalized) ||
+    supportedVideoMimeTypes.includes(normalized) ||
+    supportedAudioMimeTypes.includes(normalized) ||
+    supportedDocumentMimeTypes.includes(normalized)
+  );
 }
 
 function getMediaKind(mimeType: string) {
@@ -174,6 +183,10 @@ function getMediaKind(mimeType: string) {
 
   if (supportedImageMimeTypes.includes(normalized)) {
     return "image";
+  }
+
+  if (supportedVideoMimeTypes.includes(normalized)) {
+    return "video";
   }
 
   return "document";
@@ -194,6 +207,10 @@ function buildAttachmentBody(file: File, caption?: string) {
     return `Imagen enviada: ${file.name || "imagen"}`;
   }
 
+  if (mediaKind === "video") {
+    return `Video enviado: ${file.name || "video"}`;
+  }
+
   return `Archivo enviado: ${file.name || "archivo"}`;
 }
 
@@ -201,7 +218,7 @@ function getSendValidationError(error: z.ZodError) {
   const fileErrors = error.flatten().fieldErrors.file ?? [];
 
   if (fileErrors.length) {
-    return "Formato no compatible con WhatsApp o archivo demasiado grande. Proba con imagen, PDF, Office o audio compatible.";
+    return "Formato no compatible con WhatsApp o archivo demasiado grande. Proba con imagen, video MP4/3GP, PDF, Office o audio compatible.";
   }
 
   return "Mensaje invalido.";

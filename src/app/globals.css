@@ -557,6 +557,13 @@ button:disabled {
   object-fit: contain;
 }
 
+.message-video {
+  border-radius: 8px;
+  display: block;
+  max-height: 360px;
+  max-width: 100%;
+}
+
 .message-file {
   align-items: center;
   background: #f1f5f2;

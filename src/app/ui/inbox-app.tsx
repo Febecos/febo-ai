@@ -987,7 +987,7 @@ function InboxList({
                 type="file"
               />
               <input
-                accept="image/png,image/jpeg,image/webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                accept="image/png,image/jpeg,image/webp,video/mp4,video/3gpp,.mp4,.3gp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
                 hidden
                 onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
                 ref={attachmentInputRef}
@@ -995,7 +995,7 @@ function InboxList({
               />
               <div className="drop-zone">
                 <Paperclip size={18} />
-                <span>Solta aca una imagen, PDF o archivo</span>
+                <span>Solta aca una imagen, video, PDF o archivo</span>
               </div>
               <textarea
                 disabled={sendingReply}
@@ -1080,6 +1080,10 @@ function MessageMedia({ message }: { message: ConversationMessage }) {
     return <audio controls preload="metadata" src={src} />;
   }
 
+  if (mimeType.startsWith("video/")) {
+    return <video className="message-video" controls preload="metadata" src={src} />;
+  }
+
   return (
     <a className="message-file" href={src} rel="noreferrer" target="_blank">
       <FileText size={17} />
@@ -1091,6 +1095,7 @@ function MessageMedia({ message }: { message: ConversationMessage }) {
 function isSupportedClientAttachment(file: File) {
   const mimeType = file.type.split(";")[0].trim().toLowerCase();
   const supportedImages = ["image/jpeg", "image/png", "image/webp"];
+  const supportedVideos = ["video/mp4", "video/3gpp", "video/3gp"];
   const supportedDocuments = [
     "application/pdf",
     "application/msword",
@@ -1102,7 +1107,7 @@ function isSupportedClientAttachment(file: File) {
     "text/plain"
   ];
 
-  return supportedImages.includes(mimeType) || isSupportedClientAudio(mimeType) || supportedDocuments.includes(mimeType);
+  return supportedImages.includes(mimeType) || supportedVideos.includes(mimeType) || isSupportedClientAudio(mimeType) || supportedDocuments.includes(mimeType);
 }
 
 function isSupportedClientAudio(mimeType: string) {
@@ -1116,6 +1121,10 @@ function getAttachmentSendLabel(file: File) {
 
   if (file.type.startsWith("image/")) {
     return "Enviar imagen";
+  }
+
+  if (file.type.startsWith("video/")) {
+    return "Enviar video";
   }
 
   return "Enviar archivo";

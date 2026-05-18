@@ -135,6 +135,7 @@ button:disabled {
 
 .metric-card,
 .agent-panel,
+.admin-panel,
 .conversation-list,
 .conversation-detail,
 .login-panel {
@@ -156,10 +157,71 @@ button:disabled {
 .metric-card span,
 .panel-title,
 .field,
+.check-field,
+.user-meta,
 .info-cell small,
 .message-preview small {
   color: var(--muted);
   font-size: 13px;
+}
+
+.admin-panel {
+  display: grid;
+  overflow: hidden;
+}
+
+.user-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 12px;
+}
+
+.user-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.user-card-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.user-card-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-form {
+  align-content: flex-start;
+}
+
+.user-meta {
+  overflow-wrap: anywhere;
+}
+
+.form-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.check-field {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.check-field input {
+  height: 16px;
+  width: 16px;
 }
 
 .workspace-grid {
@@ -472,6 +534,11 @@ select {
   color: var(--red);
 }
 
+.ok {
+  color: var(--green);
+  padding: 0 12px 12px;
+}
+
 .login-shell {
   align-items: center;
   display: grid;
@@ -505,6 +572,10 @@ select {
     grid-template-columns: 1fr;
   }
 
+  .user-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .conversation-detail {
     order: -1;
   }
@@ -530,7 +601,9 @@ select {
   }
 
   .stat-grid,
-  .detail-grid {
+  .detail-grid,
+  .form-grid,
+  .user-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -578,5 +651,14 @@ select {
 
   .toolbar > * {
     flex: 1 1 150px;
+  }
+}
+
+@media (max-width: 560px) {
+  .stat-grid,
+  .detail-grid,
+  .form-grid,
+  .user-grid {
+    grid-template-columns: 1fr;
   }
 }

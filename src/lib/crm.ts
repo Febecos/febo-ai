@@ -7,6 +7,15 @@ export type AppUser = {
   role: "admin" | "vendedor";
 };
 
+export type AuthUserRecord = AppUser & {
+  login_code_hash: string | null;
+};
+
+export type UserAdminSummary = AppUser & {
+  active: boolean;
+  has_login_code: boolean;
+};
+
 export type ConversationSummary = {
   id: string;
   status: string;
@@ -115,11 +124,11 @@ export async function findUserByEmail(email: string) {
 
   const sql = getSql();
   const rows = (await sql`
-    select id, full_name, email, role
+    select id, full_name, email, role, login_code_hash
     from app_users
     where lower(email) = lower(${email}) and active = true
     limit 1
-  `) as AppUser[];
+  `) as AuthUserRecord[];
 
   return rows[0] ?? null;
 }
@@ -136,6 +145,55 @@ export async function getUsers() {
     where active = true
     order by role, full_name
   `) as AppUser[];
+}
+
+export async function getAdminUsers() {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  return (await sql`
+    select id, full_name, email, role, active, (login_code_hash is not null) as has_login_code
+    from app_users
+    order by active desc, role, full_name
+  `) as UserAdminSummary[];
+}
+
+export async function upsertAppUser(input: {
+  id?: string;
+  fullName: string;
+  email: string;
+  role: "admin" | "vendedor";
+  active: boolean;
+  loginCodeHash?: string | null;
+}) {
+  const sql = getSql();
+  const id = input.id || null;
+  const loginCodeHash = input.loginCodeHash ?? null;
+  const shouldChangeCode = input.loginCodeHash !== undefined;
+
+  const rows = (await sql`
+    insert into app_users (id, full_name, email, role, active, login_code_hash)
+    values (
+      coalesce(${id}::uuid, gen_random_uuid()),
+      ${input.fullName},
+      lower(${input.email}),
+      ${input.role},
+      ${input.active},
+      ${loginCodeHash}
+    )
+    on conflict (id) do update
+    set full_name = excluded.full_name,
+        email = excluded.email,
+        role = excluded.role,
+        active = excluded.active,
+        login_code_hash = case when ${shouldChangeCode} then excluded.login_code_hash else app_users.login_code_hash end,
+        updated_at = now()
+    returning id, full_name, email, role, active, (login_code_hash is not null) as has_login_code
+  `) as UserAdminSummary[];
+
+  return rows[0];
 }
 
 export async function recordIncomingMessage(input: {

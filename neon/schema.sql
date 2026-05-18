@@ -5,10 +5,14 @@ create table if not exists app_users (
   full_name text not null,
   email text not null unique,
   role text not null check (role in ('admin', 'vendedor')),
+  login_code_hash text,
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table app_users
+  add column if not exists login_code_hash text;
 
 insert into app_users (full_name, email, role)
 values

@@ -5,16 +5,20 @@ import {
   ChevronLeft,
   CircleUserRound,
   Filter,
+  KeyRound,
   LogOut,
   MessageSquareText,
   RefreshCcw,
+  Save,
   Search,
+  ShieldCheck,
   SendHorizonal,
   Smartphone,
-  UserCheck
+  UserCheck,
+  UserPlus
 } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
-import type { AppUser, ConversationSummary } from "@/lib/crm";
+import type { AppUser, ConversationSummary, UserAdminSummary } from "@/lib/crm";
 
 type Stats = {
   conversations: number;
@@ -34,13 +38,15 @@ export function InboxApp({
   currentUser,
   dbConfigured,
   stats,
-  users
+  users,
+  adminUsers
 }: {
   conversations: ConversationSummary[];
   currentUser: AppUser | null;
   dbConfigured: boolean;
   stats: Stats;
   users: AppUser[];
+  adminUsers: UserAdminSummary[];
 }) {
   if (!currentUser) {
     return <LoginScreen dbConfigured={dbConfigured} />;
@@ -80,6 +86,8 @@ export function InboxApp({
         <Metric label="Escaladas" value={stats.handoffs} />
         <Metric label="Calientes" value={stats.hot} />
       </section>
+
+      {currentUser.role === "admin" ? <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} /> : null}
 
       <section className="workspace-grid">
         <InboxList conversations={conversations} currentUser={currentUser} users={users} />
@@ -156,6 +164,226 @@ function Metric({ label, value }: { label: string; value: number }) {
       <strong>{value.toLocaleString("es-AR")}</strong>
       <span>{label}</span>
     </div>
+  );
+}
+
+function AdminUsersPanel({
+  currentUser,
+  initialUsers
+}: {
+  currentUser: AppUser;
+  initialUsers: UserAdminSummary[];
+}) {
+  const [users, setUsers] = useState(initialUsers);
+  const [newUser, setNewUser] = useState({
+    full_name: "",
+    email: "",
+    role: "vendedor" as AppUser["role"],
+    active: true
+  });
+  const [newCode, setNewCode] = useState("");
+  const [message, setMessage] = useState("");
+
+  async function saveUser(input: {
+    id?: string;
+    fullName: string;
+    email: string;
+    role: AppUser["role"];
+    active: boolean;
+    code?: string;
+  }) {
+    setMessage("");
+    const response = await fetch("/api/users", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input)
+    });
+    const payload = await readJsonResponse(response);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos guardar el usuario.");
+      return false;
+    }
+
+    setUsers(payload.users ?? []);
+    setMessage("Usuario guardado.");
+    return true;
+  }
+
+  async function createUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const ok = await saveUser({
+      fullName: newUser.full_name,
+      email: newUser.email,
+      role: newUser.role,
+      active: newUser.active,
+      code: newCode
+    });
+
+    if (ok) {
+      setNewUser({ full_name: "", email: "", role: "vendedor", active: true });
+      setNewCode("");
+    }
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="panel-title">
+        <ShieldCheck size={18} />
+        Usuarios y accesos
+        <span>{users.length}</span>
+      </div>
+      <div className="user-grid">
+        {users.map((user) => (
+          <UserEditor currentUserId={currentUser.id} key={user.id} onSave={saveUser} user={user} />
+        ))}
+
+        <form className="user-card user-form" onSubmit={createUser}>
+          <div className="user-card-head">
+            <UserPlus size={18} />
+            <strong>Nuevo usuario</strong>
+          </div>
+          <label className="field">
+            Nombre
+            <input
+              value={newUser.full_name}
+              onChange={(event) => setNewUser({ ...newUser, full_name: event.target.value })}
+              required
+            />
+          </label>
+          <label className="field">
+            Email
+            <input
+              type="email"
+              value={newUser.email}
+              onChange={(event) => setNewUser({ ...newUser, email: event.target.value })}
+              required
+            />
+          </label>
+          <div className="form-grid">
+            <label className="field">
+              Rol
+              <select
+                onChange={(event) => setNewUser({ ...newUser, role: event.target.value as AppUser["role"] })}
+                value={newUser.role}
+              >
+                <option value="vendedor">Vendedor</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </label>
+            <label className="field">
+              Codigo
+              <input
+                minLength={4}
+                type="password"
+                value={newCode}
+                onChange={(event) => setNewCode(event.target.value)}
+                required
+              />
+            </label>
+          </div>
+          <button className="primary" type="submit">
+            <UserPlus size={18} />
+            Crear
+          </button>
+        </form>
+      </div>
+      {message ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
+    </section>
+  );
+}
+
+function UserEditor({
+  currentUserId,
+  onSave,
+  user
+}: {
+  currentUserId: string;
+  onSave: (input: {
+    id?: string;
+    fullName: string;
+    email: string;
+    role: AppUser["role"];
+    active: boolean;
+    code?: string;
+  }) => Promise<boolean>;
+  user: UserAdminSummary;
+}) {
+  const [fullName, setFullName] = useState(user.full_name);
+  const [email, setEmail] = useState(user.email);
+  const [role, setRole] = useState<AppUser["role"]>(user.role);
+  const [active, setActive] = useState(user.active);
+  const [code, setCode] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    const ok = await onSave({
+      id: user.id,
+      fullName,
+      email,
+      role,
+      active,
+      code: code.trim() || undefined
+    });
+    setSaving(false);
+
+    if (ok) {
+      setCode("");
+    }
+  }
+
+  return (
+    <form className="user-card user-form" onSubmit={submit}>
+      <div className="user-card-head">
+        <CircleUserRound size={18} />
+        <strong>{user.full_name}</strong>
+      </div>
+      <span className="user-meta">
+        {user.role} - {user.has_login_code ? "codigo propio" : "codigo global"} - {user.active ? "activo" : "pausado"}
+      </span>
+      <label className="field">
+        Nombre
+        <input value={fullName} onChange={(event) => setFullName(event.target.value)} required />
+      </label>
+      <label className="field">
+        Email
+        <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+      </label>
+      <div className="form-grid">
+        <label className="field">
+          Rol
+          <select onChange={(event) => setRole(event.target.value as AppUser["role"])} value={role}>
+            <option value="vendedor">Vendedor</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </label>
+        <label className="field">
+          Nuevo codigo
+          <input
+            minLength={4}
+            placeholder="Dejar vacio mantiene el actual"
+            type="password"
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+          />
+        </label>
+      </div>
+      <label className="check-field">
+        <input
+          checked={active}
+          disabled={user.id === currentUserId}
+          onChange={(event) => setActive(event.target.checked)}
+          type="checkbox"
+        />
+        Usuario activo
+      </label>
+      <button className="secondary" disabled={saving} type="submit">
+        {code ? <KeyRound size={18} /> : <Save size={18} />}
+        {saving ? "Guardando" : "Guardar"}
+      </button>
+    </form>
   );
 }
 

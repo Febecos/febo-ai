@@ -17,6 +17,25 @@ function sign(payload: string) {
   return crypto.createHmac("sha256", getAuthSecret()).update(payload).digest("base64url");
 }
 
+export function hashLoginCode(code: string) {
+  return crypto.createHmac("sha256", getAuthSecret()).update(code).digest("base64url");
+}
+
+function timingSafeEqualText(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function verifyLoginCode(code: string, hash: string | null | undefined) {
+  if (!hash) {
+    return config.INTERNAL_LOGIN_CODE ? code === config.INTERNAL_LOGIN_CODE : false;
+  }
+
+  return timingSafeEqualText(hashLoginCode(code), hash);
+}
+
 function encodeSession(user: AppUser) {
   const payload = Buffer.from(
     JSON.stringify({
@@ -70,13 +89,12 @@ export async function getCurrentUser() {
 }
 
 export async function authenticateInternalUser(email: string, code: string) {
-  if (!config.INTERNAL_LOGIN_CODE) {
-    throw new Error("Falta configurar INTERNAL_LOGIN_CODE.");
-  }
+  const user = await findUserByEmail(email);
 
-  if (code !== config.INTERNAL_LOGIN_CODE) {
+  if (!user || !verifyLoginCode(code, user.login_code_hash)) {
     return null;
   }
 
-  return findUserByEmail(email);
+  const { login_code_hash: _loginCodeHash, ...safeUser } = user;
+  return safeUser;
 }

@@ -330,7 +330,7 @@ export async function listConversations(filters: ConversationFilters = {}) {
   const assignedTo =
     filters.assignedTo && filters.assignedTo !== "all" && filters.assignedTo !== "mine" ? filters.assignedTo : null;
   const onlyUnassigned = filters.assignedTo === "unassigned";
-  const limit = Math.min(Math.max(filters.limit ?? 80, 20), 200);
+  const limit = Math.min(Math.max(filters.limit ?? 300, 20), 1000);
 
   return (await sql`
     select
@@ -363,7 +363,7 @@ export async function listConversations(filters: ConversationFilters = {}) {
       and (${status}::text is null or c.status = ${status})
       and (${assignedTo}::uuid is null or c.assigned_to = ${assignedTo}::uuid)
       and (${onlyUnassigned}::boolean = false or c.assigned_to is null)
-    order by c.last_message_at desc
+    order by c.last_message_at desc, c.created_at desc, ct.display_name asc nulls last, c.id
     limit ${limit}
   `) as ConversationSummary[];
 }

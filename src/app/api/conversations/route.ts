@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       consultype: search.get("consultype") ?? undefined,
       status: search.get("status") ?? undefined,
       assignedTo: assignedTo === "mine" ? user.id : assignedTo,
-      limit: Number(search.get("limit") ?? 80)
+      limit: Number(search.get("limit") ?? 300)
     })
   });
 }

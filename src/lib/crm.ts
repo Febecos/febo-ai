@@ -54,6 +54,8 @@ export const seedUsers = [
   }
 ] as const;
 
+const hotLeadAssigneeEmail = "fernandezn.rodrigo@gmail.com";
+
 export function normalizePhone(phone: string) {
   return phone.replace(/\D/g, "");
 }
@@ -145,6 +147,18 @@ export async function getUsers() {
     where active = true
     order by role, full_name
   `) as AppUser[];
+}
+
+async function getActiveUserIdByEmail(email: string) {
+  const sql = getSql();
+  const rows = (await sql`
+    select id::text
+    from app_users
+    where lower(email) = lower(${email}) and active = true
+    limit 1
+  `) as Array<{ id: string }>;
+
+  return rows[0]?.id ?? null;
 }
 
 export async function getAdminUsers() {
@@ -264,16 +278,32 @@ export async function recordAgentReply(input: {
   }
 
   const sql = getSql();
+  const consultype = normalizeConsultype(input.intent);
+  const hotLeadAssigneeId = consultype === "caliente" ? await getActiveUserIdByEmail(hotLeadAssigneeEmail) : null;
 
   await sql`
     insert into messages (conversation_id, contact_id, direction, body, consultype, needs_human)
-    values (${input.threadId}, ${input.contactId}, 'outbound', ${input.answer}, ${input.intent}, ${input.needsHuman})
+    values (${input.threadId}, ${input.contactId}, 'outbound', ${input.answer}, ${consultype}, ${input.needsHuman})
+  `;
+
+  await sql`
+    update contacts
+    set consultype = ${consultype},
+        assigned_to = coalesce(${hotLeadAssigneeId}::uuid, assigned_to),
+        updated_at = now()
+    where id = ${input.contactId}
   `;
 
   await sql`
     update conversations
     set last_message_at = now(),
-        status = case when ${input.needsHuman} then 'handoff' else status end
+        status = case
+          when ${input.needsHuman} then 'handoff'
+          when ${consultype} = 'caliente' then 'hot'
+          else status
+        end,
+        assigned_to = coalesce(${hotLeadAssigneeId}::uuid, assigned_to),
+        updated_at = now()
     where id = ${input.threadId}
   `;
 

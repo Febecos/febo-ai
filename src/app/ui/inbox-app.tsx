@@ -504,6 +504,7 @@ function InboxList({
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingTimerRef = useRef<number | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const selectedIdRef = useRef(selectedId);
   const [filters, setFilters] = useState({
     query: "",
     consultype: "all",
@@ -513,41 +514,8 @@ function InboxList({
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
 
   useEffect(() => {
-    let active = true;
-
-    async function loadMessages() {
-      if (!selected?.id) {
-        setMessages([]);
-        return;
-      }
-
-      setLoadingMessages(true);
-      setMessageError("");
-
-      const response = await fetch(`/api/conversation-messages?conversationId=${selected.id}`);
-      const payload = await readJsonResponse(response);
-
-      if (!active) {
-        return;
-      }
-
-      setLoadingMessages(false);
-
-      if (!response.ok) {
-        setMessages([]);
-        setMessageError(payload?.error ?? "No pudimos cargar la conversacion.");
-        return;
-      }
-
-      setMessages(payload?.messages ?? []);
-    }
-
-    void loadMessages();
-
-    return () => {
-      active = false;
-    };
-  }, [selected?.id]);
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   useEffect(() => {
     return () => {
@@ -560,7 +528,68 @@ function InboxList({
     threadEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length, selected?.id]);
 
-  async function refreshConversations(nextFilters = filters) {
+  useEffect(() => {
+    void loadConversationMessages(selected?.id);
+  }, [selected?.id]);
+
+  useEffect(() => {
+    async function refreshVisibleInbox() {
+      if (document.hidden || sendingReply || recording) {
+        return;
+      }
+
+      await refreshConversations(filters, { silent: true });
+      await loadConversationMessages(selectedIdRef.current, { silent: true });
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshVisibleInbox();
+    }, 5000);
+
+    window.addEventListener("focus", refreshVisibleInbox);
+    document.addEventListener("visibilitychange", refreshVisibleInbox);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshVisibleInbox);
+      document.removeEventListener("visibilitychange", refreshVisibleInbox);
+    };
+  }, [filters, recording, sendingReply]);
+
+  async function loadConversationMessages(conversationId?: string, options: { silent?: boolean } = {}) {
+    if (!conversationId) {
+      setMessages([]);
+      return;
+    }
+
+    if (!options.silent) {
+      setLoadingMessages(true);
+      setMessageError("");
+    }
+
+    const response = await fetch(`/api/conversation-messages?conversationId=${conversationId}`);
+    const payload = await readJsonResponse(response);
+
+    if (conversationId !== selectedIdRef.current) {
+      return;
+    }
+
+    if (!options.silent) {
+      setLoadingMessages(false);
+    }
+
+    if (!response.ok) {
+      if (!options.silent) {
+        setMessages([]);
+        setMessageError(payload?.error ?? "No pudimos cargar la conversacion.");
+      }
+      return;
+    }
+
+    setMessages(payload?.messages ?? []);
+  }
+
+  async function refreshConversations(nextFilters = filters, options: { silent?: boolean } = {}) {
     const params = new URLSearchParams();
 
     if (nextFilters.query.trim()) {
@@ -581,12 +610,19 @@ function InboxList({
 
     const response = await fetch(`/api/conversations?${params.toString()}`);
     const payload = await readJsonResponse(response);
+
+    if (!response.ok) {
+      return;
+    }
+
     const nextItems = payload?.conversations ?? [];
     setItems(nextItems);
 
-    if (!nextItems.some((item: ConversationSummary) => item.id === selectedId)) {
+    if (!nextItems.some((item: ConversationSummary) => item.id === selectedIdRef.current)) {
       setSelectedId(nextItems[0]?.id ?? "");
-      setMobileDetailOpen(false);
+      if (!options.silent) {
+        setMobileDetailOpen(false);
+      }
     }
   }
 
@@ -609,9 +645,7 @@ function InboxList({
 
     await refreshConversations();
     if (conversationId === selected?.id) {
-      const messagesResponse = await fetch(`/api/conversation-messages?conversationId=${conversationId}`);
-      const payload = await readJsonResponse(messagesResponse);
-      setMessages(payload?.messages ?? []);
+      await loadConversationMessages(conversationId);
     }
   }
 

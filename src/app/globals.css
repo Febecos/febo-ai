@@ -649,6 +649,33 @@ select {
   justify-self: end;
 }
 
+.audio-draft,
+.recording-pill {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 13px;
+  min-height: 30px;
+  padding: 0 10px;
+  width: fit-content;
+}
+
+.audio-draft {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.recording-pill {
+  background: var(--red-soft);
+  color: var(--red);
+  font-weight: 700;
+}
+
+.recording-stop {
+  border-color: #efc7c3;
+  color: var(--red);
+}
+
 .composer-actions {
   align-items: center;
   display: flex;

@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   SendHorizonal,
   Smartphone,
+  Square,
   UserCheck,
   UserPlus
 } from "lucide-react";
@@ -495,7 +496,13 @@ function InboxList({
   const [replyAudio, setReplyAudio] = useState<File | null>(null);
   const [sendingReply, setSendingReply] = useState(false);
   const [replyError, setReplyError] = useState("");
+  const [recording, setRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingTimerRef = useRef<number | null>(null);
   const [filters, setFilters] = useState({
     query: "",
     consultype: "all",
@@ -540,6 +547,13 @@ function InboxList({
       active = false;
     };
   }, [selected?.id]);
+
+  useEffect(() => {
+    return () => {
+      stopRecorderTracks();
+      clearRecordingTimer();
+    };
+  }, []);
 
   async function refreshConversations(nextFilters = filters) {
     const params = new URLSearchParams();
@@ -633,6 +647,79 @@ function InboxList({
     setReplyAudio(null);
     setMessages(payload?.messages ?? []);
     await refreshConversations();
+  }
+
+  async function startRecording() {
+    setReplyError("");
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setReplyError("Este navegador no permite grabar audio directo. Proba con Adjuntar.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = getPreferredRecordingMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      recordingChunksRef.current = [];
+      recordingStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordingChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(recordingChunksRef.current, {
+          type: recorder.mimeType || mimeType || "audio/webm"
+        });
+
+        if (blob.size > 0) {
+          const extension = audioExtensionForMime(blob.type);
+          setReplyAudio(new File([blob], `audio-febo-${Date.now()}.${extension}`, { type: blob.type }));
+          setReplyText("");
+        }
+
+        stopRecorderTracks();
+        clearRecordingTimer();
+        setRecording(false);
+      };
+
+      recorder.start();
+      setRecording(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingSeconds((seconds) => seconds + 1);
+      }, 1000);
+    } catch {
+      setReplyError("No pudimos acceder al microfono. Revisá permisos o usá Adjuntar.");
+      stopRecorderTracks();
+      clearRecordingTimer();
+      setRecording(false);
+    }
+  }
+
+  function stopRecording() {
+    const recorder = mediaRecorderRef.current;
+
+    if (recorder?.state === "recording") {
+      recorder.stop();
+    }
+  }
+
+  function stopRecorderTracks() {
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingStreamRef.current = null;
+    mediaRecorderRef.current = null;
+  }
+
+  function clearRecordingTimer() {
+    if (recordingTimerRef.current) {
+      window.clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
   }
 
   return (
@@ -803,8 +890,8 @@ function InboxList({
 
             <form className="reply-composer" onSubmit={sendManualReply}>
               <input
-                accept="audio/aac,audio/amr,audio/mpeg,audio/mp4,audio/ogg,.aac,.amr,.mp3,.m4a,.ogg"
-                capture
+                accept="audio/*,.aac,.amr,.mp3,.m4a,.ogg"
+                capture="user"
                 hidden
                 onChange={(event) => setReplyAudio(event.target.files?.[0] ?? null)}
                 ref={audioInputRef}
@@ -816,14 +903,26 @@ function InboxList({
                 placeholder={replyAudio ? replyAudio.name : "Escribir respuesta"}
                 value={replyText}
               />
+              {recording ? <div className="recording-pill">Grabando {formatRecordingSeconds(recordingSeconds)}</div> : null}
+              {replyAudio ? <div className="audio-draft">Audio listo: {replyAudio.name}</div> : null}
               <div className="composer-actions">
+                {recording ? (
+                  <button className="secondary recording-stop" disabled={sendingReply} onClick={stopRecording} type="button">
+                    <Square size={16} />
+                    Detener
+                  </button>
+                ) : (
+                  <button className="secondary" disabled={sendingReply} onClick={startRecording} type="button">
+                    <Mic size={18} />
+                    Grabar
+                  </button>
+                )}
                 <button
                   className="secondary"
-                  disabled={sendingReply}
+                  disabled={sendingReply || recording}
                   onClick={() => audioInputRef.current?.click()}
                   type="button"
                 >
-                  <Mic size={18} />
                   Audio
                 </button>
                 {replyAudio ? (
@@ -854,6 +953,43 @@ function formatMessageTime(value: string) {
     minute: "2-digit",
     month: "2-digit"
   }).format(new Date(value));
+}
+
+function getPreferredRecordingMimeType() {
+  if (typeof MediaRecorder === "undefined") {
+    return "";
+  }
+
+  const candidates = ["audio/mp4", "audio/aac", "audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/webm"];
+  return candidates.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? "";
+}
+
+function audioExtensionForMime(mimeType: string) {
+  if (mimeType.includes("mp4")) {
+    return "m4a";
+  }
+
+  if (mimeType.includes("aac")) {
+    return "aac";
+  }
+
+  if (mimeType.includes("ogg")) {
+    return "ogg";
+  }
+
+  if (mimeType.includes("mpeg")) {
+    return "mp3";
+  }
+
+  return "webm";
+}
+
+function formatRecordingSeconds(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60)
+    .toString()
+    .padStart(2, "0");
+  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${seconds}`;
 }
 
 function Info({ label, value }: { label: string; value: string }) {

@@ -24,6 +24,14 @@ export type ConversationSummary = {
   unread_count: number;
 };
 
+export type ConversationFilters = {
+  query?: string;
+  consultype?: string;
+  status?: string;
+  assignedTo?: string;
+  limit?: number;
+};
+
 export const seedUsers = [
   {
     full_name: "Guillermo Sandler",
@@ -219,12 +227,23 @@ export async function recordAgentReply(input: {
   }
 }
 
-export async function listConversations() {
+export async function listConversations(filters: ConversationFilters = {}) {
   if (!isDbConfigured()) {
     return [];
   }
 
   const sql = getSql();
+  const query = filters.query?.trim() ?? "";
+  const phoneQuery = normalizePhone(query);
+  const search = query ? `%${query.toLowerCase()}%` : null;
+  const phoneSearch = phoneQuery ? `%${phoneQuery}%` : null;
+  const consultype = filters.consultype && filters.consultype !== "all" ? filters.consultype : null;
+  const status = filters.status && filters.status !== "all" ? filters.status : null;
+  const assignedTo =
+    filters.assignedTo && filters.assignedTo !== "all" && filters.assignedTo !== "mine" ? filters.assignedTo : null;
+  const onlyUnassigned = filters.assignedTo === "unassigned";
+  const limit = Math.min(Math.max(filters.limit ?? 80, 20), 200);
+
   return (await sql`
     select
       c.id,
@@ -251,8 +270,13 @@ export async function listConversations() {
       order by m.created_at desc
       limit 1
     ) lm on true
+    where (${search}::text is null or lower(coalesce(ct.display_name, '')) like ${search} or ct.phone like ${phoneSearch})
+      and (${consultype}::text is null or ct.consultype = ${consultype})
+      and (${status}::text is null or c.status = ${status})
+      and (${assignedTo}::uuid is null or c.assigned_to = ${assignedTo}::uuid)
+      and (${onlyUnassigned}::boolean = false or c.assigned_to is null)
     order by c.last_message_at desc
-    limit 100
+    limit ${limit}
   `) as ConversationSummary[];
 }
 

@@ -2,10 +2,13 @@
 
 import {
   Bot,
+  ChevronLeft,
   CircleUserRound,
+  Filter,
   LogOut,
   MessageSquareText,
   RefreshCcw,
+  Search,
   SendHorizonal,
   Smartphone,
   UserCheck
@@ -167,7 +170,50 @@ function InboxList({
 }) {
   const [items, setItems] = useState(conversations);
   const [selectedId, setSelectedId] = useState(conversations[0]?.id ?? "");
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    query: "",
+    consultype: "all",
+    status: "all",
+    assignedTo: "all"
+  });
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
+
+  async function refreshConversations(nextFilters = filters) {
+    const params = new URLSearchParams();
+
+    if (nextFilters.query.trim()) {
+      params.set("q", nextFilters.query.trim());
+    }
+
+    if (nextFilters.consultype !== "all") {
+      params.set("consultype", nextFilters.consultype);
+    }
+
+    if (nextFilters.status !== "all") {
+      params.set("status", nextFilters.status);
+    }
+
+    if (nextFilters.assignedTo !== "all") {
+      params.set("assignedTo", nextFilters.assignedTo === "mine" ? currentUser.id : nextFilters.assignedTo);
+    }
+
+    const response = await fetch(`/api/conversations?${params.toString()}`);
+    const payload = await readJsonResponse(response);
+    const nextItems = payload?.conversations ?? [];
+    setItems(nextItems);
+
+    if (!nextItems.some((item: ConversationSummary) => item.id === selectedId)) {
+      setSelectedId(nextItems[0]?.id ?? "");
+      setMobileDetailOpen(false);
+    }
+  }
+
+  function updateFilters(next: Partial<typeof filters>) {
+    const nextFilters = { ...filters, ...next };
+    setFilters(nextFilters);
+    void refreshConversations(nextFilters);
+  }
 
   async function patchConversation(conversationId: string, body: Record<string, unknown>) {
     const response = await fetch("/api/conversations", {
@@ -180,24 +226,69 @@ function InboxList({
       return;
     }
 
-    const refreshed = await fetch("/api/conversations");
-    const payload = await refreshed.json();
-    setItems(payload.conversations ?? []);
+    await refreshConversations();
   }
 
   return (
-    <div className="inbox-panel">
+    <div className={`inbox-panel ${mobileDetailOpen ? "show-detail" : "show-list"}`}>
       <div className="conversation-list">
         <div className="panel-title">
           <MessageSquareText size={18} />
           Conversaciones
+          <span>{items.length}</span>
+        </div>
+        <div className="filters">
+          <label className="search-field">
+            <Search size={16} />
+            <input
+              placeholder="Buscar nombre o telefono"
+              value={filters.query}
+              onChange={(event) => updateFilters({ query: event.target.value })}
+            />
+          </label>
+          <div className="filter-row">
+            <Filter size={16} />
+            <select onChange={(event) => updateFilters({ consultype: event.target.value })} value={filters.consultype}>
+              <option value="all">Todas las etiquetas</option>
+              <option value="caliente">Caliente</option>
+              <option value="comparador">Comparador</option>
+              <option value="sin-perforacion">Sin perforacion</option>
+              <option value="proyecto-futuro">Proyecto futuro</option>
+              <option value="informacion">Informacion</option>
+              <option value="seguimiento">Seguimiento</option>
+              <option value="otro">Otro</option>
+            </select>
+            <select onChange={(event) => updateFilters({ status: event.target.value })} value={filters.status}>
+              <option value="all">Todos los estados</option>
+              <option value="open">Abiertas</option>
+              <option value="waiting">Esperando</option>
+              <option value="quoted">Cotizadas</option>
+              <option value="hot">Calientes</option>
+              <option value="handoff">Humano</option>
+              <option value="closed">Cerradas</option>
+              <option value="lost">Perdidas</option>
+            </select>
+            <select onChange={(event) => updateFilters({ assignedTo: event.target.value })} value={filters.assignedTo}>
+              <option value="all">Todos</option>
+              <option value="mine">Mias</option>
+              <option value="unassigned">Sin asignar</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.full_name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         {items.length ? (
           items.map((conversation) => (
             <button
               className={`conversation-row ${conversation.id === selected?.id ? "active" : ""}`}
               key={conversation.id}
-              onClick={() => setSelectedId(conversation.id)}
+              onClick={() => {
+                setSelectedId(conversation.id);
+                setMobileDetailOpen(true);
+              }}
               type="button"
             >
               <span className="row-main">
@@ -215,6 +306,10 @@ function InboxList({
       <div className="conversation-detail">
         {selected ? (
           <>
+            <button className="back-button" onClick={() => setMobileDetailOpen(false)} type="button">
+              <ChevronLeft size={18} />
+              Volver
+            </button>
             <div className="detail-head">
               <div>
                 <h2>{selected.display_name || "Sin nombre"}</h2>

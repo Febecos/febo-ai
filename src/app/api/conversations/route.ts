@@ -10,14 +10,25 @@ const updateSchema = z.object({
   assignedTo: z.string().uuid().nullable().optional()
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
   if (!user) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
 
-  return NextResponse.json({ conversations: await listConversations() });
+  const search = request.nextUrl.searchParams;
+  const assignedTo = search.get("assignedTo") ?? undefined;
+
+  return NextResponse.json({
+    conversations: await listConversations({
+      query: search.get("q") ?? undefined,
+      consultype: search.get("consultype") ?? undefined,
+      status: search.get("status") ?? undefined,
+      assignedTo: assignedTo === "mine" ? user.id : assignedTo,
+      limit: Number(search.get("limit") ?? 80)
+    })
+  });
 }
 
 export async function PATCH(request: NextRequest) {

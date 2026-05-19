@@ -1257,23 +1257,31 @@ select {
 
 @media (max-width: 720px) {
   .app-shell {
-    height: 100dvh;
+    height: 100svh;
     grid-template-rows: auto minmax(0, 1fr);
-    max-height: 100dvh;
+    max-height: 100svh;
     overflow: hidden;
-    gap: 10px;
-    padding: 10px;
+    gap: 6px;
+    padding: 6px 8px max(6px, env(safe-area-inset-bottom));
   }
 
   .app-header {
     align-items: flex-start;
     display: grid;
-    gap: 6px;
+    gap: 4px;
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .app-header h1 {
-    font-size: 20px;
+    font-size: 19px;
+  }
+
+  .app-header .muted {
+    font-size: 12px;
+  }
+
+  .eyebrow {
+    font-size: 10px;
   }
 
   .header-actions {
@@ -1302,9 +1310,9 @@ select {
   .admin-workspace {
     align-items: stretch;
     display: grid;
-    gap: 6px;
+    gap: 5px;
     height: 100%;
-    grid-template-columns: 46px minmax(0, 1fr);
+    grid-template-columns: 44px minmax(0, 1fr);
     min-height: 0;
     overflow: hidden;
   }
@@ -1329,11 +1337,11 @@ select {
     aspect-ratio: 1;
     font-size: 0;
     justify-content: center;
-    min-height: 38px;
+    min-height: 36px;
     overflow: hidden;
     padding: 0;
     white-space: nowrap;
-    width: 38px;
+    width: 36px;
   }
 
   .tool-sidebar-bottom {
@@ -1395,12 +1403,12 @@ select {
     display: flex;
     flex-direction: column;
     position: static;
-    gap: 10px;
+    gap: 8px;
     height: 100%;
     max-height: 100%;
     min-height: 0;
     overflow: hidden;
-    padding: 10px;
+    padding: 8px;
   }
 
   .back-button {
@@ -1497,7 +1505,7 @@ select {
   }
 
   .reply-composer textarea {
-    min-height: 52px;
+    min-height: 46px;
   }
 
   .composer-actions {

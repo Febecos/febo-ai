@@ -323,9 +323,14 @@ button:disabled {
   padding: 12px;
 }
 
-.full-width {
-  margin: 12px;
-  width: calc(100% - 24px);
+.list-quick-actions {
+  display: grid;
+  gap: 10px;
+  padding: 12px 12px 0;
+}
+
+.new-contact-button {
+  width: 100%;
 }
 
 .new-contact-card {
@@ -1246,6 +1251,7 @@ select {
   }
 
   .filter-row {
+    gap: 6px;
     grid-template-columns: 1fr;
   }
 
@@ -1255,19 +1261,22 @@ select {
 
   .filter-row select {
     grid-column: auto;
+    min-height: 34px;
+    padding: 0 8px;
   }
 
   .toolbar > * {
-    flex: 1 1 112px;
+    flex: 0 0 auto;
   }
 
   .toolbar {
     gap: 6px;
+    justify-content: flex-start;
     padding: 8px;
   }
 
   .toolbar > button {
-    flex: 1 1 0;
+    flex: 0 0 auto;
     font-size: 14px;
     gap: 5px;
     min-width: 0;
@@ -1319,6 +1328,39 @@ select {
 
   .tool-sidebar button {
     justify-content: center;
+  }
+
+  .panel-title {
+    min-height: 40px;
+    padding: 0 10px;
+  }
+
+  .list-quick-actions {
+    gap: 6px;
+    grid-template-columns: 42px minmax(0, 1fr);
+    padding: 8px 8px 6px;
+  }
+
+  .new-contact-button {
+    aspect-ratio: 1;
+    font-size: 0;
+    gap: 0;
+    min-height: 40px;
+    padding: 0;
+  }
+
+  .new-contact-button svg {
+    flex: 0 0 auto;
+  }
+
+  .search-field {
+    min-height: 40px;
+    padding: 0 8px;
+  }
+
+  .filters {
+    gap: 6px;
+    padding: 0 8px 8px;
   }
 
   .stat-grid {

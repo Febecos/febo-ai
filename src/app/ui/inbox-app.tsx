@@ -1230,10 +1230,20 @@ function InboxList({
           Conversaciones
           <span>{items.length}</span>
         </div>
-        <button className="secondary full-width" onClick={() => setNewContactOpen(!newContactOpen)} type="button">
-          <UserPlus size={17} />
-          Nuevo contacto
-        </button>
+        <div className="list-quick-actions">
+          <button className="secondary new-contact-button" onClick={() => setNewContactOpen(!newContactOpen)} type="button">
+            <UserPlus size={17} />
+            Nuevo contacto
+          </button>
+          <label className="search-field">
+            <Search size={16} />
+            <input
+              placeholder="Buscar nombre o telefono"
+              value={filters.query}
+              onChange={(event) => updateFilters({ query: event.target.value })}
+            />
+          </label>
+        </div>
         {newContactOpen ? (
           <form className="new-contact-card" onSubmit={createContactWithTemplate}>
             <label className="field">
@@ -1277,14 +1287,6 @@ function InboxList({
           </form>
         ) : null}
         <div className="filters">
-          <label className="search-field">
-            <Search size={16} />
-            <input
-              placeholder="Buscar nombre o telefono"
-              value={filters.query}
-              onChange={(event) => updateFilters({ query: event.target.value })}
-            />
-          </label>
           <div className="filter-row">
             <Filter size={16} />
             <select onChange={(event) => updateFilters({ consultype: event.target.value })} value={filters.consultype}>

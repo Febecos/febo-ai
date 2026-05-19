@@ -101,7 +101,8 @@ export async function POST(request: NextRequest) {
     const result = await runFebecosAgent({
       phone: message.from,
       message: agentMessage,
-      contactName: message.contactName
+      contactName: message.contactName,
+      conversationId: stored.threadId
     });
 
     await sendWhatsAppText(message.from, result.respuesta);

@@ -3,6 +3,7 @@ import path from "node:path";
 import OpenAI, { toFile } from "openai";
 import { z } from "zod";
 import { config, requireEnv } from "./config";
+import { listAgentConversationContext } from "./crm";
 import { createLead, createSupportTicket, getProfileByPhone, platformFallbackContext, recordPlatformEvent } from "./febecos";
 
 const consultypeValues = [
@@ -106,15 +107,21 @@ export async function runFebecosAgent(input: {
   phone: string;
   message: string;
   contactName?: string;
+  conversationId?: string | null;
 }): Promise<AgentResult> {
   const profile = await getProfileByPhone(input.phone);
   const fallback = platformFallbackContext();
   const prompt = await getOperatingPrompt();
+  const history = await listAgentConversationContext(input.conversationId, 30);
 
   const response = await getOpenAI().responses.create({
     model: config.OPENAI_MODEL,
     instructions: [
       prompt,
+      "Regla critica de contexto: usa el historial de conversacion como fuente principal para entender el caso. No trates cada mensaje como si fuera el primer contacto.",
+      "No repreguntes datos que el cliente ya dio en el historial. Si faltan datos, pregunta solo el dato faltante mas importante.",
+      "Responde al ultimo mensaje del cliente, pero manteniendo continuidad con lo ya conversado.",
+      "Si el historial muestra que un humano ya tomo la conversacion o la IA esta pausada, no intentes cerrar ni avanzar por tu cuenta.",
       "Regla de integracion: devolve exclusivamente JSON valido con las claves del esquema pedido.",
       "No muestres el JSON al usuario final; el campo respuesta es el unico texto que se envia por WhatsApp.",
       "Si no hay catalogo, stock o precio disponible en el contexto, no inventes modelos ni importes: pedi el dato faltante o escala segun las reglas del prompt."
@@ -129,7 +136,19 @@ export async function runFebecosAgent(input: {
               whatsapp: {
                 phone: input.phone,
                 name: input.contactName ?? null,
-                message: input.message
+                message: input.message,
+                history: history.map((message) => ({
+                  speaker:
+                    message.direction === "inbound"
+                      ? "cliente"
+                      : message.source === "manual"
+                        ? "humano_febecos"
+                        : "febo_ai",
+                  text: message.body,
+                  consultype: message.consultype,
+                  needsHuman: message.needs_human,
+                  at: message.created_at
+                }))
               },
               febecos: {
                 profile,

@@ -47,6 +47,15 @@ export type ConversationMessage = {
   media_filename: string | null;
 };
 
+export type AgentConversationMessage = {
+  direction: "inbound" | "outbound" | "internal";
+  body: string;
+  consultype: string | null;
+  needs_human: boolean;
+  created_at: string;
+  source: string | null;
+};
+
 export type ConversationFilters = {
   query?: string;
   consultype?: string;
@@ -487,6 +496,28 @@ export async function listConversationMessages(conversationId: string, limit = 1
     order by m.created_at asc
     limit ${safeLimit}
   `) as ConversationMessage[];
+}
+
+export async function listAgentConversationContext(conversationId: string | null | undefined, limit = 30) {
+  if (!isDbConfigured() || !conversationId) {
+    return [];
+  }
+
+  const sql = getSql();
+  const safeLimit = Math.min(Math.max(limit, 8), 40);
+
+  return (await sql`
+    select direction, body, consultype, needs_human, created_at::text, metadata->>'source' as source
+    from (
+      select direction, body, consultype, needs_human, created_at, metadata
+      from messages
+      where conversation_id = ${conversationId}
+        and nullif(trim(body), '') is not null
+      order by created_at desc
+      limit ${safeLimit}
+    ) recent
+    order by created_at asc
+  `) as AgentConversationMessage[];
 }
 
 export async function getConversationReplyTarget(conversationId: string) {

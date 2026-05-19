@@ -1255,6 +1255,7 @@ select {
 @media (max-width: 720px) {
   .app-shell {
     height: 100dvh;
+    grid-template-rows: auto minmax(0, 1fr);
     max-height: 100dvh;
     overflow: hidden;
     gap: 10px;
@@ -1299,6 +1300,7 @@ select {
     align-items: stretch;
     display: grid;
     gap: 6px;
+    height: 100%;
     grid-template-columns: 46px minmax(0, 1fr);
     min-height: 0;
     overflow: hidden;
@@ -1354,11 +1356,13 @@ select {
 
   .tool-content {
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
   }
 
   .inbox-panel {
     display: block;
+    height: 100%;
+    min-height: 0;
   }
 
   .inbox-panel.show-list .conversation-detail,
@@ -1389,7 +1393,10 @@ select {
     flex-direction: column;
     position: static;
     gap: 10px;
-    min-height: calc(100vh - 20px);
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
     padding: 10px;
   }
 
@@ -1465,6 +1472,7 @@ select {
   }
 
   .message-thread {
+    height: 100%;
     max-height: none;
   }
 
@@ -1474,9 +1482,9 @@ select {
   }
 
   .reply-composer {
-    bottom: 0;
-    margin-top: auto;
-    position: sticky;
+    flex: 0 0 auto;
+    margin-top: 0;
+    position: relative;
     z-index: 7;
   }
 

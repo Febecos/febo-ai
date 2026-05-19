@@ -1006,7 +1006,6 @@ function InboxList({
       if (messageThreadRef.current) {
         messageThreadRef.current.scrollTop = messageThreadRef.current.scrollHeight;
       }
-      threadEndRef.current?.scrollIntoView({ block: "end" });
     };
 
     window.requestAnimationFrame(() => {

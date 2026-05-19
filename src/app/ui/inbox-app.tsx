@@ -747,6 +747,7 @@ function InboxList({
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingTimerRef = useRef<number | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const messageThreadRef = useRef<HTMLDivElement>(null);
   const selectedIdRef = useRef(selectedId);
   const [filters, setFilters] = useState({
     query: "",
@@ -769,9 +770,12 @@ function InboxList({
 
   useEffect(() => {
     window.requestAnimationFrame(() => {
+      if (messageThreadRef.current) {
+        messageThreadRef.current.scrollTop = messageThreadRef.current.scrollHeight;
+      }
       threadEndRef.current?.scrollIntoView({ block: "end" });
     });
-  }, [messages.length, selected?.id]);
+  }, [activeConversationTab, messages.length, selected?.id]);
 
   useEffect(() => {
     if (!replyFile?.type.startsWith("audio/")) {
@@ -1492,13 +1496,6 @@ function InboxList({
               </form>
             ) : null}
 
-            <div className="detail-grid">
-              <Info label="Etiqueta" value={selected.consultype} />
-              <Info label="Sentimiento" value={selected.sentiment} />
-              <Info label="Asignado" value={selected.assigned_name ?? "Sin asignar"} />
-              <Info label="IA" value={selected.ai_enabled ? "Activa" : "Pausada"} />
-            </div>
-
             <div className="conversation-tabs">
               <button
                 className={activeConversationTab === "chat" ? "active" : ""}
@@ -1522,15 +1519,10 @@ function InboxList({
 
             {activeConversationTab === "chat" ? (
               <div className="thread-panel">
-              <div className="thread-title">
-                <MessageSquareText size={17} />
-                Conversacion
-                <span>{messages.length}</span>
-              </div>
               {loadingMessages ? <div className="empty-state">Cargando mensajes...</div> : null}
               {messageError ? <div className="empty-state warn">{messageError}</div> : null}
               {!loadingMessages && !messageError && messages.length ? (
-                <div className="message-thread">
+                <div className="message-thread" ref={messageThreadRef}>
                   {messages.map((message) => (
                     <article className={`chat-bubble ${message.direction} ${isAudioMessage(message) ? "audio-bubble" : ""}`} key={message.id}>
                       {!isAudioMessage(message) && message.body ? <p>{message.body}</p> : null}

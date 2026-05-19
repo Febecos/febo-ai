@@ -721,6 +721,26 @@ button:disabled {
   padding: 10px;
 }
 
+.template-composer {
+  background: #fbfcfb;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.template-composer textarea {
+  min-height: 78px;
+}
+
+.template-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .primary,
 .secondary {
   align-items: center;
@@ -942,6 +962,10 @@ select {
 .ok {
   color: var(--green);
   padding: 0 12px 12px;
+}
+
+.ok.inline {
+  padding: 0;
 }
 
 .login-shell {

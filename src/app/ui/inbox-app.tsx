@@ -623,6 +623,11 @@ function InboxList({
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [newContactOpen, setNewContactOpen] = useState(false);
   const [creatingContact, setCreatingContact] = useState(false);
+  const [templateComposerOpen, setTemplateComposerOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [templateParameters, setTemplateParameters] = useState("");
+  const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [templateMessage, setTemplateMessage] = useState("");
   const [newContact, setNewContact] = useState({
     displayName: "",
     phone: "",
@@ -785,7 +790,47 @@ function InboxList({
       const activeTemplates = (payload?.templates ?? []).filter((template: MessageTemplate) => template.active);
       setTemplates(activeTemplates);
       setNewContact((current) => ({ ...current, templateId: current.templateId || activeTemplates[0]?.id || "" }));
+      setSelectedTemplateId((current) => current || activeTemplates[0]?.id || "");
     }
+  }
+
+  async function sendTemplateToSelected(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selected?.phone || !selectedTemplateId) {
+      setTemplateMessage("Elegí una plantilla para enviar.");
+      return;
+    }
+
+    setTemplateMessage("");
+    setSendingTemplate(true);
+    const response = await fetch("/api/contacts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        phone: selected.phone,
+        displayName: selected.display_name ?? undefined,
+        templateId: selectedTemplateId,
+        parameters: templateParameters
+          .split(/\r?\n|,/)
+          .map((value) => value.trim())
+          .filter(Boolean)
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setSendingTemplate(false);
+
+    if (!response.ok) {
+      setTemplateMessage(payload?.error ?? "No pudimos enviar la plantilla.");
+      return;
+    }
+
+    setItems(payload?.conversations ?? []);
+    setSelectedId(payload?.conversationId ?? selected.id);
+    setMessages(payload?.messages ?? []);
+    setTemplateParameters("");
+    setTemplateMessage("Plantilla enviada.");
+    await refreshConversations(filters, { silent: true });
   }
 
   async function createContactWithTemplate(event: FormEvent<HTMLFormElement>) {
@@ -1183,6 +1228,10 @@ function InboxList({
                 <Bot size={17} />
                 {selected.ai_enabled ? "Pausar IA" : "Activar IA"}
               </button>
+              <button className="secondary" onClick={() => setTemplateComposerOpen(!templateComposerOpen)} type="button">
+                <FileText size={17} />
+                Plantilla
+              </button>
               <select
                 onChange={(event) => patchConversation(selected.id, { assignedTo: event.target.value || null })}
                 value={selected.assigned_to ?? ""}
@@ -1207,6 +1256,49 @@ function InboxList({
                 <option value="lost">Perdida</option>
               </select>
             </div>
+
+            {templateComposerOpen ? (
+              <form className="template-composer" onSubmit={sendTemplateToSelected}>
+                <label className="field">
+                  Plantilla para este contacto
+                  <select value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)}>
+                    <option value="">Elegir plantilla</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.label} · {template.language_code}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  Variables
+                  <textarea
+                    placeholder="Solo si la plantilla usa {{1}}, {{2}}"
+                    value={templateParameters}
+                    onChange={(event) => setTemplateParameters(event.target.value)}
+                  />
+                </label>
+                <div className="template-actions">
+                  <button className="primary" disabled={sendingTemplate || !selectedTemplateId} type="submit">
+                    <SendHorizonal size={17} />
+                    {sendingTemplate ? "Enviando" : "Enviar plantilla"}
+                  </button>
+                  <button
+                    className="secondary"
+                    disabled={sendingTemplate}
+                    onClick={() => {
+                      setTemplateComposerOpen(false);
+                      setTemplateMessage("");
+                    }}
+                    type="button"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+                {!templates.length ? <span className="muted">Primero carga una plantilla aprobada en la solapa Plantillas.</span> : null}
+                {templateMessage ? <span className={templateMessage.includes("enviada") ? "ok inline" : "warn"}>{templateMessage}</span> : null}
+              </form>
+            ) : null}
 
             <div className="detail-grid">
               <Info label="Etiqueta" value={selected.consultype} />

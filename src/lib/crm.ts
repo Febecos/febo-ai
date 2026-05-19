@@ -376,7 +376,7 @@ export async function recordAgentReply(input: {
 
   const sql = getSql();
   const consultype = normalizeConsultype(input.intent);
-  const hotLeadAssigneeId = consultype === "caliente" ? await getHotLeadAssigneeId() : null;
+  const humanAssigneeId = input.needsHuman || consultype === "caliente" ? await getHotLeadAssigneeId() : null;
 
   await sql`
     insert into messages (conversation_id, contact_id, direction, body, consultype, needs_human)
@@ -386,7 +386,7 @@ export async function recordAgentReply(input: {
   await sql`
     update contacts
     set consultype = ${consultype},
-        assigned_to = coalesce(${hotLeadAssigneeId}::uuid, assigned_to),
+        assigned_to = coalesce(${humanAssigneeId}::uuid, assigned_to),
         updated_at = now()
     where id = ${input.contactId}
   `;
@@ -394,20 +394,21 @@ export async function recordAgentReply(input: {
   await sql`
     update conversations
     set last_message_at = now(),
+        ai_enabled = case when ${input.needsHuman} then false else ai_enabled end,
         status = case
           when ${input.needsHuman} then 'handoff'
           when ${consultype} = 'caliente' then 'hot'
           else status
         end,
-        assigned_to = coalesce(${hotLeadAssigneeId}::uuid, assigned_to),
+        assigned_to = coalesce(${humanAssigneeId}::uuid, assigned_to),
         updated_at = now()
     where id = ${input.threadId}
   `;
 
   if (input.needsHuman) {
     await sql`
-      insert into handoffs (conversation_id, contact_id, reason, status)
-      values (${input.threadId}, ${input.contactId}, ${input.intent}, 'pending')
+      insert into handoffs (conversation_id, contact_id, reason, status, assigned_to)
+      values (${input.threadId}, ${input.contactId}, ${input.intent}, 'assigned', ${humanAssigneeId}::uuid)
     `;
   }
 }

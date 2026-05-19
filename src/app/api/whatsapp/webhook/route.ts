@@ -104,6 +104,7 @@ export async function POST(request: NextRequest) {
       contactName: message.contactName,
       conversationId: stored.threadId
     });
+    const needsHuman = shouldPauseForHumanHandoff(result.respuesta, result.escalar);
 
     await sendWhatsAppText(message.from, result.respuesta);
 
@@ -112,11 +113,32 @@ export async function POST(request: NextRequest) {
       threadId: stored.threadId,
       answer: result.respuesta,
       intent: result.consultype,
-      needsHuman: result.escalar
+      needsHuman
     });
   }
 
   return NextResponse.json({ ok: true });
+}
+
+function shouldPauseForHumanHandoff(answer: string, escalates: boolean) {
+  if (escalates) {
+    return true;
+  }
+
+  const normalized = answer
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return [
+    "te paso a un asesor",
+    "te paso con un asesor",
+    "te paso a un vendedor",
+    "te paso con un vendedor",
+    "te paso con el equipo",
+    "ya lo estamos derivando",
+    "te van a estar escribiendo"
+  ].some((phrase) => normalized.includes(phrase));
 }
 
 function audioExtensionForMime(mimeType: string) {

@@ -581,9 +581,16 @@ button:disabled {
 }
 
 .delivery-status {
+  align-items: center;
   color: #52605a;
+  display: inline-flex;
   font-size: 12px;
+  gap: 4px;
   justify-self: end;
+}
+
+.delivery-status.read {
+  color: #0d83ff;
 }
 
 .delivery-status.failed {

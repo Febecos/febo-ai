@@ -1,9 +1,13 @@
 "use client";
 
 import {
+  AlertCircle,
   Bot,
+  Check,
+  CheckCheck,
   ChevronLeft,
   CircleUserRound,
+  Clock3,
   FileText,
   Filter,
   ImageIcon,
@@ -1113,9 +1117,20 @@ function formatMessageTime(value: string) {
 
 function DeliveryStatus({ message }: { message: ConversationMessage }) {
   const failed = message.whatsapp_status === "failed";
+  const statusIcon =
+    message.whatsapp_status === "read" || message.whatsapp_status === "delivered" ? (
+      <CheckCheck size={14} />
+    ) : message.whatsapp_status === "sent" ? (
+      <Check size={14} />
+    ) : failed ? (
+      <AlertCircle size={14} />
+    ) : (
+      <Clock3 size={14} />
+    );
 
   return (
-    <span className={`delivery-status ${failed ? "failed" : ""}`}>
+    <span className={`delivery-status ${failed ? "failed" : message.whatsapp_status ?? ""}`} title={message.whatsapp_error ?? undefined}>
+      {statusIcon}
       {formatDeliveryStatus(message)}
     </span>
   );

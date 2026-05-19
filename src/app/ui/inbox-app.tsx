@@ -510,8 +510,6 @@ function InboxList({
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const audioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const mediaRecorderChunksRef = useRef<Blob[]>([]);
   const recordingSamplesRef = useRef<Int16Array[]>([]);
   const recordingSampleRateRef = useRef(44100);
   const recordingStreamRef = useRef<MediaStream | null>(null);
@@ -755,11 +753,6 @@ function InboxList({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       recordingStreamRef.current = stream;
 
-      if (typeof MediaRecorder !== "undefined") {
-        startMediaRecorder(stream);
-        return;
-      }
-
       const AudioContextConstructor =
         window.AudioContext ??
         (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -809,38 +802,6 @@ function InboxList({
     }
   }
 
-  function startMediaRecorder(stream: MediaStream) {
-    const mimeType = getBestRecordingMimeType();
-    const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-
-    mediaRecorderChunksRef.current = [];
-    mediaRecorderRef.current = recorder;
-
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        mediaRecorderChunksRef.current.push(event.data);
-      }
-    };
-
-    recorder.onerror = () => {
-      setReplyError("No pudimos grabar el audio. Proba de nuevo.");
-      setPreparingRecording(false);
-      stopRecorderTracks();
-      clearRecordingTimer();
-      setRecording(false);
-    };
-
-    recorder.onstop = () => {
-      const chunks = [...mediaRecorderChunksRef.current];
-      mediaRecorderChunksRef.current = [];
-
-      void prepareMediaRecorderAudio(chunks, recorder.mimeType || mimeType || "audio/webm");
-    };
-
-    recorder.start(250);
-    markRecordingStarted();
-  }
-
   function markRecordingStarted() {
     setReplyFile(null);
     setPreparingRecording(false);
@@ -852,20 +813,6 @@ function InboxList({
   }
 
   function stopRecording() {
-    const recorder = mediaRecorderRef.current;
-
-    if (recorder && recorder.state !== "inactive") {
-      clearRecordingTimer();
-      setRecording(false);
-      setPreparingRecording(true);
-      setReplyError("");
-      recorder.requestData();
-      recorder.stop();
-      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
-      recordingStreamRef.current = null;
-      return;
-    }
-
     const samples = [...recordingSamplesRef.current];
     const sampleRate = recordingSampleRateRef.current;
 
@@ -893,30 +840,7 @@ function InboxList({
     }, 0);
   }
 
-  async function prepareMediaRecorderAudio(chunks: Blob[], mimeType: string) {
-    try {
-      const blob = new Blob(chunks, { type: mimeType });
-
-      if (!blob.size) {
-        setReplyError("No se detecto audio grabado. Proba grabar dos segundos y detener.");
-        return;
-      }
-
-      const file = await buildMp3RecordingFileFromBlob(blob);
-      setAttachment(file);
-      setReplyText("");
-    } catch {
-      setReplyError("No pudimos preparar el audio grabado. Proba de nuevo o adjunta un audio.");
-    } finally {
-      mediaRecorderRef.current = null;
-      stopRecorderTracks();
-      setPreparingRecording(false);
-    }
-  }
-
   function stopRecorderTracks() {
-    mediaRecorderRef.current = null;
-    mediaRecorderChunksRef.current = [];
     audioProcessorRef.current?.disconnect();
     audioProcessorRef.current = null;
     audioSourceRef.current?.disconnect();
@@ -1263,65 +1187,6 @@ function formatRecordingSeconds(totalSeconds: number) {
     .padStart(2, "0");
   const seconds = (totalSeconds % 60).toString().padStart(2, "0");
   return `${minutes}:${seconds}`;
-}
-
-function getBestRecordingMimeType() {
-  const candidates = [
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/mp4",
-    "audio/aac"
-  ];
-
-  return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
-}
-
-async function buildMp3RecordingFileFromBlob(blob: Blob) {
-  const AudioContextConstructor =
-    window.AudioContext ??
-    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-
-  if (!AudioContextConstructor) {
-    throw new Error("AudioContext unavailable");
-  }
-
-  const audioContext = new AudioContextConstructor();
-
-  try {
-    const audioBuffer = await audioContext.decodeAudioData(await blob.arrayBuffer());
-    const samples = audioBufferToInt16Chunks(audioBuffer);
-    const file = buildMp3RecordingFile(samples, audioBuffer.sampleRate);
-
-    if (!file) {
-      throw new Error("Empty MP3");
-    }
-
-    return file;
-  } finally {
-    void audioContext.close();
-  }
-}
-
-function audioBufferToInt16Chunks(audioBuffer: AudioBuffer) {
-  const chunks: Int16Array[] = [];
-  const channels = Array.from({ length: audioBuffer.numberOfChannels }, (_, index) => audioBuffer.getChannelData(index));
-  const chunkSize = 4096;
-
-  for (let offset = 0; offset < audioBuffer.length; offset += chunkSize) {
-    const length = Math.min(chunkSize, audioBuffer.length - offset);
-    const pcm = new Int16Array(length);
-
-    for (let index = 0; index < length; index += 1) {
-      const sampleIndex = offset + index;
-      const mixedSample = channels.reduce((sum, channel) => sum + channel[sampleIndex], 0) / channels.length;
-      const sample = Math.max(-1, Math.min(1, mixedSample));
-      pcm[index] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
-    }
-
-    chunks.push(pcm);
-  }
-
-  return chunks;
 }
 
 function buildMp3RecordingFile(chunks: Int16Array[], sampleRate: number) {

@@ -756,8 +756,9 @@ function InboxList({
         const blob = new Blob(recordingChunksRef.current, { type: recordingMimeType });
 
         if (blob.size > 0) {
-          const extension = audioExtensionForMime(recordingMimeType);
-          setAttachment(new File([blob], `audio-febo-${Date.now()}.${extension}`, { type: recordingMimeType }));
+          const whatsappMimeType = normalizeRecordedAudioMimeType(recordingMimeType);
+          const extension = audioExtensionForMime(whatsappMimeType);
+          setAttachment(new File([blob], `audio-febo-${Date.now()}.${extension}`, { type: whatsappMimeType }));
           setReplyText("");
         }
 
@@ -1156,6 +1157,28 @@ function audioExtensionForMime(mimeType: string) {
   }
 
   return "audio";
+}
+
+function normalizeRecordedAudioMimeType(mimeType: string) {
+  const normalized = mimeType.toLowerCase();
+
+  if (normalized.includes("ogg")) {
+    return "audio/ogg";
+  }
+
+  if (normalized.includes("aac")) {
+    return "audio/aac";
+  }
+
+  if (normalized.includes("mpeg")) {
+    return "audio/mpeg";
+  }
+
+  if (normalized.includes("mp4")) {
+    return "audio/mp4";
+  }
+
+  return mimeType.split(";")[0].trim().toLowerCase();
 }
 
 function formatRecordingSeconds(totalSeconds: number) {

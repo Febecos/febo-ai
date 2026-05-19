@@ -706,7 +706,7 @@ function InboxList({
     }
 
     if (!isSupportedClientAttachment(file)) {
-      setReplyError("Formato no compatible. Usa imagen, PDF, Office o audio compatible.");
+      setReplyError("Formato no compatible. Usa imagen, video MP4/3GP, PDF, Office o audio M4A/AAC/MP3/OGG compatible.");
       return;
     }
 
@@ -726,60 +726,7 @@ function InboxList({
 
   async function startRecording() {
     setReplyError("");
-
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setReplyError("Este navegador no permite grabar audio directo. Proba con Adjuntar.");
-      return;
-    }
-
-    try {
-      const mimeType = getPreferredRecordingMimeType();
-
-      if (!mimeType) {
-        setReplyError("Este navegador graba en un formato que WhatsApp no acepta. Usa Audio para grabar con el celu.");
-        return;
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-      recordingChunksRef.current = [];
-      recordingStreamRef.current = stream;
-      mediaRecorderRef.current = recorder;
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          recordingChunksRef.current.push(event.data);
-        }
-      };
-
-      recorder.onstop = () => {
-        const blob = new Blob(recordingChunksRef.current, {
-          type: recorder.mimeType || mimeType || "audio/webm"
-        });
-
-        if (blob.size > 0) {
-          const extension = audioExtensionForMime(blob.type);
-          setAttachment(new File([blob], `audio-febo-${Date.now()}.${extension}`, { type: blob.type }));
-          setReplyText("");
-        }
-
-        stopRecorderTracks();
-        clearRecordingTimer();
-        setRecording(false);
-      };
-
-      recorder.start();
-      setRecording(true);
-      setRecordingSeconds(0);
-      recordingTimerRef.current = window.setInterval(() => {
-        setRecordingSeconds((seconds) => seconds + 1);
-      }, 1000);
-    } catch {
-      setReplyError("No pudimos acceder al microfono. Revisá permisos o usá Adjuntar.");
-      stopRecorderTracks();
-      clearRecordingTimer();
-      setRecording(false);
-    }
+    audioInputRef.current?.click();
   }
 
   function stopRecording() {
@@ -1111,7 +1058,14 @@ function isSupportedClientAttachment(file: File) {
 }
 
 function isSupportedClientAudio(mimeType: string) {
-  return ["audio/aac", "audio/amr", "audio/mp4", "audio/mpeg", "audio/ogg"].includes(mimeType);
+  const raw = mimeType.trim().toLowerCase();
+  const normalized = raw.split(";")[0].trim();
+
+  if (normalized === "audio/mp4" && raw.includes("opus")) {
+    return false;
+  }
+
+  return ["audio/aac", "audio/amr", "audio/mp4", "audio/mpeg", "audio/ogg"].includes(normalized);
 }
 
 function getAttachmentSendLabel(file: File) {

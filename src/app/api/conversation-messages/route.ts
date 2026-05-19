@@ -160,7 +160,13 @@ async function parseAttachmentRequest(request: NextRequest) {
 }
 
 function isSupportedWhatsAppAudio(mimeType: string) {
-  const normalized = mimeType.split(";")[0].trim().toLowerCase();
+  const raw = mimeType.trim().toLowerCase();
+  const normalized = raw.split(";")[0].trim();
+
+  if (normalized === "audio/mp4" && raw.includes("opus")) {
+    return false;
+  }
+
   return supportedAudioMimeTypes.includes(normalized);
 }
 
@@ -169,7 +175,7 @@ function isSupportedWhatsAppAttachment(mimeType: string) {
   return (
     supportedImageMimeTypes.includes(normalized) ||
     supportedVideoMimeTypes.includes(normalized) ||
-    supportedAudioMimeTypes.includes(normalized) ||
+    isSupportedWhatsAppAudio(mimeType) ||
     supportedDocumentMimeTypes.includes(normalized)
   );
 }
@@ -218,7 +224,7 @@ function getSendValidationError(error: z.ZodError) {
   const fileErrors = error.flatten().fieldErrors.file ?? [];
 
   if (fileErrors.length) {
-    return "Formato no compatible con WhatsApp o archivo demasiado grande. Proba con imagen, video MP4/3GP, PDF, Office o audio compatible.";
+    return "Formato no compatible con WhatsApp o archivo demasiado grande. Proba con imagen, video MP4/3GP, PDF, Office o audio M4A/AAC/MP3/OGG compatible.";
   }
 
   return "Mensaje invalido.";

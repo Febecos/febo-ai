@@ -39,8 +39,12 @@ export type AgentResult = z.infer<typeof agentSchema>;
 const quoteExtractionSchema = z.object({
   shouldQuote: z.boolean(),
   hasEnoughData: z.boolean(),
+  perforationDepthMeters: z.number().nullable(),
+  waterLevelMeters: z.number().nullable(),
+  tankHeightMeters: z.number().nullable(),
   heightMeters: z.number().nullable(),
   litersPerDay: z.number().nullable(),
+  rawDiameter: z.string().nullable(),
   maxPumpDiameterInches: z.number().nullable(),
   mode: z.enum(["molino", "generador", "molino_generador"]).nullable(),
   missingData: z.array(z.string()),
@@ -271,9 +275,13 @@ async function extractQuoteRequest(input: {
       "shouldQuote=true si el cliente pide precio/cotizacion/modelo o si ya dio datos suficientes para cotizar.",
       "hasEnoughData=true solo si hay altura/profundidad, consumo diario y diametro maximo de bomba compatible.",
       "Para ganado calcula litrosPerDay = animales * 60.",
-      "Si hay profundidad pero no altura de tanque, usa heightMeters = profundidad + 5 y agrega esa suposicion.",
-      "Si el cliente da altura total/MCA, usa ese valor como heightMeters.",
-      "Para diametro: 63mm o 75mm o 3 pulgadas reales => maxPumpDiameterInches=2; 80-100mm => 3; 110mm, 115mm, 4 pulgadas o mas => 4; 6 pulgadas o pozo grande => 4.",
+      "Distingui profundidad total del pozo/perforacion de nivel de agua/espejo de agua. Si el cliente dice que el agua esta a X metros, eso es waterLevelMeters y manda para calcular heightMeters.",
+      "La profundidad total del pozo solo sirve como fallback si no hay nivel de agua. No sumes profundidad total si el cliente ya dio nivel de agua.",
+      "Si hay nivel de agua y altura de tanque, usa heightMeters = nivel de agua + altura de tanque. Si hay nivel de agua pero no altura de tanque, usa nivel de agua + 5 y agrega esa suposicion.",
+      "Si no hay nivel de agua pero hay profundidad total y altura de tanque, usa heightMeters = profundidad total + altura de tanque. Si falta altura de tanque, usa +5 y agrega esa suposicion.",
+      "Si el cliente da altura total/MCA explicitamente, usa ese valor como heightMeters salvo que tambien haya nivel de agua y altura de tanque mas especificos.",
+      "rawDiameter debe conservar la frase literal del diametro/camisa/cano/perforacion.",
+      "Para diametro maximo compatible: camisa/cano/pozo/perforacion de 3 pulgadas o 3 pulgadas reales => maxPumpDiameterInches=2, nunca 3; 63mm/75mm/76mm => 2; 80-100mm => 3; 110mm/115mm/4 pulgadas o mas => 4; 6 pulgadas o pozo grande => 4.",
       "Si falta diametro, incluilo en missingData y hasEnoughData=false.",
       "mode puede ser molino, generador o molino_generador si el cliente menciona sistema actual; si no, null."
     ].join("\n"),
@@ -301,8 +309,12 @@ async function extractQuoteRequest(input: {
           required: [
             "shouldQuote",
             "hasEnoughData",
+            "perforationDepthMeters",
+            "waterLevelMeters",
+            "tankHeightMeters",
             "heightMeters",
             "litersPerDay",
+            "rawDiameter",
             "maxPumpDiameterInches",
             "mode",
             "missingData",
@@ -311,8 +323,12 @@ async function extractQuoteRequest(input: {
           properties: {
             shouldQuote: { type: "boolean" },
             hasEnoughData: { type: "boolean" },
+            perforationDepthMeters: { type: ["number", "null"] },
+            waterLevelMeters: { type: ["number", "null"] },
+            tankHeightMeters: { type: ["number", "null"] },
             heightMeters: { type: ["number", "null"] },
             litersPerDay: { type: ["number", "null"] },
+            rawDiameter: { type: ["string", "null"] },
             maxPumpDiameterInches: { type: ["number", "null"] },
             mode: { type: ["string", "null"], enum: ["molino", "generador", "molino_generador", null] },
             missingData: { type: "array", items: { type: "string" } },
@@ -324,7 +340,159 @@ async function extractQuoteRequest(input: {
     }
   });
 
-  return quoteExtractionSchema.parse(JSON.parse(normalizeJson(response.output_text)));
+  const parsed = quoteExtractionSchema.parse(JSON.parse(normalizeJson(response.output_text)));
+  return normalizeQuoteExtraction(parsed, input);
+}
+
+function normalizeQuoteExtraction(
+  extraction: QuoteExtraction,
+  input: { message: string; history: ReturnType<typeof buildConversationHistory> }
+): QuoteExtraction {
+  const sourceText = [
+    ...input.history
+      .filter((message) => message.speaker === "cliente" || message.speaker === "humano_febecos")
+      .map((message) => message.text),
+    input.message,
+    extraction.rawDiameter ?? ""
+  ].join("\n");
+  const assumptions = [...extraction.assumptions];
+  const missingData = new Set(extraction.missingData);
+  const tankHeightMeters = normalizePositiveNumber(extraction.tankHeightMeters) ?? inferTankHeightMeters(sourceText);
+  const waterLevelMeters = normalizePositiveNumber(extraction.waterLevelMeters) ?? inferWaterLevelMeters(sourceText);
+  const perforationDepthMeters = normalizePositiveNumber(extraction.perforationDepthMeters) ?? inferPerforationDepthMeters(sourceText);
+  let heightMeters = normalizePositiveNumber(extraction.heightMeters);
+  const maxPumpDiameterInches = normalizePumpDiameter(sourceText, extraction.maxPumpDiameterInches);
+
+  if (waterLevelMeters) {
+    const tank = tankHeightMeters ?? 5;
+    heightMeters = waterLevelMeters + tank;
+    if (!tankHeightMeters) {
+      assumptions.push("altura de tanque asumida en 5 m porque el cliente no la informo");
+    }
+    assumptions.push("altura calculada con nivel de agua, no con profundidad total del pozo");
+  } else if (!heightMeters && perforationDepthMeters) {
+    const tank = tankHeightMeters ?? 5;
+    heightMeters = perforationDepthMeters + tank;
+    if (!tankHeightMeters) {
+      assumptions.push("altura de tanque asumida en 5 m porque el cliente no la informo");
+    }
+    assumptions.push("sin nivel de agua informado, se uso profundidad total como fallback");
+  }
+
+  if (heightMeters) {
+    missingData.delete("altura");
+    missingData.delete("profundidad");
+    missingData.delete("nivel de agua");
+  }
+
+  if (maxPumpDiameterInches) {
+    missingData.delete("diametro");
+    missingData.delete("diámetro");
+  }
+
+  if (extraction.litersPerDay) {
+    missingData.delete("consumo diario");
+    missingData.delete("litros por dia");
+    missingData.delete("litros por día");
+  }
+
+  return {
+    ...extraction,
+    hasEnoughData: Boolean(heightMeters && extraction.litersPerDay && maxPumpDiameterInches),
+    perforationDepthMeters,
+    waterLevelMeters,
+    tankHeightMeters,
+    heightMeters,
+    maxPumpDiameterInches,
+    missingData: Array.from(missingData),
+    assumptions: Array.from(new Set(assumptions))
+  };
+}
+
+function normalizePositiveNumber(value: number | null) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function normalizePumpDiameter(sourceText: string, extracted: number | null) {
+  const text = sourceText.toLowerCase();
+  const millimeters = Array.from(text.matchAll(/(\d{2,3})\s*mm/g))
+    .map((match) => Number(match[1]))
+    .filter((value) => Number.isFinite(value));
+
+  if (/(^|[^\d])3\s*(?:"|”|pulg(?:adas?)?)/i.test(sourceText) || millimeters.some((value) => value >= 63 && value <= 76)) {
+    return 2;
+  }
+
+  if (millimeters.some((value) => value >= 80 && value <= 100)) {
+    return 3;
+  }
+
+  if (
+    /(^|[^\d])(?:4|5|6)\s*(?:"|”|pulg(?:adas?)?)/i.test(sourceText) ||
+    millimeters.some((value) => value >= 110)
+  ) {
+    return 4;
+  }
+
+  return normalizePositiveNumber(extracted);
+}
+
+function inferWaterLevelMeters(sourceText: string) {
+  return findMeters(sourceText, [
+    /(?:agua|nivel de agua|espejo de agua)\s+(?:esta|está|se encuentra|queda|arranca)?\s*(?:a|en)?\s*([0-9]+(?:[.,][0-9]+)?|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:m|mts|metros?)/i,
+    /([0-9]+(?:[.,][0-9]+)?|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:m|mts|metros?)\s+(?:de\s+)?(?:agua|nivel de agua|espejo de agua)/i
+  ]);
+}
+
+function inferPerforationDepthMeters(sourceText: string) {
+  return findMeters(sourceText, [
+    /(?:pozo|perforacion|perforación|profundidad)\s+(?:de|tiene|esta|está|es|a)?\s*([0-9]+(?:[.,][0-9]+)?|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:m|mts|metros?)/i,
+    /([0-9]+(?:[.,][0-9]+)?|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:m|mts|metros?)\s+(?:de\s+)?(?:profundidad|pozo|perforacion|perforación)/i
+  ]);
+}
+
+function inferTankHeightMeters(sourceText: string) {
+  return findMeters(sourceText, [
+    /(?:tanque|deposito|depósito)[^.\n]{0,60}?([0-9]+(?:[.,][0-9]+)?|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:m|mts|metros?)\s*(?:de\s+)?(?:altura|alto)?/i,
+    /([0-9]+(?:[.,][0-9]+)?|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:m|mts|metros?)\s+(?:de\s+)?(?:altura\s+)?(?:al\s+)?(?:tanque|deposito|depósito)/i
+  ]);
+}
+
+function findMeters(sourceText: string, patterns: RegExp[]) {
+  for (const pattern of patterns) {
+    const match = sourceText.match(pattern);
+    const value = match?.[1] ? parseSpokenNumber(match[1]) : null;
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function parseSpokenNumber(value: string) {
+  const normalized = value.toLowerCase().replace(",", ".").trim();
+  const numeric = Number(normalized);
+
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return numeric;
+  }
+
+  const words: Record<string, number> = {
+    uno: 1,
+    una: 1,
+    dos: 2,
+    tres: 3,
+    cuatro: 4,
+    cinco: 5,
+    seis: 6,
+    siete: 7,
+    ocho: 8,
+    nueve: 9,
+    diez: 10
+  };
+
+  return words[normalized] ?? null;
 }
 
 async function getSelectorQuote(extraction: QuoteExtraction):

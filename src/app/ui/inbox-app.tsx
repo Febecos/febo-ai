@@ -1007,7 +1007,7 @@ function InboxList({
               {!loadingMessages && !messageError && messages.length ? (
                 <div className="message-thread">
                   {messages.map((message) => (
-                    <article className={`chat-bubble ${message.direction}`} key={message.id}>
+                    <article className={`chat-bubble ${message.direction} ${isAudioMessage(message) ? "audio-bubble" : ""}`} key={message.id}>
                       {!isAudioMessage(message) && message.body ? <p>{message.body}</p> : null}
                       {message.media_id ? <MessageMedia message={message} /> : null}
                       <small>

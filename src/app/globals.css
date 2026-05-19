@@ -549,11 +549,42 @@ button:disabled {
   width: 280px;
 }
 
+.chat-bubble.audio-bubble {
+  border: 0;
+  border-radius: 15px;
+  color: #ffffff;
+  gap: 4px;
+  max-width: min(86%, 320px);
+  padding: 4px 10px;
+  width: fit-content;
+}
+
+.chat-bubble.inbound.audio-bubble {
+  background: #0d83ff;
+  border-top-left-radius: 0;
+}
+
+.chat-bubble.outbound.audio-bubble,
+.chat-bubble.internal.audio-bubble {
+  background: #8d38eb;
+  border-top-right-radius: 0;
+}
+
+.chat-bubble.audio-bubble small {
+  color: rgba(255, 255, 255, 0.82);
+  justify-self: end;
+}
+
+.chat-bubble.audio-bubble audio {
+  height: 32px;
+  width: min(240px, 100%);
+}
+
 .message-audio-card {
   align-items: flex-start;
   display: flex;
-  gap: 10px;
-  min-width: min(100%, 330px);
+  gap: 8px;
+  min-width: min(100%, 240px);
 }
 
 .message-audio-icon {
@@ -562,15 +593,15 @@ button:disabled {
   border-radius: 999px;
   display: inline-flex;
   flex: 0 0 auto;
-  height: 34px;
+  height: 32px;
   justify-content: center;
-  margin-top: 34px;
-  width: 34px;
+  margin-top: 38px;
+  width: 32px;
 }
 
 .message-audio-content {
   display: grid;
-  gap: 7px;
+  gap: 5px;
   min-width: 0;
 }
 
@@ -580,6 +611,7 @@ button:disabled {
 }
 
 .message-transcript summary {
+  color: #ffffff;
   cursor: pointer;
   font-size: 13px;
   text-decoration: underline;
@@ -594,6 +626,7 @@ button:disabled {
   border-radius: 6px;
   display: inline-block;
   font-size: 12px;
+  line-height: 1.25;
   max-width: 100%;
   overflow-wrap: anywhere;
   padding: 8px 9px;

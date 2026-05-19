@@ -147,6 +147,7 @@ export async function runFebecosAgent(input: {
       "Responde al ultimo mensaje del cliente, pero manteniendo continuidad con lo ya conversado.",
       "Si el historial muestra que un humano ya tomo la conversacion o la IA esta pausada, no intentes cerrar ni avanzar por tu cuenta.",
       "Cuando el contexto incluya selectorQuote, usalo como unica fuente para modelo, precio, caudal, stock y cuotas. No digas que no tenes acceso al sistema.",
+      "Dentro de selectorQuote, los campos autoritativos son result.sugerencia.precio_full, result.sugerencia.cant_paneles, result.sugerencia.watts, result.sugerencia.codigo y result.caudal_a_altura. No recalcules precio ni cantidad de paneles.",
       "Si selectorQuote no esta disponible pero falta algun dato tecnico, pedi solo ese dato. No inventes precios ni modelos.",
       "Si selectorQuote.error existe, deriva o pedi disculpas brevemente; no inventes una cotizacion alternativa.",
       "Si tu respuesta dice que vas a pasar, derivar o conectar al cliente con un asesor, vendedor, agente humano o Equipo FEBECOS, entonces escalar debe ser true.",
@@ -539,7 +540,7 @@ async function getSelectorQuote(extraction: QuoteExtraction):
       mode: extraction.mode
     });
 
-    return { status: "ok", inputs: extraction, result };
+    return { status: "ok", inputs: extraction, result: getAgentSafeSelectorResult(result) };
   } catch (error) {
     return {
       status: "error",
@@ -547,6 +548,49 @@ async function getSelectorQuote(extraction: QuoteExtraction):
       error: error instanceof Error ? error.message : "No pudimos consultar el motor selector."
     };
   }
+}
+
+function getAgentSafeSelectorResult(result: SelectorPumpResult): SelectorPumpResult {
+  const suggestion = result.sugerencia;
+
+  return {
+    ok: true,
+    inputs: result.inputs,
+    sugerencia: {
+      codigo: suggestion.codigo,
+      marca: suggestion.marca,
+      tipo: suggestion.tipo,
+      energia: suggestion.energia,
+      impulsor: suggestion.impulsor,
+      watts: suggestion.watts,
+      cant_paneles: suggestion.cant_paneles,
+      watts_panel: suggestion.watts_panel,
+      diam_bomba: suggestion.diam_bomba,
+      diam_perf: suggestion.diam_perf,
+      stock: suggestion.stock,
+      precio_full: suggestion.precio_full,
+      precio_base: suggestion.precio_base,
+      precio_6cuotas: suggestion.precio_6cuotas,
+      cuota_mensual: suggestion.cuota_mensual
+    },
+    caudal_a_altura: result.caudal_a_altura,
+    cumple: result.cumple,
+    opciones: result.opciones?.slice(0, 3).map((option) => ({
+      codigo: option.codigo,
+      marca: option.marca,
+      watts: option.watts,
+      precio_full: option.precio_full,
+      stock: option.stock,
+      caudal_verano: option.caudal_verano,
+      caudal_invierno: option.caudal_invierno,
+      cubre_invierno: option.cubre_invierno
+    })),
+    es_fallback: result.es_fallback,
+    cobertura_pct: result.cobertura_pct,
+    cobertura_insuficiente: result.cobertura_insuficiente,
+    nota: result.nota,
+    link_calculadora_roi: result.link_calculadora_roi
+  };
 }
 
 async function executeAgentAction(input: {

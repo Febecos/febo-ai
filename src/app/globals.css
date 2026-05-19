@@ -1097,6 +1097,12 @@ select {
   margin-left: auto;
 }
 
+.composer-icon-button {
+  aspect-ratio: 1;
+  min-width: 38px;
+  padding: 0;
+}
+
 .answer-box {
   min-height: 112px;
 }
@@ -1246,8 +1252,12 @@ select {
   }
 
   .tool-sidebar-bottom {
+    background: var(--panel);
     gap: 2px;
+    margin-top: auto;
     padding-top: 3px;
+    position: sticky;
+    bottom: 3px;
   }
 
   .tool-sidebar button svg {
@@ -1388,6 +1398,11 @@ select {
     flex: 0 0 auto;
     min-height: 34px;
     padding: 0 9px;
+  }
+
+  .composer-actions .composer-icon-button {
+    min-width: 36px;
+    padding: 0;
   }
 
   .composer-actions .primary {

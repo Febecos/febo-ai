@@ -769,12 +769,20 @@ function InboxList({
   }, []);
 
   useEffect(() => {
-    window.requestAnimationFrame(() => {
+    const scrollToBottom = () => {
       if (messageThreadRef.current) {
         messageThreadRef.current.scrollTop = messageThreadRef.current.scrollHeight;
       }
       threadEndRef.current?.scrollIntoView({ block: "end" });
+    };
+
+    window.requestAnimationFrame(() => {
+      scrollToBottom();
+      window.requestAnimationFrame(scrollToBottom);
     });
+
+    const timeoutId = window.setTimeout(scrollToBottom, 120);
+    return () => window.clearTimeout(timeoutId);
   }, [activeConversationTab, messages.length, selected?.id]);
 
   useEffect(() => {
@@ -1618,24 +1626,37 @@ function InboxList({
               ) : null}
               <div className="composer-actions">
                 {recording ? (
-                  <button className="secondary recording-stop" disabled={sendingReply} onClick={stopRecording} type="button">
+                  <button
+                    aria-label="Detener grabacion"
+                    className="secondary recording-stop composer-icon-button"
+                    disabled={sendingReply}
+                    onClick={stopRecording}
+                    title="Detener"
+                    type="button"
+                  >
                     <Square size={16} />
-                    Detener
                   </button>
                 ) : (
-                  <button className="secondary" disabled={sendingReply || preparingRecording} onClick={startRecording} type="button">
+                  <button
+                    aria-label="Grabar audio"
+                    className="secondary composer-icon-button"
+                    disabled={sendingReply || preparingRecording}
+                    onClick={startRecording}
+                    title="Grabar"
+                    type="button"
+                  >
                     <Mic size={18} />
-                    Grabar
                   </button>
                 )}
                 <button
-                  className="secondary"
+                  aria-label="Adjuntar archivo"
+                  className="secondary composer-icon-button"
                   disabled={sendingReply || recording || preparingRecording}
                   onClick={() => attachmentInputRef.current?.click()}
+                  title="Adjuntar"
                   type="button"
                 >
                   <Paperclip size={18} />
-                  Adjuntar
                 </button>
                 <button className="primary" disabled={sendingReply || preparingRecording || (!replyText.trim() && !replyFile)} type="submit">
                   <SendHorizonal size={18} />

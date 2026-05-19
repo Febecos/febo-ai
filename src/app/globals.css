@@ -44,7 +44,7 @@ button {
 }
 
 button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.65;
 }
 
@@ -720,8 +720,20 @@ select {
   max-width: 100%;
 }
 
-.attachment-draft span {
+.attachment-draft-body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.attachment-draft-body span {
   overflow-wrap: anywhere;
+}
+
+.attachment-draft audio {
+  height: 34px;
+  max-width: min(360px, 66vw);
+  width: 100%;
 }
 
 .attachment-draft button {
@@ -736,6 +748,11 @@ select {
   background: var(--red-soft);
   color: var(--red);
   font-weight: 700;
+}
+
+.recording-pill.preparing {
+  background: #fff5dd;
+  color: var(--amber);
 }
 
 .recording-stop {

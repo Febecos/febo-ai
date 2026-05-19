@@ -499,15 +499,19 @@ function InboxList({
   const [messageError, setMessageError] = useState("");
   const [replyText, setReplyText] = useState("");
   const [replyFile, setReplyFile] = useState<File | null>(null);
+  const [replyFilePreviewUrl, setReplyFilePreviewUrl] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
   const [replyError, setReplyError] = useState("");
   const [draggingFile, setDraggingFile] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [preparingRecording, setPreparingRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const audioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaRecorderChunksRef = useRef<Blob[]>([]);
   const recordingSamplesRef = useRef<Int16Array[]>([]);
   const recordingSampleRateRef = useRef(44100);
   const recordingStreamRef = useRef<MediaStream | null>(null);
@@ -536,6 +540,18 @@ function InboxList({
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length, selected?.id]);
+
+  useEffect(() => {
+    if (!replyFile?.type.startsWith("audio/")) {
+      setReplyFilePreviewUrl("");
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(replyFile);
+    setReplyFilePreviewUrl(previewUrl);
+
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [replyFile]);
 
   useEffect(() => {
     void loadConversationMessages(selected?.id);
@@ -730,24 +746,39 @@ function InboxList({
   async function startRecording() {
     setReplyError("");
 
-    const AudioContextConstructor =
-      window.AudioContext ??
-      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-
-    if (!navigator.mediaDevices?.getUserMedia || !AudioContextConstructor) {
+    if (!navigator.mediaDevices?.getUserMedia) {
       setReplyError("Este navegador no permite grabar audio directo. Proba con Adjuntar.");
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
+
+      if (typeof MediaRecorder !== "undefined") {
+        startMediaRecorder(stream);
+        return;
+      }
+
+      const AudioContextConstructor =
+        window.AudioContext ??
+        (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+      if (!AudioContextConstructor) {
+        setReplyError("Este navegador no permite preparar audio directo. Proba con Adjuntar.");
+        stopRecorderTracks();
+        return;
+      }
+
       const audioContext = new AudioContextConstructor();
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
       const source = audioContext.createMediaStreamSource(stream);
       const processor = audioContext.createScriptProcessor(4096, 1, 1);
 
       recordingSamplesRef.current = [];
       recordingSampleRateRef.current = audioContext.sampleRate;
-      recordingStreamRef.current = stream;
       audioContextRef.current = audioContext;
       audioSourceRef.current = source;
       audioProcessorRef.current = processor;
@@ -768,41 +799,124 @@ function InboxList({
 
       source.connect(processor);
       processor.connect(audioContext.destination);
-      setReplyFile(null);
-      setRecording(true);
-      setRecordingSeconds(0);
-      recordingTimerRef.current = window.setInterval(() => {
-        setRecordingSeconds((seconds) => seconds + 1);
-      }, 1000);
+      markRecordingStarted();
     } catch {
       setReplyError("No pudimos acceder al microfono. Revisa permisos del navegador.");
       stopRecorderTracks();
       clearRecordingTimer();
       setRecording(false);
+      setPreparingRecording(false);
     }
   }
 
+  function startMediaRecorder(stream: MediaStream) {
+    const mimeType = getBestRecordingMimeType();
+    const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+
+    mediaRecorderChunksRef.current = [];
+    mediaRecorderRef.current = recorder;
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        mediaRecorderChunksRef.current.push(event.data);
+      }
+    };
+
+    recorder.onerror = () => {
+      setReplyError("No pudimos grabar el audio. Proba de nuevo.");
+      setPreparingRecording(false);
+      stopRecorderTracks();
+      clearRecordingTimer();
+      setRecording(false);
+    };
+
+    recorder.onstop = () => {
+      const chunks = [...mediaRecorderChunksRef.current];
+      mediaRecorderChunksRef.current = [];
+
+      void prepareMediaRecorderAudio(chunks, recorder.mimeType || mimeType || "audio/webm");
+    };
+
+    recorder.start(250);
+    markRecordingStarted();
+  }
+
+  function markRecordingStarted() {
+    setReplyFile(null);
+    setPreparingRecording(false);
+    setRecording(true);
+    setRecordingSeconds(0);
+    recordingTimerRef.current = window.setInterval(() => {
+      setRecordingSeconds((seconds) => seconds + 1);
+    }, 1000);
+  }
+
   function stopRecording() {
+    const recorder = mediaRecorderRef.current;
+
+    if (recorder && recorder.state !== "inactive") {
+      clearRecordingTimer();
+      setRecording(false);
+      setPreparingRecording(true);
+      setReplyError("");
+      recorder.requestData();
+      recorder.stop();
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+      return;
+    }
+
     const samples = [...recordingSamplesRef.current];
     const sampleRate = recordingSampleRateRef.current;
 
     stopRecorderTracks();
     clearRecordingTimer();
     setRecording(false);
+    setPreparingRecording(true);
+    setReplyError("");
 
     window.setTimeout(() => {
-      const file = buildMp3RecordingFile(samples, sampleRate);
+      try {
+        const file = buildMp3RecordingFile(samples, sampleRate);
 
-      if (file) {
-        setAttachment(file);
-        setReplyText("");
-      } else {
-        setReplyError("No se detecto audio grabado.");
+        if (file) {
+          setAttachment(file);
+          setReplyText("");
+        } else {
+          setReplyError("No se detecto audio grabado. Proba grabar dos segundos y detener.");
+        }
+      } catch {
+        setReplyError("No pudimos preparar el audio grabado. Proba de nuevo o adjunta un audio.");
+      } finally {
+        setPreparingRecording(false);
       }
     }, 0);
   }
 
+  async function prepareMediaRecorderAudio(chunks: Blob[], mimeType: string) {
+    try {
+      const blob = new Blob(chunks, { type: mimeType });
+
+      if (!blob.size) {
+        setReplyError("No se detecto audio grabado. Proba grabar dos segundos y detener.");
+        return;
+      }
+
+      const file = await buildMp3RecordingFileFromBlob(blob);
+      setAttachment(file);
+      setReplyText("");
+    } catch {
+      setReplyError("No pudimos preparar el audio grabado. Proba de nuevo o adjunta un audio.");
+    } finally {
+      mediaRecorderRef.current = null;
+      stopRecorderTracks();
+      setPreparingRecording(false);
+    }
+  }
+
   function stopRecorderTracks() {
+    mediaRecorderRef.current = null;
+    mediaRecorderChunksRef.current = [];
     audioProcessorRef.current?.disconnect();
     audioProcessorRef.current = null;
     audioSourceRef.current?.disconnect();
@@ -997,7 +1111,7 @@ function InboxList({
               onSubmit={sendManualReply}
             >
               <input
-                accept="image/png,image/jpeg,image/webp,video/mp4,video/3gpp,.mp4,.3gp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                accept="image/png,image/jpeg,image/webp,video/mp4,video/3gpp,audio/aac,audio/mp4,audio/mpeg,audio/ogg,.mp4,.3gp,.m4a,.aac,.mp3,.ogg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
                 hidden
                 onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
                 ref={attachmentInputRef}
@@ -1014,10 +1128,14 @@ function InboxList({
                 value={replyText}
               />
               {recording ? <div className="recording-pill">Grabando {formatRecordingSeconds(recordingSeconds)}</div> : null}
+              {preparingRecording ? <div className="recording-pill preparing">Preparando audio...</div> : null}
               {replyFile ? (
                 <div className="attachment-draft">
                   {replyFile.type.startsWith("image/") ? <ImageIcon size={16} /> : <FileText size={16} />}
-                  <span>{replyFile.name}</span>
+                  <div className="attachment-draft-body">
+                    <span>{replyFile.name}</span>
+                    {replyFilePreviewUrl ? <audio controls preload="metadata" src={replyFilePreviewUrl} /> : null}
+                  </div>
                   <button aria-label="Quitar archivo" onClick={() => setReplyFile(null)} type="button">
                     <X size={15} />
                   </button>
@@ -1030,21 +1148,21 @@ function InboxList({
                     Detener
                   </button>
                 ) : (
-                  <button className="secondary" disabled={sendingReply} onClick={startRecording} type="button">
+                  <button className="secondary" disabled={sendingReply || preparingRecording} onClick={startRecording} type="button">
                     <Mic size={18} />
                     Grabar
                   </button>
                 )}
                 <button
                   className="secondary"
-                  disabled={sendingReply || recording}
+                  disabled={sendingReply || recording || preparingRecording}
                   onClick={() => attachmentInputRef.current?.click()}
                   type="button"
                 >
                   <Paperclip size={18} />
                   Adjuntar
                 </button>
-                <button className="primary" disabled={sendingReply || (!replyText.trim() && !replyFile)} type="submit">
+                <button className="primary" disabled={sendingReply || preparingRecording || (!replyText.trim() && !replyFile)} type="submit">
                   <SendHorizonal size={18} />
                   {sendingReply ? "Enviando" : replyFile ? getAttachmentSendLabel(replyFile) : "Enviar"}
                 </button>
@@ -1145,6 +1263,65 @@ function formatRecordingSeconds(totalSeconds: number) {
     .padStart(2, "0");
   const seconds = (totalSeconds % 60).toString().padStart(2, "0");
   return `${minutes}:${seconds}`;
+}
+
+function getBestRecordingMimeType() {
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+    "audio/aac"
+  ];
+
+  return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
+}
+
+async function buildMp3RecordingFileFromBlob(blob: Blob) {
+  const AudioContextConstructor =
+    window.AudioContext ??
+    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+  if (!AudioContextConstructor) {
+    throw new Error("AudioContext unavailable");
+  }
+
+  const audioContext = new AudioContextConstructor();
+
+  try {
+    const audioBuffer = await audioContext.decodeAudioData(await blob.arrayBuffer());
+    const samples = audioBufferToInt16Chunks(audioBuffer);
+    const file = buildMp3RecordingFile(samples, audioBuffer.sampleRate);
+
+    if (!file) {
+      throw new Error("Empty MP3");
+    }
+
+    return file;
+  } finally {
+    void audioContext.close();
+  }
+}
+
+function audioBufferToInt16Chunks(audioBuffer: AudioBuffer) {
+  const chunks: Int16Array[] = [];
+  const channels = Array.from({ length: audioBuffer.numberOfChannels }, (_, index) => audioBuffer.getChannelData(index));
+  const chunkSize = 4096;
+
+  for (let offset = 0; offset < audioBuffer.length; offset += chunkSize) {
+    const length = Math.min(chunkSize, audioBuffer.length - offset);
+    const pcm = new Int16Array(length);
+
+    for (let index = 0; index < length; index += 1) {
+      const sampleIndex = offset + index;
+      const mixedSample = channels.reduce((sum, channel) => sum + channel[sampleIndex], 0) / channels.length;
+      const sample = Math.max(-1, Math.min(1, mixedSample));
+      pcm[index] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+    }
+
+    chunks.push(pcm);
+  }
+
+  return chunks;
 }
 
 function buildMp3RecordingFile(chunks: Int16Array[], sampleRate: number) {

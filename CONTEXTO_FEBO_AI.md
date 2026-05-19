@@ -194,3 +194,28 @@ En el nuevo chat dentro del proyecto FEBO AI:
    - conectar WhatsApp Cloud API, o
    - armar inbox basico, o
    - adaptar el agente para leer el prompt v1 desde archivo.
+
+## Notas de Codex / FEBO.ai
+
+### Sesion 19/05 - Notas internas de vendedores
+
+Se agrego una solapa `Notas internas` dentro del detalle de cada conversacion del inbox comercial.
+
+Objetivo:
+
+- Permitir que Guillermo, Rodrigo u otro vendedor dejen registro interno de la atencion.
+- Usarla para transferencias, contexto comercial, estado del caso y proximo paso.
+- No mezclar esas notas con la conversacion real de WhatsApp ni con mensajes de la IA.
+
+Implementacion:
+
+- Tabla Neon existente `conversation_notes` usada como persistencia.
+- Indice agregado `conversation_notes_conversation_created_idx`.
+- API nueva `/api/conversation-notes` con GET y POST autenticados.
+- UI en `src/app/ui/inbox-app.tsx` con tabs `Conversacion` y `Notas internas`.
+- Las notas muestran autor y fecha/hora.
+
+Verificacion:
+
+- `npm.cmd run build` OK.
+- Schema aplicado en Neon.

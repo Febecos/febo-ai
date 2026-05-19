@@ -60,6 +60,15 @@ export type ConversationMessage = {
   media_filename: string | null;
 };
 
+export type ConversationNote = {
+  id: string;
+  conversation_id: string;
+  body: string;
+  created_at: string;
+  created_by: string | null;
+  created_by_name: string | null;
+};
+
 export type AgentConversationMessage = {
   direction: "inbound" | "outbound" | "internal";
   body: string;
@@ -608,6 +617,48 @@ export async function listConversationMessages(conversationId: string, limit = 1
     order by m.created_at asc
     limit ${safeLimit}
   `) as ConversationMessage[];
+}
+
+export async function listConversationNotes(conversationId: string, limit = 80) {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  const safeLimit = Math.min(Math.max(limit, 20), 200);
+
+  const rows = await sql`
+    select
+      n.id::text,
+      n.conversation_id::text,
+      n.body,
+      n.created_at::text,
+      n.created_by::text,
+      u.full_name as created_by_name
+    from conversation_notes n
+    left join app_users u on u.id = n.created_by
+    where n.conversation_id = ${conversationId}
+    order by n.created_at desc
+    limit ${safeLimit}
+  ` as ConversationNote[];
+
+  return rows.reverse();
+}
+
+export async function createConversationNote(input: {
+  conversationId: string;
+  userId: string;
+  body: string;
+}) {
+  if (!isDbConfigured()) {
+    return;
+  }
+
+  const sql = getSql();
+  await sql`
+    insert into conversation_notes (conversation_id, created_by, body)
+    values (${input.conversationId}, ${input.userId}, ${input.body})
+  `;
 }
 
 export async function listAgentConversationContext(conversationId: string | null | undefined, limit = 30) {

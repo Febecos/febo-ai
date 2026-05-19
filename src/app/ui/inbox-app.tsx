@@ -29,7 +29,7 @@ import {
   X
 } from "lucide-react";
 import { DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { AppUser, ConversationMessage, ConversationSummary, MessageTemplate, UserAdminSummary } from "@/lib/crm";
+import type { AppUser, ConversationMessage, ConversationNote, ConversationSummary, MessageTemplate, UserAdminSummary } from "@/lib/crm";
 
 type Stats = {
   conversations: number;
@@ -609,8 +609,14 @@ function InboxList({
   const [selectedId, setSelectedId] = useState(conversations[0]?.id ?? "");
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [notes, setNotes] = useState<ConversationNote[]>([]);
+  const [activeConversationTab, setActiveConversationTab] = useState<"chat" | "notes">("chat");
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingNotes, setLoadingNotes] = useState(false);
   const [messageError, setMessageError] = useState("");
+  const [noteError, setNoteError] = useState("");
+  const [noteText, setNoteText] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [replyFile, setReplyFile] = useState<File | null>(null);
   const [replyFilePreviewUrl, setReplyFilePreviewUrl] = useState("");
@@ -681,7 +687,10 @@ function InboxList({
   }, [replyFile]);
 
   useEffect(() => {
+    setNoteText("");
+    setNoteError("");
     void loadConversationMessages(selected?.id);
+    void loadConversationNotes(selected?.id);
   }, [selected?.id]);
 
   useEffect(() => {
@@ -696,6 +705,7 @@ function InboxList({
 
       await refreshConversations(filters, { silent: true });
       await loadConversationMessages(selectedIdRef.current, { silent: true });
+      await loadConversationNotes(selectedIdRef.current, { silent: true });
     }
 
     const intervalId = window.setInterval(() => {
@@ -743,6 +753,68 @@ function InboxList({
     }
 
     setMessages(payload?.messages ?? []);
+  }
+
+  async function loadConversationNotes(conversationId?: string, options: { silent?: boolean } = {}) {
+    if (!conversationId) {
+      setNotes([]);
+      return;
+    }
+
+    if (!options.silent) {
+      setLoadingNotes(true);
+      setNoteError("");
+    }
+
+    const response = await fetch(`/api/conversation-notes?conversationId=${conversationId}`);
+    const payload = await readJsonResponse(response);
+
+    if (conversationId !== selectedIdRef.current) {
+      return;
+    }
+
+    if (!options.silent) {
+      setLoadingNotes(false);
+    }
+
+    if (!response.ok) {
+      if (!options.silent) {
+        setNotes([]);
+        setNoteError(payload?.error ?? "No pudimos cargar las notas.");
+      }
+      return;
+    }
+
+    setNotes(payload?.notes ?? []);
+  }
+
+  async function saveConversationNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selected?.id || !noteText.trim()) {
+      return;
+    }
+
+    setSavingNote(true);
+    setNoteError("");
+    const response = await fetch("/api/conversation-notes", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        conversationId: selected.id,
+        body: noteText.trim()
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setSavingNote(false);
+
+    if (!response.ok) {
+      setNoteError(payload?.error ?? "No pudimos guardar la nota.");
+      return;
+    }
+
+    setNoteText("");
+    setNotes(payload?.notes ?? []);
   }
 
   async function refreshConversations(nextFilters = filters, options: { silent?: boolean } = {}) {
@@ -1307,7 +1379,29 @@ function InboxList({
               <Info label="IA" value={selected.ai_enabled ? "Activa" : "Pausada"} />
             </div>
 
-            <div className="thread-panel">
+            <div className="conversation-tabs">
+              <button
+                className={activeConversationTab === "chat" ? "active" : ""}
+                onClick={() => setActiveConversationTab("chat")}
+                type="button"
+              >
+                <MessageSquareText size={17} />
+                Conversacion
+                <span>{messages.length}</span>
+              </button>
+              <button
+                className={activeConversationTab === "notes" ? "active" : ""}
+                onClick={() => setActiveConversationTab("notes")}
+                type="button"
+              >
+                <FileText size={17} />
+                Notas internas
+                <span>{notes.length}</span>
+              </button>
+            </div>
+
+            {activeConversationTab === "chat" ? (
+              <div className="thread-panel">
               <div className="thread-title">
                 <MessageSquareText size={17} />
                 Conversacion
@@ -1333,9 +1427,43 @@ function InboxList({
               {!loadingMessages && !messageError && !messages.length ? (
                 <div className="empty-state">Contacto importado sin historial de conversacion.</div>
               ) : null}
-            </div>
+              </div>
+            ) : (
+              <div className="notes-panel">
+                <form className="note-composer" onSubmit={saveConversationNote}>
+                  <textarea
+                    disabled={savingNote}
+                    onChange={(event) => setNoteText(event.target.value)}
+                    placeholder="Nota interna para vendedores. No se envia al cliente."
+                    value={noteText}
+                  />
+                  <div className="template-actions">
+                    <button className="primary" disabled={savingNote || !noteText.trim()} type="submit">
+                      <Save size={17} />
+                      {savingNote ? "Guardando" : "Guardar nota"}
+                    </button>
+                  </div>
+                  {noteError ? <span className="warn">{noteError}</span> : null}
+                </form>
+                {loadingNotes ? <div className="empty-state">Cargando notas...</div> : null}
+                {!loadingNotes && notes.length ? (
+                  <div className="notes-list">
+                    {notes.map((note) => (
+                      <article className="note-card" key={note.id}>
+                        <p>{note.body}</p>
+                        <small>
+                          {note.created_by_name ?? "Usuario"} - {formatMessageTime(note.created_at)}
+                        </small>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+                {!loadingNotes && !notes.length ? <div className="empty-state">Sin notas internas todavia.</div> : null}
+              </div>
+            )}
 
-            <form
+            {activeConversationTab === "chat" ? (
+              <form
               className={`reply-composer ${draggingFile ? "dragging" : ""}`}
               onDragLeave={() => setDraggingFile(false)}
               onDragOver={(event) => {
@@ -1403,7 +1531,8 @@ function InboxList({
                 </button>
               </div>
               {replyError ? <span className="warn">{replyError}</span> : null}
-            </form>
+              </form>
+            ) : null}
           </>
         ) : (
           <div className="empty-state">Selecciona una conversacion.</div>

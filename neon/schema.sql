@@ -106,6 +106,8 @@ create table if not exists conversation_notes (
   created_at timestamptz not null default now()
 );
 
+create index if not exists conversation_notes_conversation_created_idx on conversation_notes(conversation_id, created_at);
+
 create table if not exists handoffs (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references conversations(id) on delete cascade,

@@ -23,6 +23,10 @@ Uso acordado:
 - Si el conector de Google Drive no permite escritura directa, Codex debe dejar el bloque de actualizacion listo para pegar.
 - No guardar secretos, tokens ni claves completas en Drive, Markdown ni GitHub.
 
+### Notas de Codex / FEBO.AI
+
+- 2026-05-19: FEBO.AI ya tiene guardarrail deterministico para `cobertura_insuficiente=true` del selector. Si el motor indica que el catalogo no cubre bien el caudal pedido, la IA no cotiza libremente: responde mensaje controlado, marca `consultype=caliente`, `escalar=true`, crea ticket y deriva a asesor humano. Ver `src/lib/agent.ts`.
+
 ## Objetivo
 
 Febo AI es la plataforma propia de FEBECOS para reemplazar lo minimo necesario de Hariaz en la atencion de WhatsApp, sin seguir pagando una suite grande que hoy no se rentabiliza.

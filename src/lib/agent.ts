@@ -138,6 +138,18 @@ export async function runFebecosAgent(input: {
   });
   const selectorQuote = await getSelectorQuote(quoteExtraction);
 
+  if (isInsufficientCoverageQuote(selectorQuote)) {
+    const result = buildInsufficientCoverageResult(selectorQuote);
+
+    await executeAgentAction({
+      phone: input.phone,
+      message: input.message,
+      result
+    });
+
+    return result;
+  }
+
   const response = await getOpenAI().responses.create({
     model: config.OPENAI_MODEL,
     instructions: [
@@ -148,6 +160,7 @@ export async function runFebecosAgent(input: {
       "Si el historial muestra que un humano ya tomo la conversacion o la IA esta pausada, no intentes cerrar ni avanzar por tu cuenta.",
       "Cuando el contexto incluya selectorQuote, usalo como unica fuente para modelo, precio, caudal, stock y cuotas. No digas que no tenes acceso al sistema.",
       "Dentro de selectorQuote, los campos autoritativos son result.sugerencia.precio_full, result.sugerencia.cant_paneles, result.sugerencia.watts, result.sugerencia.codigo y result.caudal_a_altura. No recalcules precio ni cantidad de paneles.",
+      "Si selectorQuote.status='ok' y result.cobertura_insuficiente=true, no cotices precio ni modelo: explica brevemente que requiere armado a medida y escala a asesor humano.",
       "Si selectorQuote no esta disponible pero falta algun dato tecnico, pedi solo ese dato. No inventes precios ni modelos.",
       "Si selectorQuote.error existe, deriva o pedi disculpas brevemente; no inventes una cotizacion alternativa.",
       "Si tu respuesta dice que vas a pasar, derivar o conectar al cliente con un asesor, vendedor, agente humano o Equipo FEBECOS, entonces escalar debe ser true.",
@@ -591,6 +604,42 @@ function getAgentSafeSelectorResult(result: SelectorPumpResult): SelectorPumpRes
     nota: result.nota,
     link_calculadora_roi: result.link_calculadora_roi
   };
+}
+
+type SelectorQuote = Awaited<ReturnType<typeof getSelectorQuote>>;
+
+function isInsufficientCoverageQuote(
+  quote: SelectorQuote
+): quote is Extract<SelectorQuote, { status: "ok" }> {
+  return quote.status === "ok" && quote.result.cobertura_insuficiente === true;
+}
+
+function buildInsufficientCoverageResult(quote: Extract<SelectorQuote, { status: "ok" }>): AgentResult {
+  const coverage = formatCoverage(quote.result.cobertura_pct);
+
+  return {
+    respuesta: [
+      "Con esos datos, lo que figura en catalogo no llega a cubrir bien el caudal que necesitas.",
+      coverage ? `El equipo mas cercano cubre aprox. ${coverage} del consumo pedido, asi que no te quiero pasar una cotizacion incorrecta.` : "No te quiero pasar una cotizacion incorrecta.",
+      "Te paso a un asesor de Febecos para armarlo a medida y que quede bien resuelto."
+    ].join("\n\n"),
+    sentimiento: "neutral",
+    consultype: "caliente",
+    escalar: true,
+    nombre: null,
+    imagenes: [],
+    archivos: [],
+    action: "create_ticket",
+    actionSubject: "cotizacion a medida por cobertura insuficiente"
+  };
+}
+
+function formatCoverage(value?: number) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return `${Math.round(value)}%`;
 }
 
 async function executeAgentAction(input: {

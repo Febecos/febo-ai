@@ -108,16 +108,6 @@ export function InboxApp({
             <Smartphone size={16} />
             PWA lista para celu
           </span>
-          {currentUser.role !== "admin" ? (
-            <>
-              <button className="icon-button" onClick={() => window.location.reload()} title="Actualizar" type="button">
-                <RefreshCcw size={18} />
-              </button>
-              <button className="icon-button" onClick={logout} title="Salir" type="button">
-                <LogOut size={18} />
-              </button>
-            </>
-          ) : null}
         </div>
       </header>
 
@@ -132,19 +122,12 @@ export function InboxApp({
         <Metric label="Calientes" value={stats.hot} />
       </section>
 
-      {currentUser.role === "admin" ? (
-        <AdminToolWorkspace
-          adminUsers={adminUsers}
-          conversations={conversations}
-          currentUser={currentUser}
-          users={users}
-        />
-      ) : (
-        <section className="workspace-grid">
-          <InboxList conversations={conversations} currentUser={currentUser} users={users} />
-          <AgentTester />
-        </section>
-      )}
+      <ToolWorkspace
+        adminUsers={adminUsers}
+        conversations={conversations}
+        currentUser={currentUser}
+        users={users}
+      />
     </main>
   );
 }
@@ -219,7 +202,7 @@ function Metric({ label, value }: { label: string; value: number }) {
   );
 }
 
-function AdminToolWorkspace({
+function ToolWorkspace({
   adminUsers,
   conversations,
   currentUser,
@@ -234,7 +217,7 @@ function AdminToolWorkspace({
 
   return (
     <section className="admin-workspace">
-      <nav className="tool-sidebar" aria-label="Herramientas de administrador">
+      <nav className="tool-sidebar" aria-label="Herramientas de trabajo">
         <button
           className={activeTool === "conversations" ? "active" : ""}
           onClick={() => setActiveTool("conversations")}
@@ -259,14 +242,18 @@ function AdminToolWorkspace({
           <UsersRound size={18} />
           Contactos
         </button>
-        <button className={activeTool === "users" ? "active" : ""} onClick={() => setActiveTool("users")} type="button">
-          <ShieldCheck size={18} />
-          Usuarios y accesos
-        </button>
-        <button className={activeTool === "ai" ? "active" : ""} onClick={() => setActiveTool("ai")} type="button">
-          <Bot size={18} />
-          Probar IA
-        </button>
+        {currentUser.role === "admin" ? (
+          <>
+            <button className={activeTool === "users" ? "active" : ""} onClick={() => setActiveTool("users")} type="button">
+              <ShieldCheck size={18} />
+              Usuarios y accesos
+            </button>
+            <button className={activeTool === "ai" ? "active" : ""} onClick={() => setActiveTool("ai")} type="button">
+              <Bot size={18} />
+              Probar IA
+            </button>
+          </>
+        ) : null}
         <div className="tool-sidebar-bottom">
           <button onClick={() => window.location.reload()} title="Actualizar" type="button">
             <RefreshCcw size={18} />
@@ -285,8 +272,10 @@ function AdminToolWorkspace({
         ) : null}
         {activeTool === "templates" ? <TemplatesPanel /> : null}
         {activeTool === "contacts" ? <ContactsPanel users={users} /> : null}
-        {activeTool === "users" ? <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} /> : null}
-        {activeTool === "ai" ? <AgentTester /> : null}
+        {activeTool === "users" && currentUser.role === "admin" ? (
+          <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} />
+        ) : null}
+        {activeTool === "ai" && currentUser.role === "admin" ? <AgentTester /> : null}
       </div>
     </section>
   );

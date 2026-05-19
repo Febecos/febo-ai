@@ -315,7 +315,7 @@ export async function recordIncomingMessage(input: {
     (
       (await sql`
         insert into conversations (contact_id, status, last_message_at, ai_enabled)
-        values (${contactId}, 'open', now())
+        values (${contactId}, 'open', now(), true)
         returning id, ai_enabled
       `) as Array<{ id: string; ai_enabled: boolean }>
     )[0];

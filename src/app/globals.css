@@ -702,8 +702,7 @@ select {
   justify-self: end;
 }
 
-.attachment-draft,
-.recording-pill {
+.attachment-draft {
   align-items: center;
   border-radius: 999px;
   display: inline-flex;
@@ -730,17 +729,6 @@ select {
   color: inherit;
   min-height: 24px;
   padding: 0;
-}
-
-.recording-pill {
-  background: var(--red-soft);
-  color: var(--red);
-  font-weight: 700;
-}
-
-.recording-stop {
-  border-color: #efc7c3;
-  color: var(--red);
 }
 
 .composer-actions {

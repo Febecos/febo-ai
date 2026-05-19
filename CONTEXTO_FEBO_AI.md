@@ -275,3 +275,8 @@ Mobile:
 - Dropzone de archivos oculta en celular para no ocupar pantalla.
 - Conversacion con alto limitado y burbujas mas anchas.
 - Metricas ocultas en pantallas muy chicas.
+
+Pendiente:
+
+- Agregar `marcar como no leido` por contacto/conversacion.
+- Mostrar no leidos con resaltado verde oscuro o senal equivalente en la lista.

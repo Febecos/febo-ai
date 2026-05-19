@@ -6,6 +6,7 @@ export type WhatsAppTextMessage = {
   id: string;
   text: string;
   contactName?: string;
+  interactiveId?: string;
 };
 
 export type WhatsAppAudioMessage = {
@@ -44,6 +45,10 @@ type WhatsAppWebhookBody = {
           type?: string;
           text?: { body?: string };
           audio?: { id?: string; mime_type?: string; sha256?: string; voice?: boolean };
+          interactive?: {
+            type?: string;
+            button_reply?: { id?: string; title?: string };
+          };
         }>;
         statuses?: Array<{
           id?: string;
@@ -104,6 +109,16 @@ export function extractInboundMessages(body: WhatsAppWebhookBody): WhatsAppInbou
             from: message.from,
             id: message.id,
             text: message.text.body,
+            contactName: contact?.profile?.name
+          });
+        }
+
+        if (message.type === "interactive" && message.interactive?.button_reply?.title) {
+          messages.push({
+            from: message.from,
+            id: message.id,
+            text: message.interactive.button_reply.title,
+            interactiveId: message.interactive.button_reply.id,
             contactName: contact?.profile?.name
           });
         }
@@ -233,6 +248,50 @@ export async function sendWhatsAppText(to: string, body: string) {
 
   if (!response.ok) {
     throw new Error(await getWhatsAppErrorMessage(response, "enviar el mensaje"));
+  }
+
+  return response.json();
+}
+
+export async function sendWhatsAppReplyButtons(input: {
+  to: string;
+  body: string;
+  buttons: Array<{ id: string; title: string }>;
+}) {
+  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
+  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+
+  const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: input.to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: {
+          text: input.body
+        },
+        action: {
+          buttons: input.buttons.slice(0, 3).map((button) => ({
+            type: "reply",
+            reply: {
+              id: button.id,
+              title: button.title.slice(0, 20)
+            }
+          }))
+        }
+      }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(await getWhatsAppErrorMessage(response, "enviar los botones"));
   }
 
   return response.json();

@@ -26,6 +26,7 @@ Uso acordado:
 ### Notas de Codex / FEBO.AI
 
 - 2026-05-19: FEBO.AI ya tiene guardarrail deterministico para `cobertura_insuficiente=true` del selector. Si el motor indica que el catalogo no cubre bien el caudal pedido, la IA no cotiza libremente: responde mensaje controlado, marca `consultype=caliente`, `escalar=true`, crea ticket y deriva a asesor humano. Ver `src/lib/agent.ts`.
+- 2026-05-19: Se agregaron botones interactivos de WhatsApp para decisiones comerciales post-cotizacion: `Ver cuotas` y `Hablar asesor`. Si el cliente toca `Hablar asesor`, la IA se pausa y se crea handoff. Si toca `Ver cuotas`, entra como mensaje del cliente para continuar el flujo. Ver `src/lib/whatsapp.ts` y `src/app/api/whatsapp/webhook/route.ts`.
 
 ## Objetivo
 

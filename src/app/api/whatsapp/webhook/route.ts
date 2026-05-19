@@ -8,9 +8,13 @@ import {
   extractMessageStatuses,
   isWhatsAppAudioMessage,
   isWhatsAppTextMessage,
+  sendWhatsAppReplyButtons,
   sendWhatsAppText,
   verifyMetaSignature
 } from "@/lib/whatsapp";
+
+const WHATSAPP_BUTTON_VIEW_INSTALLMENTS = "febo_view_installments";
+const WHATSAPP_BUTTON_TALK_TO_ADVISOR = "febo_talk_to_advisor";
 
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams;
@@ -86,6 +90,22 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
+    if (isText && message.interactiveId === WHATSAPP_BUTTON_TALK_TO_ADVISOR) {
+      const handoffAnswer = "Perfecto. Te paso con un asesor de Febecos para que lo vean directo y coordinen como seguir.";
+      const sent = await sendWhatsAppText(message.from, handoffAnswer);
+
+      await recordAgentReply({
+        contactId: stored.contactId,
+        threadId: stored.threadId,
+        answer: handoffAnswer,
+        intent: "caliente",
+        needsHuman: true,
+        waMessageId: getSentMessageId(sent)
+      });
+
+      continue;
+    }
+
     if (!agentMessage) {
       const fallbackAnswer = "Recibi tu audio, pero no pude leerlo bien. Me lo podes mandar por escrito?";
 
@@ -111,7 +131,16 @@ export async function POST(request: NextRequest) {
     });
     const needsHuman = shouldPauseForHumanHandoff(result.respuesta, result.escalar);
 
-    const sent = await sendWhatsAppText(message.from, result.respuesta);
+    const sent = shouldOfferDecisionButtons(result.respuesta, needsHuman) ?
+      await sendWhatsAppReplyButtons({
+        to: message.from,
+        body: result.respuesta,
+        buttons: [
+          { id: WHATSAPP_BUTTON_VIEW_INSTALLMENTS, title: "Ver cuotas" },
+          { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Hablar asesor" }
+        ]
+      })
+    : await sendWhatsAppText(message.from, result.respuesta);
 
     await recordAgentReply({
       contactId: stored.contactId,
@@ -124,6 +153,27 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+function shouldOfferDecisionButtons(answer: string, needsHuman: boolean) {
+  if (needsHuman) {
+    return false;
+  }
+
+  const normalized = answer
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return (
+    normalized.includes("cuota") &&
+    normalized.includes("asesor") &&
+    (
+      normalized.includes("como te gustaria") ||
+      normalized.includes("queres verlo") ||
+      normalized.includes("preferis verlo")
+    )
+  );
 }
 
 function getSentMessageId(response: unknown) {

@@ -566,7 +566,7 @@ button:disabled {
 
 .chat-bubble.outbound.audio-bubble,
 .chat-bubble.internal.audio-bubble {
-  background: #8d38eb;
+  background: var(--blue);
   border-top-right-radius: 0;
 }
 

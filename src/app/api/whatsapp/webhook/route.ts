@@ -15,6 +15,8 @@ import {
 
 const WHATSAPP_BUTTON_VIEW_INSTALLMENTS = "febo_view_installments";
 const WHATSAPP_BUTTON_TALK_TO_ADVISOR = "febo_talk_to_advisor";
+const WHATSAPP_BUTTON_SIX_INSTALLMENTS = "febo_six_installments";
+const WHATSAPP_BUTTON_CASH = "febo_cash";
 
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams;
@@ -131,7 +133,14 @@ export async function POST(request: NextRequest) {
     });
     const needsHuman = shouldPauseForHumanHandoff(result.respuesta, result.escalar);
 
-    const sent = shouldOfferDecisionButtons(result.respuesta, needsHuman) ?
+    const paymentButtons = getPaymentDecisionButtons(result.respuesta, needsHuman);
+    const sent = paymentButtons ?
+      await sendWhatsAppReplyButtons({
+        to: message.from,
+        body: result.respuesta,
+        buttons: paymentButtons
+      })
+    : shouldOfferDecisionButtons(result.respuesta, needsHuman) ?
       await sendWhatsAppReplyButtons({
         to: message.from,
         body: result.respuesta,
@@ -155,15 +164,37 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
+function getPaymentDecisionButtons(answer: string, needsHuman: boolean) {
+  if (needsHuman) {
+    return null;
+  }
+
+  const normalized = normalizeAnswer(answer);
+
+  if (
+    normalized.includes("cuota") &&
+    normalized.includes("contado") &&
+    (
+      normalized.includes("queres verlo") ||
+      normalized.includes("pensando mas de contado") ||
+      normalized.includes("preferis")
+    )
+  ) {
+    return [
+      { id: WHATSAPP_BUTTON_SIX_INSTALLMENTS, title: "6 cuotas" },
+      { id: WHATSAPP_BUTTON_CASH, title: "Contado" }
+    ];
+  }
+
+  return null;
+}
+
 function shouldOfferDecisionButtons(answer: string, needsHuman: boolean) {
   if (needsHuman) {
     return false;
   }
 
-  const normalized = answer
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  const normalized = normalizeAnswer(answer);
 
   return (
     normalized.includes("cuota") &&
@@ -174,6 +205,13 @@ function shouldOfferDecisionButtons(answer: string, needsHuman: boolean) {
       normalized.includes("preferis verlo")
     )
   );
+}
+
+function normalizeAnswer(answer: string) {
+  return answer
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function getSentMessageId(response: unknown) {

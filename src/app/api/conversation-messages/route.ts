@@ -251,12 +251,14 @@ async function convertWavToMp3File(file: File) {
 
 function createMp3Encoder(sampleRate: number) {
   const runtimeGlobal = globalThis as typeof globalThis & {
+    BitStream?: unknown;
     Lame?: unknown;
     MPEGMode?: unknown;
   };
 
   runtimeGlobal.MPEGMode ??= require("lamejs/src/js/MPEGMode.js");
   runtimeGlobal.Lame ??= require("lamejs/src/js/Lame.js");
+  runtimeGlobal.BitStream ??= require("lamejs/src/js/BitStream.js");
 
   const { Mp3Encoder } = require("lamejs") as typeof import("lamejs");
   return new Mp3Encoder(1, sampleRate, 128);

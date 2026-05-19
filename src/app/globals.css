@@ -1258,7 +1258,20 @@ select {
   }
 
   .toolbar > * {
-    flex: 1 1 140px;
+    flex: 1 1 112px;
+  }
+
+  .toolbar {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .toolbar > button {
+    flex: 1 1 0;
+    font-size: 14px;
+    gap: 5px;
+    min-width: 0;
+    padding: 0 8px;
   }
 
   .toolbar-field {

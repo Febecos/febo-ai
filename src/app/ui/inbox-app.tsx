@@ -1008,7 +1008,7 @@ function InboxList({
                 <div className="message-thread">
                   {messages.map((message) => (
                     <article className={`chat-bubble ${message.direction}`} key={message.id}>
-                      <p>{message.body}</p>
+                      {!isAudioMessage(message) && message.body ? <p>{message.body}</p> : null}
                       {message.media_id ? <MessageMedia message={message} /> : null}
                       <small>
                         {message.direction === "inbound" ? "Cliente" : "Febo AI"} · {formatMessageTime(message.created_at)}
@@ -1120,7 +1120,7 @@ function MessageMedia({ message }: { message: ConversationMessage }) {
   }
 
   if (mimeType.startsWith("audio/")) {
-    return <audio controls preload="metadata" src={src} />;
+    return <AudioMessageCard filename={filename} message={message} src={src} />;
   }
 
   if (mimeType.startsWith("video/")) {
@@ -1133,6 +1133,46 @@ function MessageMedia({ message }: { message: ConversationMessage }) {
       <span>{filename}</span>
     </a>
   );
+}
+
+function AudioMessageCard({
+  filename,
+  message,
+  src
+}: {
+  filename: string;
+  message: ConversationMessage;
+  src: string;
+}) {
+  const transcript = getAudioTranscript(message.body);
+
+  return (
+    <div className="message-audio-card">
+      <div className="message-audio-icon">
+        <Mic size={16} />
+      </div>
+      <div className="message-audio-content">
+        <audio controls preload="metadata" src={src} />
+        <strong>AUDIO</strong>
+        {transcript ? (
+          <details className="message-transcript">
+            <summary>Ver transcripcion</summary>
+            <p>{transcript}</p>
+          </details>
+        ) : null}
+        <span className="message-audio-name">[Audio: {filename.replace(/\.[^.]+$/, "")}]</span>
+      </div>
+    </div>
+  );
+}
+
+function isAudioMessage(message: ConversationMessage) {
+  return Boolean(message.media_mime_type?.startsWith("audio/"));
+}
+
+function getAudioTranscript(body: string) {
+  const prefix = "Audio transcripto:";
+  return body.startsWith(prefix) ? body.slice(prefix.length).trim() : "";
 }
 
 function isSupportedClientAttachment(file: File) {

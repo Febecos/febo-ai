@@ -549,6 +549,56 @@ button:disabled {
   width: 280px;
 }
 
+.message-audio-card {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  min-width: min(100%, 330px);
+}
+
+.message-audio-icon {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.34);
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 34px;
+  justify-content: center;
+  margin-top: 34px;
+  width: 34px;
+}
+
+.message-audio-content {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.message-audio-content strong {
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.message-transcript summary {
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+.message-transcript p {
+  margin-top: 6px;
+}
+
+.message-audio-name {
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 6px;
+  display: inline-block;
+  font-size: 12px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 8px 9px;
+}
+
 .message-image {
   border-radius: 8px;
   display: block;

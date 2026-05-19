@@ -259,7 +259,7 @@ function createMp3Encoder(sampleRate: number) {
   runtimeGlobal.Lame ??= require("lamejs/src/js/Lame.js");
 
   const { Mp3Encoder } = require("lamejs") as typeof import("lamejs");
-  return new Mp3Encoder(1, sampleRate, 64);
+  return new Mp3Encoder(1, sampleRate, 128);
 }
 
 function parseWavPcm16(arrayBuffer: ArrayBuffer) {

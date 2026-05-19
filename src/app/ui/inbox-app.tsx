@@ -25,7 +25,6 @@ import {
   X
 } from "lucide-react";
 import { DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Mp3Encoder } from "lamejs";
 import type { AppUser, ConversationMessage, ConversationSummary, UserAdminSummary } from "@/lib/crm";
 
 type Stats = {
@@ -824,7 +823,7 @@ function InboxList({
 
     window.setTimeout(() => {
       try {
-        const file = buildMp3RecordingFile(samples, sampleRate);
+        const file = buildWavRecordingFile(samples, sampleRate);
 
         if (file) {
           setAttachment(file);
@@ -1035,7 +1034,7 @@ function InboxList({
               onSubmit={sendManualReply}
             >
               <input
-                accept="image/png,image/jpeg,image/webp,video/mp4,video/3gpp,audio/aac,audio/mp4,audio/mpeg,audio/ogg,.mp4,.3gp,.m4a,.aac,.mp3,.ogg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                accept="image/png,image/jpeg,image/webp,video/mp4,video/3gpp,audio/aac,audio/mp4,audio/mpeg,audio/ogg,audio/wav,.mp4,.3gp,.m4a,.aac,.mp3,.ogg,.wav,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
                 hidden
                 onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
                 ref={attachmentInputRef}
@@ -1162,7 +1161,7 @@ function isSupportedClientAudio(mimeType: string) {
     return false;
   }
 
-  return ["audio/aac", "audio/amr", "audio/mp4", "audio/mpeg", "audio/ogg"].includes(normalized);
+  return ["audio/aac", "audio/amr", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/wav", "audio/x-wav"].includes(normalized);
 }
 
 function getAttachmentSendLabel(file: File) {
@@ -1189,41 +1188,62 @@ function formatRecordingSeconds(totalSeconds: number) {
   return `${minutes}:${seconds}`;
 }
 
-function buildMp3RecordingFile(chunks: Int16Array[], sampleRate: number) {
+function buildWavRecordingFile(chunks: Int16Array[], sampleRate: number) {
   if (!chunks.length) {
     return null;
   }
 
-  const encoder = new Mp3Encoder(1, sampleRate, 64);
-  const mp3Chunks: Int8Array[] = [];
+  const sampleCount = chunks.reduce((total, chunk) => total + chunk.length, 0);
 
-  for (const chunk of chunks) {
-    for (let offset = 0; offset < chunk.length; offset += 1152) {
-      const mp3Buffer = encoder.encodeBuffer(chunk.subarray(offset, offset + 1152));
-
-      if (mp3Buffer.length > 0) {
-        mp3Chunks.push(mp3Buffer);
-      }
-    }
-  }
-
-  const finalBuffer = encoder.flush();
-
-  if (finalBuffer.length > 0) {
-    mp3Chunks.push(finalBuffer);
-  }
-
-  if (!mp3Chunks.length) {
+  if (!sampleCount) {
     return null;
   }
 
-  const blobParts = mp3Chunks.map((chunk) => {
-    const copy = new Uint8Array(chunk.length);
-    copy.set(chunk);
-    return copy.buffer;
-  });
+  const buffer = new ArrayBuffer(44 + sampleCount * 2);
+  const view = new DataView(buffer);
+  let cursor = 0;
 
-  return new File(blobParts, `audio-febo-${Date.now()}.mp3`, { type: "audio/mpeg" });
+  writeAscii(view, cursor, "RIFF");
+  cursor += 4;
+  view.setUint32(cursor, 36 + sampleCount * 2, true);
+  cursor += 4;
+  writeAscii(view, cursor, "WAVE");
+  cursor += 4;
+  writeAscii(view, cursor, "fmt ");
+  cursor += 4;
+  view.setUint32(cursor, 16, true);
+  cursor += 4;
+  view.setUint16(cursor, 1, true);
+  cursor += 2;
+  view.setUint16(cursor, 1, true);
+  cursor += 2;
+  view.setUint32(cursor, sampleRate, true);
+  cursor += 4;
+  view.setUint32(cursor, sampleRate * 2, true);
+  cursor += 4;
+  view.setUint16(cursor, 2, true);
+  cursor += 2;
+  view.setUint16(cursor, 16, true);
+  cursor += 2;
+  writeAscii(view, cursor, "data");
+  cursor += 4;
+  view.setUint32(cursor, sampleCount * 2, true);
+  cursor += 4;
+
+  for (const chunk of chunks) {
+    for (const sample of chunk) {
+      view.setInt16(cursor, sample, true);
+      cursor += 2;
+    }
+  }
+
+  return new File([buffer], `audio-febo-${Date.now()}.wav`, { type: "audio/wav" });
+}
+
+function writeAscii(view: DataView, offset: number, value: string) {
+  for (let index = 0; index < value.length; index += 1) {
+    view.setUint8(offset + index, value.charCodeAt(index));
+  }
 }
 
 function Info({ label, value }: { label: string; value: string }) {

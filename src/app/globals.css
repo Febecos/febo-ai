@@ -667,11 +667,14 @@ button:disabled {
 
 .message-thread {
   display: grid;
-  align-content: end;
+  align-content: start;
   gap: 10px;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
   padding: 10px 14px 14px;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .notes-panel {
@@ -1472,8 +1475,9 @@ select {
   }
 
   .message-thread {
-    height: 100%;
+    height: auto;
     max-height: none;
+    min-height: 0;
   }
 
   .thread-panel {

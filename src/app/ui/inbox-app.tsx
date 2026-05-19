@@ -55,6 +55,16 @@ const CONSULTYPE_OPTIONS = [
   { value: "otro", label: "Otro" }
 ];
 
+const STATUS_OPTIONS = [
+  { value: "open", label: "Abierta" },
+  { value: "waiting", label: "Esperando" },
+  { value: "quoted", label: "Cotizada" },
+  { value: "hot", label: "Caliente" },
+  { value: "handoff", label: "Humano" },
+  { value: "closed", label: "Cerrada" },
+  { value: "lost", label: "Perdida" }
+];
+
 export function InboxApp({
   conversations,
   currentUser,
@@ -758,7 +768,9 @@ function InboxList({
   }, []);
 
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ block: "end" });
+    window.requestAnimationFrame(() => {
+      threadEndRef.current?.scrollIntoView({ block: "end" });
+    });
   }, [messages.length, selected?.id]);
 
   useEffect(() => {
@@ -1368,7 +1380,7 @@ function InboxList({
                 <h2>{selected.display_name || "Sin nombre"}</h2>
                 <span>{selected.phone}</span>
               </div>
-              <span className={`status ${selected.status}`}>{selected.status}</span>
+              <span className={`status ${selected.status}`}>{getStatusLabel(selected.status)}</span>
             </div>
 
             <div className="toolbar">
@@ -1392,8 +1404,8 @@ function InboxList({
                 <FileText size={17} />
                 Plantilla
               </button>
-              <label className="toolbar-field">
-                Transferir a
+              <details className="toolbar-menu">
+                <summary>Transferir</summary>
                 <select
                   onChange={(event) =>
                     patchConversation(selected.id, {
@@ -1411,24 +1423,19 @@ function InboxList({
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="toolbar-field">
-                Estado
-                <select
-                  onChange={(event) => patchConversation(selected.id, { status: event.target.value })}
-                  value={selected.status}
-                >
-                  <option value="open">Abierta</option>
-                  <option value="waiting">Esperando</option>
-                  <option value="quoted">Cotizada</option>
-                  <option value="hot">Caliente</option>
-                  <option value="handoff">Humano</option>
-                  <option value="closed">Cerrada</option>
-                  <option value="lost">Perdida</option>
+              </details>
+              <details className="toolbar-menu">
+                <summary>{getStatusLabel(selected.status)}</summary>
+                <select onChange={(event) => patchConversation(selected.id, { status: event.target.value })} value={selected.status}>
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
-              </label>
-              <label className="toolbar-field">
-                Etiqueta
+              </details>
+              <details className="toolbar-menu">
+                <summary>{getConsultypeLabel(selected.consultype)}</summary>
                 <select
                   onChange={(event) => patchConversation(selected.id, { consultype: event.target.value })}
                   value={selected.consultype}
@@ -1439,7 +1446,7 @@ function InboxList({
                     </option>
                   ))}
                 </select>
-              </label>
+              </details>
             </div>
 
             {templateComposerOpen ? (
@@ -1983,6 +1990,14 @@ function AgentTester() {
 async function logout() {
   await fetch("/api/auth/logout", { method: "POST" });
   window.location.reload();
+}
+
+function getStatusLabel(value: string) {
+  return STATUS_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
+function getConsultypeLabel(value: string) {
+  return CONSULTYPE_OPTIONS.find((option) => option.value === value)?.label ?? value;
 }
 
 async function readJsonResponse(response: Response) {

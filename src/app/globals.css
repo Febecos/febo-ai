@@ -493,7 +493,7 @@ button:disabled {
 .detail-grid {
   align-items: flex-start;
   display: grid;
-  gap: 10px;
+  gap: 6px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
@@ -502,13 +502,15 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 4px;
-  min-height: 68px;
+  gap: 2px;
+  min-height: 48px;
   min-width: 0;
-  padding: 12px;
+  padding: 8px;
 }
 
 .info-cell strong {
+  font-size: 13px;
+  line-height: 1.15;
   overflow-wrap: anywhere;
 }
 
@@ -527,10 +529,10 @@ button:disabled {
 
 .thread-panel {
   display: grid;
-  gap: 12px;
+  gap: 0;
   grid-template-rows: auto minmax(0, 1fr);
-  max-height: 520px;
-  min-height: 220px;
+  max-height: none;
+  min-height: min(52vh, 520px);
   overflow: hidden;
   padding: 0;
 }
@@ -819,17 +821,30 @@ button:disabled {
   padding: 10px;
 }
 
-.toolbar-field {
-  color: var(--muted);
-  display: grid;
-  flex: 1 1 170px;
-  font-size: 12px;
-  gap: 4px;
-  min-width: 150px;
+.toolbar-menu {
+  position: relative;
 }
 
-.toolbar-field select {
+.toolbar-menu summary {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
   color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  min-height: 34px;
+  padding: 0 9px;
+}
+
+.toolbar-menu[open] summary {
+  border-color: #b9dec8;
+}
+
+.toolbar-menu select {
+  margin-top: 6px;
+  min-width: min(220px, 72vw);
   width: 100%;
 }
 
@@ -972,8 +987,8 @@ select {
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 10px;
-  padding: 10px;
+  gap: 8px;
+  padding: 8px;
 }
 
 .reply-composer.dragging {
@@ -998,8 +1013,8 @@ select {
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--ink);
-  min-height: 86px;
-  padding: 11px 12px;
+  min-height: 62px;
+  padding: 9px 10px;
   resize: vertical;
   width: 100%;
 }
@@ -1070,8 +1085,12 @@ select {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.composer-actions .primary {
+  margin-left: auto;
 }
 
 .answer-box {
@@ -1254,8 +1273,11 @@ select {
   }
 
   .conversation-detail {
+    display: flex;
+    flex-direction: column;
     position: static;
     gap: 10px;
+    min-height: calc(100vh - 20px);
     padding: 10px;
   }
 
@@ -1304,16 +1326,29 @@ select {
     padding: 0 7px;
   }
 
-  .toolbar-field {
-    flex-basis: 100%;
+  .toolbar-menu summary {
+    font-size: 12px;
+    min-height: 32px;
+    padding: 0 7px;
+  }
+
+  .toolbar-menu select {
+    font-size: 14px;
+    min-height: 34px;
   }
 
   .message-thread {
-    max-height: 56vh;
+    max-height: none;
+  }
+
+  .thread-panel {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .reply-composer {
     bottom: 0;
+    margin-top: auto;
     position: sticky;
     z-index: 7;
   }
@@ -1323,15 +1358,21 @@ select {
   }
 
   .reply-composer textarea {
-    min-height: 62px;
+    min-height: 52px;
   }
 
   .composer-actions {
-    justify-content: stretch;
+    justify-content: flex-start;
   }
 
   .composer-actions button {
-    flex: 1 1 92px;
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 0 9px;
+  }
+
+  .composer-actions .primary {
+    margin-left: auto;
   }
 }
 
@@ -1390,6 +1431,15 @@ select {
 
   .detail-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .info-cell {
+    min-height: 42px;
+    padding: 7px;
+  }
+
+  .info-cell small {
+    font-size: 11px;
   }
 
   .conversation-row {

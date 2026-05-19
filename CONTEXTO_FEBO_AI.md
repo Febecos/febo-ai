@@ -270,7 +270,7 @@ Transferencia:
 Mobile:
 
 - Se ajusto el layout para uso desde celular.
-- Menu admin horizontal.
+- Menu admin vertical compacto con iconos.
 - Composer sticky abajo.
 - Dropzone de archivos oculta en celular para no ocupar pantalla.
 - Conversacion con alto limitado y burbujas mas anchas.

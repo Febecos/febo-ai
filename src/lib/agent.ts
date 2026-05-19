@@ -132,6 +132,18 @@ export async function runFebecosAgent(input: {
   const prompt = await getOperatingPrompt();
   const history = await listAgentConversationContext(input.conversationId, 30);
   const conversationHistory = buildConversationHistory(history);
+  const paymentPreferenceResult = buildPaymentPreferenceResult(input.message, conversationHistory);
+
+  if (paymentPreferenceResult) {
+    await executeAgentAction({
+      phone: input.phone,
+      message: input.message,
+      result: paymentPreferenceResult
+    });
+
+    return paymentPreferenceResult;
+  }
+
   const quoteExtraction = await extractQuoteRequest({
     message: input.message,
     history: conversationHistory
@@ -162,6 +174,7 @@ export async function runFebecosAgent(input: {
       "Dentro de selectorQuote, los campos autoritativos son result.sugerencia.precio_full, result.sugerencia.cant_paneles, result.sugerencia.watts, result.sugerencia.codigo y result.caudal_a_altura. No recalcules precio ni cantidad de paneles.",
       "Si selectorQuote.status='ok' y result.cobertura_insuficiente=true, no cotices precio ni modelo: explica brevemente que requiere armado a medida y escala a asesor humano.",
       "Cuando ya diste una cotizacion y el cliente todavia no confirmo compra pero puede querer cuotas o asesor, no derives de una: pregunta 'Si queres verlo en cuotas o preferis hablar con un asesor, te ayudo. Como te gustaria verlo?'.",
+      "Si el cliente solo responde '6 cuotas', 'seis cuotas' o 'contado' despues de una cotizacion, no repitas la cotizacion completa: confirma la preferencia en una frase y ofrece hablar con asesor.",
       "Si selectorQuote no esta disponible pero falta algun dato tecnico, pedi solo ese dato. No inventes precios ni modelos.",
       "Si selectorQuote.error existe, deriva o pedi disculpas brevemente; no inventes una cotizacion alternativa.",
       "Si tu respuesta dice que vas a pasar, derivar o conectar al cliente con un asesor, vendedor, agente humano o Equipo FEBECOS, entonces escalar debe ser true.",
@@ -277,6 +290,63 @@ function buildConversationHistory(history: AgentConversationMessage[]) {
     needsHuman: message.needs_human,
     at: message.created_at
   }));
+}
+
+function buildPaymentPreferenceResult(
+  message: string,
+  history: ReturnType<typeof buildConversationHistory>
+): AgentResult | null {
+  if (!hasRecentQuote(history)) {
+    return null;
+  }
+
+  const normalized = normalizeSpanish(message);
+  const wantsInstallments =
+    /\b(6|seis)\s*cuotas?\b/.test(normalized) ||
+    normalized === "ver cuotas" ||
+    normalized === "cuotas";
+  const wantsCash =
+    /\bcontado\b/.test(normalized) ||
+    normalized === "cash";
+
+  if (!wantsInstallments && !wantsCash) {
+    return null;
+  }
+
+  return {
+    respuesta: wantsInstallments ?
+      "Perfecto, lo vemos en 6 cuotas. Si queres avanzar, podes hablar con un asesor y lo coordinan con vos."
+    : "Perfecto, lo vemos de contado. Si queres avanzar, podes hablar con un asesor y lo coordinan con vos.",
+    sentimiento: "positivo",
+    consultype: "comparador",
+    escalar: false,
+    nombre: null,
+    imagenes: [],
+    archivos: [],
+    action: "none",
+    actionSubject: null
+  };
+}
+
+function hasRecentQuote(history: ReturnType<typeof buildConversationHistory>) {
+  return history
+    .slice(-8)
+    .some((message) => {
+      if (message.speaker !== "febo_ai") {
+        return false;
+      }
+
+      const text = normalizeSpanish(message.text);
+      return text.includes("cuota") || text.includes("contado") || text.includes("precio") || text.includes("$");
+    });
+}
+
+function normalizeSpanish(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 async function extractQuoteRequest(input: {

@@ -140,6 +140,14 @@ export async function POST(request: NextRequest) {
         body: result.respuesta,
         buttons: paymentButtons
       })
+    : shouldOfferAdvisorButton(result.respuesta, needsHuman) ?
+      await sendWhatsAppReplyButtons({
+        to: message.from,
+        body: result.respuesta,
+        buttons: [
+          { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Hablar asesor" }
+        ]
+      })
     : shouldOfferDecisionButtons(result.respuesta, needsHuman) ?
       await sendWhatsAppReplyButtons({
         to: message.from,
@@ -182,11 +190,22 @@ function getPaymentDecisionButtons(answer: string, needsHuman: boolean) {
   ) {
     return [
       { id: WHATSAPP_BUTTON_SIX_INSTALLMENTS, title: "6 cuotas" },
-      { id: WHATSAPP_BUTTON_CASH, title: "Contado" }
+      { id: WHATSAPP_BUTTON_CASH, title: "Contado" },
+      { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Hablar asesor" }
     ];
   }
 
   return null;
+}
+
+function shouldOfferAdvisorButton(answer: string, needsHuman: boolean) {
+  if (needsHuman) {
+    return false;
+  }
+
+  const normalized = normalizeAnswer(answer);
+
+  return normalized.includes("hablar con un asesor") || normalized.includes("hablar con asesor");
 }
 
 function shouldOfferDecisionButtons(answer: string, needsHuman: boolean) {

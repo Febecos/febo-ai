@@ -249,6 +249,9 @@ function TemplatesPanel() {
     body: "",
     active: true
   });
+  const [bulkTemplates, setBulkTemplates] = useState("");
+  const [syncingTemplates, setSyncingTemplates] = useState(false);
+  const [importingTemplates, setImportingTemplates] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -284,12 +287,71 @@ function TemplatesPanel() {
     setMessage("Plantilla guardada.");
   }
 
+  async function syncMetaTemplates() {
+    setMessage("");
+    setSyncingTemplates(true);
+    const response = await fetch("/api/templates/sync", { method: "POST" });
+    const payload = await readJsonResponse(response);
+    setSyncingTemplates(false);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos sincronizar Meta.");
+      return;
+    }
+
+    setTemplates(payload?.templates ?? []);
+    setMessage(`Sincronizadas ${payload?.imported ?? 0} plantillas desde Meta.`);
+  }
+
+  async function importBulkTemplates() {
+    setMessage("");
+    const parsedTemplates = parseBulkTemplates(bulkTemplates);
+
+    if (!parsedTemplates.length) {
+      setMessage("Pega al menos una plantilla. Formato: nombre_meta | idioma | nombre interno | categoria | texto");
+      return;
+    }
+
+    setImportingTemplates(true);
+    const response = await fetch("/api/templates/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ templates: parsedTemplates })
+    });
+    const payload = await readJsonResponse(response);
+    setImportingTemplates(false);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos importar las plantillas.");
+      return;
+    }
+
+    setTemplates(payload?.templates ?? []);
+    setBulkTemplates("");
+    setMessage(`Importadas ${payload?.imported ?? parsedTemplates.length} plantillas.`);
+  }
+
   return (
     <section className="admin-panel">
       <div className="panel-title">
         <MessageSquareText size={18} />
         Plantillas de WhatsApp
         <span>{templates.length}</span>
+      </div>
+      <div className="template-sync">
+        <button className="secondary" disabled={syncingTemplates} onClick={syncMetaTemplates} type="button">
+          <RefreshCcw size={17} />
+          {syncingTemplates ? "Sincronizando" : "Sincronizar Meta"}
+        </button>
+        <textarea
+          onChange={(event) => setBulkTemplates(event.target.value)}
+          placeholder="Carga masiva: nombre_meta | idioma | nombre interno | categoria | texto"
+          value={bulkTemplates}
+        />
+        <button className="secondary" disabled={importingTemplates || !bulkTemplates.trim()} onClick={importBulkTemplates} type="button">
+          <Save size={17} />
+          {importingTemplates ? "Importando" : "Importar lote"}
+        </button>
       </div>
       <form className="template-form" onSubmit={saveTemplate}>
         <div className="form-grid">
@@ -1549,6 +1611,35 @@ function formatMessageTime(value: string) {
     minute: "2-digit",
     month: "2-digit"
   }).format(new Date(value));
+}
+
+function parseBulkTemplates(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [name = "", languageCode = "es_AR", label = "", category = "utility", ...bodyParts] = line.split("|").map((part) => part.trim());
+      const safeName = name.trim();
+
+      return {
+        label: label || humanizeTemplateName(safeName),
+        name: safeName,
+        languageCode: languageCode || "es_AR",
+        category: category || "utility",
+        body: bodyParts.join(" | "),
+        active: true
+      };
+    })
+    .filter((template) => template.name.length >= 2);
+}
+
+function humanizeTemplateName(name: string) {
+  return name
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function DeliveryStatus({ message }: { message: ConversationMessage }) {

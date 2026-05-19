@@ -317,6 +317,25 @@ export async function upsertMessageTemplate(input: {
   return rows[0];
 }
 
+export async function upsertMessageTemplates(
+  templates: Array<{
+    label: string;
+    name: string;
+    languageCode: string;
+    category: string;
+    body: string;
+    active: boolean;
+  }>
+) {
+  const saved: MessageTemplate[] = [];
+
+  for (const template of templates) {
+    saved.push(await upsertMessageTemplate(template));
+  }
+
+  return saved;
+}
+
 export async function upsertAppUser(input: {
   id?: string;
   fullName: string;

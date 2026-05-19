@@ -9,6 +9,7 @@ const schema = z.object({
   WHATSAPP_VERIFY_TOKEN: z.string().optional(),
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().optional(),
   WHATSAPP_APP_SECRET: z.string().optional(),
   FEBECOS_API_BASE_URL: z.string().url().optional(),
   FEBECOS_API_TOKEN: z.string().optional(),

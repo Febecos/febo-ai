@@ -219,3 +219,28 @@ Verificacion:
 
 - `npm.cmd run build` OK.
 - Schema aplicado en Neon.
+
+### Sesion 19/05 - Plantillas WhatsApp
+
+Se activo administracion masiva de plantillas.
+
+Implementacion:
+
+- Solapa Plantillas ahora permite `Sincronizar Meta`.
+- API nueva `/api/templates/sync` lee WhatsApp Business Manager y guarda en Neon.
+- API nueva `/api/templates/import` permite cargar lotes manuales.
+- Variable nueva para sincronizacion Meta: `WHATSAPP_BUSINESS_ACCOUNT_ID`.
+
+Formato de carga masiva:
+
+`nombre_meta | idioma | nombre interno | categoria | texto`
+
+Ejemplo:
+
+`hola_inicial | es_AR | Hola inicial | utility | Hola, te escribimos de FEBECOS.`
+
+Notas:
+
+- Las plantillas de Meta quedan activas solo si vienen con status `APPROVED`.
+- El envio sigue usando `WHATSAPP_ACCESS_TOKEN` y `WHATSAPP_PHONE_NUMBER_ID`.
+- Si falla la sincronizacion, revisar que `WHATSAPP_BUSINESS_ACCOUNT_ID` este en Vercel y que el token tenga permisos sobre la cuenta de WhatsApp.

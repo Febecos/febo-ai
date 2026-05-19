@@ -889,6 +889,27 @@ select {
   padding: 12px;
 }
 
+.template-sync {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.template-sync textarea {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  min-height: 86px;
+  padding: 11px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
+.template-sync button {
+  justify-self: start;
+}
+
 .template-form .primary {
   justify-self: start;
 }

@@ -34,6 +34,15 @@ export type WhatsAppMessageStatus = {
   }>;
 };
 
+export type WhatsAppTemplateSummary = {
+  label: string;
+  name: string;
+  languageCode: string;
+  category: string;
+  body: string;
+  active: boolean;
+};
+
 type WhatsAppWebhookBody = {
   entry?: Array<{
     changes?: Array<{
@@ -65,6 +74,22 @@ type WhatsAppWebhookBody = {
       };
     }>;
   }>;
+};
+
+type MetaTemplateResponse = {
+  data?: Array<{
+    name?: string;
+    language?: string;
+    category?: string;
+    status?: string;
+    components?: Array<{
+      type?: string;
+      text?: string;
+    }>;
+  }>;
+  paging?: {
+    next?: string;
+  };
 };
 
 export function verifyMetaSignature(rawBody: string, signature: string | null) {
@@ -139,6 +164,59 @@ export function extractInboundMessages(body: WhatsAppWebhookBody): WhatsAppInbou
   }
 
   return messages;
+}
+
+export async function fetchWhatsAppMessageTemplates() {
+  const businessAccountId = requireEnv("WHATSAPP_BUSINESS_ACCOUNT_ID");
+  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+  const templates: WhatsAppTemplateSummary[] = [];
+  let nextUrl =
+    `https://graph.facebook.com/v20.0/${businessAccountId}/message_templates?` +
+    new URLSearchParams({
+      fields: "name,language,category,status,components",
+      limit: "100",
+      access_token: accessToken
+    }).toString();
+
+  while (nextUrl) {
+    const response = await fetch(nextUrl, { cache: "no-store" });
+
+    if (!response.ok) {
+      throw new Error(await getWhatsAppErrorMessage(response, "leer las plantillas"));
+    }
+
+    const payload = (await response.json()) as MetaTemplateResponse;
+
+    for (const template of payload.data ?? []) {
+      if (!template.name || !template.language) {
+        continue;
+      }
+
+      const body = template.components?.find((component) => component.type === "BODY")?.text ?? "";
+      const status = template.status?.toUpperCase() ?? "";
+
+      templates.push({
+        label: humanizeTemplateName(template.name),
+        name: template.name,
+        languageCode: template.language,
+        category: (template.category ?? "utility").toLowerCase(),
+        body,
+        active: status ? status === "APPROVED" : true
+      });
+    }
+
+    nextUrl = payload.paging?.next ?? "";
+  }
+
+  return templates;
+}
+
+function humanizeTemplateName(name: string) {
+  return name
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export function extractMessageStatuses(body: WhatsAppWebhookBody): WhatsAppMessageStatus[] {

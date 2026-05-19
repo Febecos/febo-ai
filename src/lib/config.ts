@@ -13,7 +13,8 @@ const schema = z.object({
   FEBECOS_API_BASE_URL: z.string().url().optional(),
   FEBECOS_API_TOKEN: z.string().optional(),
   FEBECOS_PUBLIC_URL: z.string().url().default("https://febecos.com"),
-  FEBECOS_HUMAN_SUPPORT_LABEL: z.string().default("Equipo FEBECOS")
+  FEBECOS_HUMAN_SUPPORT_LABEL: z.string().default("Equipo FEBECOS"),
+  FEBECOS_SELECTOR_API_BASE_URL: z.string().url().default("https://simulador-roi-seven.vercel.app/api")
 });
 
 export const config = schema.parse(process.env);

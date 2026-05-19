@@ -20,6 +20,19 @@ export type WhatsAppAudioMessage = {
 
 export type WhatsAppInboundMessage = WhatsAppTextMessage | WhatsAppAudioMessage;
 
+export type WhatsAppMessageStatus = {
+  id: string;
+  recipientId?: string;
+  status: string;
+  timestamp?: string;
+  errors?: Array<{
+    code?: number;
+    title?: string;
+    message?: string;
+    details?: string;
+  }>;
+};
+
 type WhatsAppWebhookBody = {
   entry?: Array<{
     changes?: Array<{
@@ -31,6 +44,18 @@ type WhatsAppWebhookBody = {
           type?: string;
           text?: { body?: string };
           audio?: { id?: string; mime_type?: string; sha256?: string; voice?: boolean };
+        }>;
+        statuses?: Array<{
+          id?: string;
+          recipient_id?: string;
+          status?: string;
+          timestamp?: string;
+          errors?: Array<{
+            code?: number;
+            title?: string;
+            message?: string;
+            error_data?: { details?: string };
+          }>;
         }>;
       };
     }>;
@@ -99,6 +124,35 @@ export function extractInboundMessages(body: WhatsAppWebhookBody): WhatsAppInbou
   }
 
   return messages;
+}
+
+export function extractMessageStatuses(body: WhatsAppWebhookBody): WhatsAppMessageStatus[] {
+  const statuses: WhatsAppMessageStatus[] = [];
+
+  for (const entry of body.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      for (const status of change.value?.statuses ?? []) {
+        if (!status.id || !status.status) {
+          continue;
+        }
+
+        statuses.push({
+          id: status.id,
+          recipientId: status.recipient_id,
+          status: status.status,
+          timestamp: status.timestamp,
+          errors: status.errors?.map((error) => ({
+            code: error.code,
+            title: error.title,
+            message: error.message,
+            details: error.error_data?.details
+          }))
+        });
+      }
+    }
+  }
+
+  return statuses;
 }
 
 export function isWhatsAppAudioMessage(message: WhatsAppInboundMessage): message is WhatsAppAudioMessage {

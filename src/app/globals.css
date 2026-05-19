@@ -580,6 +580,16 @@ button:disabled {
   width: min(240px, 100%);
 }
 
+.delivery-status {
+  color: #52605a;
+  font-size: 12px;
+  justify-self: end;
+}
+
+.delivery-status.failed {
+  color: #b42318;
+}
+
 .message-audio-card {
   align-items: flex-start;
   display: flex;

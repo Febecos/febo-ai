@@ -95,22 +95,28 @@ export async function POST(request: NextRequest) {
       const whatsappFile = await prepareAttachmentForWhatsApp(file);
       const uploaded = await uploadWhatsAppMedia(whatsappFile);
       const mediaKind = getMediaKind(whatsappFile.type);
+      let waMessageId: string | null = null;
 
       if (mediaKind === "audio") {
-        await sendWhatsAppAudio(target.phone, uploaded.id);
+        const sent = await sendWhatsAppAudio(target.phone, uploaded.id);
+        waMessageId = getSentMessageId(sent);
       } else if (mediaKind === "image") {
-        await sendWhatsAppImage(target.phone, uploaded.id, caption);
+        const sent = await sendWhatsAppImage(target.phone, uploaded.id, caption);
+        waMessageId = getSentMessageId(sent);
       } else if (mediaKind === "video") {
-        await sendWhatsAppVideo(target.phone, uploaded.id, caption);
+        const sent = await sendWhatsAppVideo(target.phone, uploaded.id, caption);
+        waMessageId = getSentMessageId(sent);
       } else {
-        await sendWhatsAppDocument(target.phone, uploaded.id, file.name || "archivo", caption);
+        const sent = await sendWhatsAppDocument(target.phone, uploaded.id, file.name || "archivo", caption);
+        waMessageId = getSentMessageId(sent);
       }
 
       const messageId = await recordManualOutboundMessage({
         conversationId: parsed.data.conversationId,
         contactId: target.contact_id,
         userId: user.id,
-        body: buildAttachmentBody(file, caption)
+        body: buildAttachmentBody(file, caption),
+        waMessageId
       });
       const buffer = Buffer.from(await whatsappFile.arrayBuffer());
 
@@ -123,12 +129,13 @@ export async function POST(request: NextRequest) {
         dataBase64: buffer.toString("base64")
       });
     } else {
-      await sendWhatsAppText(target.phone, parsed.data.text);
+      const sent = await sendWhatsAppText(target.phone, parsed.data.text);
       await recordManualOutboundMessage({
         conversationId: parsed.data.conversationId,
         contactId: target.contact_id,
         userId: user.id,
-        body: parsed.data.text
+        body: parsed.data.text,
+        waMessageId: getSentMessageId(sent)
       });
     }
   } catch (error) {
@@ -142,6 +149,11 @@ export async function POST(request: NextRequest) {
     ok: true,
     messages: await listConversationMessages(parsed.data.conversationId)
   });
+}
+
+function getSentMessageId(response: unknown) {
+  const data = response as { messages?: Array<{ id?: string }> };
+  return data.messages?.[0]?.id ?? null;
 }
 
 async function parseAttachmentRequest(request: NextRequest) {

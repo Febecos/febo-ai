@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runFebecosAgent, transcribeAudio } from "@/lib/agent";
 import { config } from "@/lib/config";
-import { recordAgentReply, recordIncomingMessage, saveMessageMedia, updateMessageBody } from "@/lib/crm";
+import { recordAgentReply, recordIncomingMessage, recordWhatsAppMessageStatuses, saveMessageMedia, updateMessageBody } from "@/lib/crm";
 import {
   downloadWhatsAppMedia,
   extractInboundMessages,
+  extractMessageStatuses,
   isWhatsAppAudioMessage,
   isWhatsAppTextMessage,
   sendWhatsAppText,
@@ -32,7 +33,10 @@ export async function POST(request: NextRequest) {
   }
 
   const body = JSON.parse(rawBody);
+  const statuses = extractMessageStatuses(body);
   const messages = extractInboundMessages(body);
+
+  await recordWhatsAppMessageStatuses(statuses);
 
   for (const message of messages) {
     const isText = isWhatsAppTextMessage(message);
@@ -85,14 +89,15 @@ export async function POST(request: NextRequest) {
     if (!agentMessage) {
       const fallbackAnswer = "Recibi tu audio, pero no pude leerlo bien. Me lo podes mandar por escrito?";
 
-      await sendWhatsAppText(message.from, fallbackAnswer);
+      const sent = await sendWhatsAppText(message.from, fallbackAnswer);
 
       await recordAgentReply({
         contactId: stored.contactId,
         threadId: stored.threadId,
         answer: fallbackAnswer,
         intent: "otro",
-        needsHuman: false
+        needsHuman: false,
+        waMessageId: getSentMessageId(sent)
       });
 
       continue;
@@ -106,18 +111,24 @@ export async function POST(request: NextRequest) {
     });
     const needsHuman = shouldPauseForHumanHandoff(result.respuesta, result.escalar);
 
-    await sendWhatsAppText(message.from, result.respuesta);
+    const sent = await sendWhatsAppText(message.from, result.respuesta);
 
     await recordAgentReply({
       contactId: stored.contactId,
       threadId: stored.threadId,
       answer: result.respuesta,
       intent: result.consultype,
-      needsHuman
+      needsHuman,
+      waMessageId: getSentMessageId(sent)
     });
   }
 
   return NextResponse.json({ ok: true });
+}
+
+function getSentMessageId(response: unknown) {
+  const data = response as { messages?: Array<{ id?: string }> };
+  return data.messages?.[0]?.id ?? null;
 }
 
 function shouldPauseForHumanHandoff(answer: string, escalates: boolean) {

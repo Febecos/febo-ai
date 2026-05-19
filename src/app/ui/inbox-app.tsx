@@ -1013,6 +1013,7 @@ function InboxList({
                       <small>
                         {message.direction === "inbound" ? "Cliente" : "Febo AI"} · {formatMessageTime(message.created_at)}
                       </small>
+                      {message.direction === "outbound" && message.whatsapp_status ? <DeliveryStatus message={message} /> : null}
                     </article>
                   ))}
                   <div ref={threadEndRef} />
@@ -1108,6 +1109,31 @@ function formatMessageTime(value: string) {
     minute: "2-digit",
     month: "2-digit"
   }).format(new Date(value));
+}
+
+function DeliveryStatus({ message }: { message: ConversationMessage }) {
+  const failed = message.whatsapp_status === "failed";
+
+  return (
+    <span className={`delivery-status ${failed ? "failed" : ""}`}>
+      {formatDeliveryStatus(message)}
+    </span>
+  );
+}
+
+function formatDeliveryStatus(message: ConversationMessage) {
+  if (message.whatsapp_status === "failed") {
+    return `Fallo WhatsApp: ${message.whatsapp_error ?? "Meta no lo entrego"}`;
+  }
+
+  const labels: Record<string, string> = {
+    accepted: "Aceptado por Meta",
+    sent: "Enviado",
+    delivered: "Entregado",
+    read: "Leido"
+  };
+
+  return labels[message.whatsapp_status ?? ""] ?? message.whatsapp_status ?? "";
 }
 
 function MessageMedia({ message }: { message: ConversationMessage }) {

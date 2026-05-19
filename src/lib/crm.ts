@@ -42,6 +42,9 @@ export type ConversationMessage = {
   consultype: string | null;
   needs_human: boolean;
   created_at: string;
+  wa_message_id: string | null;
+  whatsapp_status: string | null;
+  whatsapp_error: string | null;
   media_id: string | null;
   media_mime_type: string | null;
   media_filename: string | null;
@@ -369,6 +372,7 @@ export async function recordAgentReply(input: {
   answer: string;
   intent: string;
   needsHuman: boolean;
+  waMessageId?: string | null;
 }) {
   if (!isDbConfigured() || !input.contactId || !input.threadId) {
     return;
@@ -379,8 +383,16 @@ export async function recordAgentReply(input: {
   const humanAssigneeId = input.needsHuman || consultype === "caliente" ? await getHotLeadAssigneeId() : null;
 
   await sql`
-    insert into messages (conversation_id, contact_id, direction, body, consultype, needs_human)
-    values (${input.threadId}, ${input.contactId}, 'outbound', ${input.answer}, ${consultype}, ${input.needsHuman})
+    insert into messages (conversation_id, contact_id, direction, wa_message_id, body, consultype, needs_human)
+    values (
+      ${input.threadId},
+      ${input.contactId},
+      'outbound',
+      ${input.waMessageId ?? null},
+      ${input.answer},
+      ${consultype},
+      ${input.needsHuman}
+    )
   `;
 
   await sql`
@@ -482,6 +494,9 @@ export async function listConversationMessages(conversationId: string, limit = 1
       m.consultype,
       m.needs_human,
       m.created_at::text,
+      m.wa_message_id,
+      m.metadata->>'whatsapp_status' as whatsapp_status,
+      m.metadata->>'whatsapp_error' as whatsapp_error,
       mm.id::text as media_id,
       mm.mime_type as media_mime_type,
       mm.filename as media_filename
@@ -546,18 +561,20 @@ export async function recordManualOutboundMessage(input: {
   contactId: string;
   userId: string;
   body: string;
+  waMessageId?: string | null;
 }) {
   const sql = getSql();
 
   const rows = (await sql`
-    insert into messages (conversation_id, contact_id, direction, body, created_by, metadata)
+    insert into messages (conversation_id, contact_id, direction, wa_message_id, body, created_by, metadata)
     values (
       ${input.conversationId},
       ${input.contactId},
       'outbound',
+      ${input.waMessageId ?? null},
       ${input.body},
       ${input.userId},
-      '{"source":"manual"}'::jsonb
+      ${JSON.stringify({ source: "manual", whatsapp_status: input.waMessageId ? "accepted" : undefined })}::jsonb
     )
     returning id::text
   `) as Array<{ id: string }>;
@@ -572,6 +589,40 @@ export async function recordManualOutboundMessage(input: {
   `;
 
   return rows[0].id;
+}
+
+export async function recordWhatsAppMessageStatuses(
+  statuses: Array<{
+    id: string;
+    recipientId?: string;
+    status: string;
+    timestamp?: string;
+    errors?: Array<{ code?: number; title?: string; message?: string; details?: string }>;
+  }>
+) {
+  if (!isDbConfigured() || !statuses.length) {
+    return;
+  }
+
+  const sql = getSql();
+
+  for (const status of statuses) {
+    const error = status.errors?.[0];
+    const errorText = [error?.title, error?.message, error?.details].filter(Boolean).join(" - ") || null;
+    const payload = {
+      whatsapp_status: status.status,
+      whatsapp_status_at: status.timestamp ?? new Date().toISOString(),
+      whatsapp_recipient_id: status.recipientId ?? null,
+      whatsapp_error: errorText,
+      whatsapp_error_code: error?.code ?? null
+    };
+
+    await sql`
+      update messages
+      set metadata = metadata || ${JSON.stringify(payload)}::jsonb
+      where wa_message_id = ${status.id}
+    `;
+  }
 }
 
 export async function saveMessageMedia(input: {

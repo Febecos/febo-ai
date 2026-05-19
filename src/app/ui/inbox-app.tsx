@@ -29,7 +29,7 @@ import {
   X
 } from "lucide-react";
 import { DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { AppUser, ConversationMessage, ConversationSummary, UserAdminSummary } from "@/lib/crm";
+import type { AppUser, ConversationMessage, ConversationSummary, MessageTemplate, UserAdminSummary } from "@/lib/crm";
 
 type Stats = {
   conversations: number;
@@ -196,7 +196,7 @@ function AdminToolWorkspace({
   currentUser: AppUser;
   users: AppUser[];
 }) {
-  const [activeTool, setActiveTool] = useState<"conversations" | "users" | "ai">("conversations");
+  const [activeTool, setActiveTool] = useState<"conversations" | "templates" | "users" | "ai">("conversations");
 
   return (
     <section className="admin-workspace">
@@ -208,6 +208,14 @@ function AdminToolWorkspace({
         >
           <Inbox size={18} />
           Conversaciones
+        </button>
+        <button
+          className={activeTool === "templates" ? "active" : ""}
+          onClick={() => setActiveTool("templates")}
+          type="button"
+        >
+          <MessageSquareText size={18} />
+          Plantillas
         </button>
         <button className={activeTool === "users" ? "active" : ""} onClick={() => setActiveTool("users")} type="button">
           <ShieldCheck size={18} />
@@ -223,9 +231,112 @@ function AdminToolWorkspace({
         {activeTool === "conversations" ? (
           <InboxList conversations={conversations} currentUser={currentUser} users={users} />
         ) : null}
+        {activeTool === "templates" ? <TemplatesPanel /> : null}
         {activeTool === "users" ? <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} /> : null}
         {activeTool === "ai" ? <AgentTester /> : null}
       </div>
+    </section>
+  );
+}
+
+function TemplatesPanel() {
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [form, setForm] = useState({
+    label: "",
+    name: "",
+    languageCode: "es_AR",
+    category: "utility",
+    body: "",
+    active: true
+  });
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    void loadTemplates();
+  }, []);
+
+  async function loadTemplates() {
+    const response = await fetch("/api/templates");
+    const payload = await readJsonResponse(response);
+
+    if (response.ok) {
+      setTemplates(payload?.templates ?? []);
+    }
+  }
+
+  async function saveTemplate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    const response = await fetch("/api/templates", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(form)
+    });
+    const payload = await readJsonResponse(response);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos guardar la plantilla.");
+      return;
+    }
+
+    setTemplates(payload?.templates ?? []);
+    setForm({ label: "", name: "", languageCode: "es_AR", category: "utility", body: "", active: true });
+    setMessage("Plantilla guardada.");
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="panel-title">
+        <MessageSquareText size={18} />
+        Plantillas de WhatsApp
+        <span>{templates.length}</span>
+      </div>
+      <form className="template-form" onSubmit={saveTemplate}>
+        <div className="form-grid">
+          <label className="field">
+            Nombre interno
+            <input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} required />
+          </label>
+          <label className="field">
+            Nombre Meta
+            <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+          </label>
+          <label className="field">
+            Idioma
+            <input value={form.languageCode} onChange={(event) => setForm({ ...form, languageCode: event.target.value })} required />
+          </label>
+          <label className="field">
+            Categoria
+            <select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>
+              <option value="utility">Utility</option>
+              <option value="marketing">Marketing</option>
+              <option value="authentication">Authentication</option>
+            </select>
+          </label>
+        </div>
+        <label className="field">
+          Texto de referencia
+          <textarea value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} />
+        </label>
+        <label className="check-field">
+          <input checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} type="checkbox" />
+          Activa
+        </label>
+        <button className="primary" type="submit">
+          <Save size={18} />
+          Guardar plantilla
+        </button>
+      </form>
+      <div className="template-list">
+        {templates.map((template) => (
+          <div className="template-row" key={template.id}>
+            <strong>{template.label}</strong>
+            <span>{template.name} · {template.language_code}</span>
+            <small>{template.active ? "activa" : "inactiva"} · {template.body || "Sin texto local"}</small>
+          </div>
+        ))}
+      </div>
+      {message ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
     </section>
   );
 }
@@ -509,6 +620,16 @@ function InboxList({
   const [recording, setRecording] = useState(false);
   const [preparingRecording, setPreparingRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [newContactOpen, setNewContactOpen] = useState(false);
+  const [creatingContact, setCreatingContact] = useState(false);
+  const [newContact, setNewContact] = useState({
+    displayName: "",
+    phone: "",
+    templateId: "",
+    parameters: ""
+  });
+  const [newContactMessage, setNewContactMessage] = useState("");
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioProcessorRef = useRef<ScriptProcessorNode | null>(null);
@@ -557,6 +678,10 @@ function InboxList({
   useEffect(() => {
     void loadConversationMessages(selected?.id);
   }, [selected?.id]);
+
+  useEffect(() => {
+    void loadTemplatesForContactForm();
+  }, []);
 
   useEffect(() => {
     async function refreshVisibleInbox() {
@@ -650,6 +775,50 @@ function InboxList({
         setMobileDetailOpen(false);
       }
     }
+  }
+
+  async function loadTemplatesForContactForm() {
+    const response = await fetch("/api/templates");
+    const payload = await readJsonResponse(response);
+
+    if (response.ok) {
+      const activeTemplates = (payload?.templates ?? []).filter((template: MessageTemplate) => template.active);
+      setTemplates(activeTemplates);
+      setNewContact((current) => ({ ...current, templateId: current.templateId || activeTemplates[0]?.id || "" }));
+    }
+  }
+
+  async function createContactWithTemplate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setNewContactMessage("");
+    setCreatingContact(true);
+    const response = await fetch("/api/contacts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        phone: newContact.phone,
+        displayName: newContact.displayName,
+        templateId: newContact.templateId || undefined,
+        parameters: newContact.parameters
+          .split(/\r?\n|,/)
+          .map((value) => value.trim())
+          .filter(Boolean)
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setCreatingContact(false);
+
+    if (!response.ok) {
+      setNewContactMessage(payload?.error ?? "No pudimos crear el contacto.");
+      return;
+    }
+
+    setItems(payload?.conversations ?? []);
+    setSelectedId(payload?.conversationId ?? "");
+    setMessages(payload?.messages ?? []);
+    setNewContact({ displayName: "", phone: "", templateId: templates[0]?.id ?? "", parameters: "" });
+    setNewContactOpen(false);
+    setMobileDetailOpen(true);
   }
 
   function updateFilters(next: Partial<typeof filters>) {
@@ -870,6 +1039,52 @@ function InboxList({
           Conversaciones
           <span>{items.length}</span>
         </div>
+        <button className="secondary full-width" onClick={() => setNewContactOpen(!newContactOpen)} type="button">
+          <UserPlus size={17} />
+          Nuevo contacto
+        </button>
+        {newContactOpen ? (
+          <form className="new-contact-card" onSubmit={createContactWithTemplate}>
+            <label className="field">
+              Nombre
+              <input value={newContact.displayName} onChange={(event) => setNewContact({ ...newContact, displayName: event.target.value })} />
+            </label>
+            <label className="field">
+              WhatsApp
+              <input
+                placeholder="Ej: 1125750323"
+                value={newContact.phone}
+                onChange={(event) => setNewContact({ ...newContact, phone: event.target.value })}
+                required
+              />
+            </label>
+            <label className="field">
+              Plantilla
+              <select value={newContact.templateId} onChange={(event) => setNewContact({ ...newContact, templateId: event.target.value })}>
+                <option value="">Crear sin enviar</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.label} · {template.language_code}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Variables
+              <textarea
+                placeholder="Una por linea si la plantilla usa {{1}}, {{2}}"
+                value={newContact.parameters}
+                onChange={(event) => setNewContact({ ...newContact, parameters: event.target.value })}
+              />
+            </label>
+            <button className="primary" disabled={creatingContact} type="submit">
+              <SendHorizonal size={17} />
+              {creatingContact ? "Enviando" : newContact.templateId ? "Crear y enviar" : "Crear contacto"}
+            </button>
+            {!templates.length ? <span className="muted">Primero carga una plantilla aprobada en la solapa Plantillas.</span> : null}
+            {newContactMessage ? <span className="warn">{newContactMessage}</span> : null}
+          </form>
+        ) : null}
         <div className="filters">
           <label className="search-field">
             <Search size={16} />

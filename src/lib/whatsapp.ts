@@ -238,6 +238,56 @@ export async function sendWhatsAppText(to: string, body: string) {
   return response.json();
 }
 
+export async function sendWhatsAppTemplate(input: {
+  to: string;
+  name: string;
+  languageCode: string;
+  bodyParameters?: string[];
+}) {
+  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
+  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+  const parameters = input.bodyParameters?.filter((value) => value.trim()).map((value) => ({
+    type: "text",
+    text: value.trim()
+  }));
+
+  const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: input.to,
+      type: "template",
+      template: {
+        name: input.name,
+        language: {
+          code: input.languageCode
+        },
+        ...(parameters?.length ?
+          {
+            components: [
+              {
+                type: "body",
+                parameters
+              }
+            ]
+          }
+        : {})
+      }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(await getWhatsAppErrorMessage(response, "enviar la plantilla"));
+  }
+
+  return response.json();
+}
+
 export async function uploadWhatsAppMedia(file: File) {
   const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
   const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");

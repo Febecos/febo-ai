@@ -35,6 +35,16 @@ export type ConversationSummary = {
   unread_count: number;
 };
 
+export type MessageTemplate = {
+  id: string;
+  label: string;
+  name: string;
+  language_code: string;
+  category: string;
+  body: string;
+  active: boolean;
+};
+
 export type ConversationMessage = {
   id: string;
   direction: "inbound" | "outbound" | "internal";
@@ -84,6 +94,29 @@ const hotLeadAssigneeEmail = "fernandezn.rodrigo@gmail.com";
 
 export function normalizePhone(phone: string) {
   return phone.replace(/\D/g, "");
+}
+
+export function normalizeWhatsAppRecipient(phone: string) {
+  const digits = normalizePhone(phone);
+
+  if (digits.startsWith("549")) {
+    return digits;
+  }
+
+  if (digits.startsWith("54")) {
+    const local = digits.slice(2);
+    return local.startsWith("9") ? digits : `549${local}`;
+  }
+
+  if (digits.startsWith("0")) {
+    return `549${digits.slice(1)}`;
+  }
+
+  if (digits.length === 10 || digits.startsWith("11")) {
+    return `549${digits}`;
+  }
+
+  return digits;
 }
 
 export function normalizeConsultype(value: string | null | undefined) {
@@ -210,6 +243,69 @@ export async function getAdminUsers() {
     from app_users
     order by active desc, sales_group desc, sales_priority, role, full_name
   `) as UserAdminSummary[];
+}
+
+export async function listMessageTemplates() {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  return (await sql`
+    select id::text, label, name, language_code, category, body, active
+    from message_templates
+    order by active desc, label
+  `) as MessageTemplate[];
+}
+
+export async function getMessageTemplate(templateId: string) {
+  if (!isDbConfigured()) {
+    return null;
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    select id::text, label, name, language_code, category, body, active
+    from message_templates
+    where id = ${templateId}
+    limit 1
+  `) as MessageTemplate[];
+
+  return rows[0] ?? null;
+}
+
+export async function upsertMessageTemplate(input: {
+  id?: string;
+  label: string;
+  name: string;
+  languageCode: string;
+  category: string;
+  body: string;
+  active: boolean;
+}) {
+  const sql = getSql();
+  const id = input.id || null;
+  const rows = (await sql`
+    insert into message_templates (id, label, name, language_code, category, body, active)
+    values (
+      coalesce(${id}::uuid, gen_random_uuid()),
+      ${input.label},
+      ${input.name},
+      ${input.languageCode},
+      ${input.category},
+      ${input.body},
+      ${input.active}
+    )
+    on conflict (name, language_code) do update
+    set label = excluded.label,
+        category = excluded.category,
+        body = excluded.body,
+        active = excluded.active,
+        updated_at = now()
+    returning id::text, label, name, language_code, category, body, active
+  `) as MessageTemplate[];
+
+  return rows[0];
 }
 
 export async function upsertAppUser(input: {
@@ -556,14 +652,65 @@ export async function getConversationReplyTarget(conversationId: string) {
   return rows[0] ?? null;
 }
 
+export async function upsertContactConversation(input: {
+  phone: string;
+  displayName?: string | null;
+  userId?: string | null;
+}) {
+  const sql = getSql();
+  const phone = normalizeWhatsAppRecipient(input.phone);
+  const contacts = (await sql`
+    insert into contacts (phone, display_name, platform, last_seen_at, source)
+    values (${phone}, ${input.displayName ?? null}, 'whatsapp', now(), 'manual')
+    on conflict (phone) do update
+    set display_name = coalesce(nullif(excluded.display_name, ''), contacts.display_name),
+        last_seen_at = now(),
+        updated_at = now()
+    returning id::text, phone, display_name
+  `) as Array<{ id: string; phone: string; display_name: string | null }>;
+  const contact = contacts[0];
+
+  const existing = (await sql`
+    select id::text
+    from conversations
+    where contact_id = ${contact.id}
+      and status in ('open', 'waiting', 'quoted', 'hot', 'handoff')
+    order by last_message_at desc
+    limit 1
+  `) as Array<{ id: string }>;
+
+  const conversation =
+    existing[0] ??
+    (
+      (await sql`
+        insert into conversations (contact_id, status, last_message_at, ai_enabled, assigned_to)
+        values (${contact.id}, 'open', now(), false, ${input.userId ?? null}::uuid)
+        returning id::text
+      `) as Array<{ id: string }>
+    )[0];
+
+  return {
+    contactId: contact.id,
+    conversationId: conversation.id,
+    phone: contact.phone,
+    displayName: contact.display_name
+  };
+}
+
 export async function recordManualOutboundMessage(input: {
   conversationId: string;
   contactId: string;
   userId: string;
   body: string;
   waMessageId?: string | null;
+  metadata?: Record<string, unknown>;
 }) {
   const sql = getSql();
+  const metadata = {
+    source: "manual",
+    whatsapp_status: input.waMessageId ? "accepted" : undefined,
+    ...(input.metadata ?? {})
+  };
 
   const rows = (await sql`
     insert into messages (conversation_id, contact_id, direction, wa_message_id, body, created_by, metadata)
@@ -574,7 +721,7 @@ export async function recordManualOutboundMessage(input: {
       ${input.waMessageId ?? null},
       ${input.body},
       ${input.userId},
-      ${JSON.stringify({ source: "manual", whatsapp_status: input.waMessageId ? "accepted" : undefined })}::jsonb
+      ${JSON.stringify(metadata)}::jsonb
     )
     returning id::text
   `) as Array<{ id: string }>;

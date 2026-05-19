@@ -126,6 +126,29 @@ create table if not exists platform_events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists message_templates (
+  id uuid primary key default gen_random_uuid(),
+  label text not null,
+  name text not null,
+  language_code text not null default 'es_AR',
+  category text not null default 'utility',
+  body text not null default '',
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (name, language_code)
+);
+
+insert into message_templates (label, name, language_code, category, body)
+values (
+  'Hola inicial',
+  'hello_world',
+  'en_US',
+  'utility',
+  'Plantilla inicial de prueba de WhatsApp. Reemplazar por una plantilla aprobada propia de FEBECOS.'
+)
+on conflict (name, language_code) do nothing;
+
 create or replace function set_updated_at()
 returns trigger
 language plpgsql
@@ -149,4 +172,9 @@ for each row execute function set_updated_at();
 drop trigger if exists set_conversations_updated_at on conversations;
 create trigger set_conversations_updated_at
 before update on conversations
+for each row execute function set_updated_at();
+
+drop trigger if exists set_message_templates_updated_at on message_templates;
+create trigger set_message_templates_updated_at
+before update on message_templates
 for each row execute function set_updated_at();

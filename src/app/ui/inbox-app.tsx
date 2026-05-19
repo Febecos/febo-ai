@@ -783,29 +783,35 @@ function InboxList({
   }
 
   function stopRecording() {
-    const file = buildMp3RecordingFile(recordingSamplesRef.current, recordingSampleRateRef.current);
-
-    if (file) {
-      setAttachment(file);
-      setReplyText("");
-    } else {
-      setReplyError("No se detecto audio grabado.");
-    }
+    const samples = [...recordingSamplesRef.current];
+    const sampleRate = recordingSampleRateRef.current;
 
     stopRecorderTracks();
     clearRecordingTimer();
     setRecording(false);
+
+    window.setTimeout(() => {
+      const file = buildMp3RecordingFile(samples, sampleRate);
+
+      if (file) {
+        setAttachment(file);
+        setReplyText("");
+      } else {
+        setReplyError("No se detecto audio grabado.");
+      }
+    }, 0);
   }
 
   function stopRecorderTracks() {
     audioProcessorRef.current?.disconnect();
-    audioSourceRef.current?.disconnect();
-    void audioContextRef.current?.close();
-    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
     audioProcessorRef.current = null;
+    audioSourceRef.current?.disconnect();
     audioSourceRef.current = null;
-    audioContextRef.current = null;
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
     recordingStreamRef.current = null;
+    void audioContextRef.current?.close();
+    audioContextRef.current = null;
+    recordingSamplesRef.current = [];
   }
 
   function clearRecordingTimer() {

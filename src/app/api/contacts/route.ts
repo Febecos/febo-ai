@@ -3,9 +3,11 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import {
   getMessageTemplate,
+  listContacts,
   listConversationMessages,
   listConversations,
   recordManualOutboundMessage,
+  updateContact,
   upsertContactConversation
 } from "@/lib/crm";
 import { sendWhatsAppTemplate } from "@/lib/whatsapp";
@@ -16,6 +18,33 @@ const createContactSchema = z.object({
   templateId: z.string().uuid().optional(),
   parameters: z.array(z.string().trim().max(200)).optional()
 });
+
+const updateContactSchema = z.object({
+  contactId: z.string().uuid(),
+  displayName: z.string().trim().max(120).nullable().optional(),
+  phone: z.string().trim().min(6).max(30).optional(),
+  contactType: z.string().trim().max(40).optional(),
+  sentiment: z.string().trim().max(40).optional(),
+  consultype: z.string().trim().max(40).optional(),
+  assignedTo: z.string().uuid().nullable().optional()
+});
+
+export async function GET(request: NextRequest) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  const search = request.nextUrl.searchParams;
+
+  return NextResponse.json({
+    contacts: await listContacts({
+      query: search.get("q") ?? undefined,
+      limit: Number(search.get("limit") ?? 300)
+    })
+  });
+}
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
@@ -77,6 +106,40 @@ export async function POST(request: NextRequest) {
     conversations: await listConversations({ limit: 300 }),
     messages: await listConversationMessages(target.conversationId)
   });
+}
+
+export async function PATCH(request: NextRequest) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  const parsed = updateContactSchema.safeParse(await request.json());
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Datos de contacto invalidos." }, { status: 400 });
+  }
+
+  try {
+    const result = await updateContact(parsed.data);
+
+    if (!result) {
+      return NextResponse.json({ error: "Contacto no encontrado." }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      contacts: await listContacts({ limit: 300 }),
+      conversations: await listConversations({ limit: 300 })
+    });
+  } catch (error) {
+    const message = error instanceof Error && error.message.includes("duplicate") ?
+      "Ya existe otro contacto con ese WhatsApp." :
+      "No pudimos guardar el contacto.";
+
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 }
 
 function getSentMessageId(response: unknown) {

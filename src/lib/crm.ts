@@ -35,6 +35,23 @@ export type ConversationSummary = {
   unread_count: number;
 };
 
+export type ContactSummary = {
+  id: string;
+  phone: string;
+  display_name: string | null;
+  platform: string;
+  contact_type: string;
+  sentiment: string;
+  consultype: string;
+  assigned_to: string | null;
+  assigned_name: string | null;
+  source: string | null;
+  imported_from: string | null;
+  last_seen_at: string;
+  conversation_id: string | null;
+  conversation_status: string | null;
+};
+
 export type MessageTemplate = {
   id: string;
   label: string;
@@ -83,6 +100,11 @@ export type ConversationFilters = {
   consultype?: string;
   status?: string;
   assignedTo?: string;
+  limit?: number;
+};
+
+export type ContactFilters = {
+  query?: string;
   limit?: number;
 };
 
@@ -600,6 +622,95 @@ export async function listConversations(filters: ConversationFilters = {}) {
     order by c.last_message_at desc, c.created_at desc, ct.display_name asc nulls last, c.id
     limit ${limit}
   `) as ConversationSummary[];
+}
+
+export async function listContacts(filters: ContactFilters = {}) {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  const query = filters.query?.trim() ?? "";
+  const phoneQuery = normalizePhone(query);
+  const search = query ? `%${query.toLowerCase()}%` : null;
+  const phoneSearch = phoneQuery ? `%${phoneQuery}%` : null;
+  const limit = Math.min(Math.max(filters.limit ?? 300, 20), 1000);
+
+  return (await sql`
+    select
+      ct.id::text,
+      ct.phone,
+      ct.display_name,
+      ct.platform,
+      ct.contact_type,
+      ct.sentiment,
+      ct.consultype,
+      ct.assigned_to::text,
+      u.full_name as assigned_name,
+      ct.source,
+      ct.imported_from,
+      ct.last_seen_at::text,
+      c.id::text as conversation_id,
+      c.status as conversation_status
+    from contacts ct
+    left join app_users u on u.id = ct.assigned_to
+    left join lateral (
+      select id, status, last_message_at
+      from conversations
+      where contact_id = ct.id
+      order by last_message_at desc
+      limit 1
+    ) c on true
+    where (${search}::text is null or lower(coalesce(ct.display_name, '')) like ${search} or ct.phone like ${phoneSearch})
+    order by coalesce(c.last_message_at, ct.last_seen_at) desc, ct.display_name asc nulls last, ct.phone
+    limit ${limit}
+  `) as ContactSummary[];
+}
+
+export async function updateContact(input: {
+  contactId: string;
+  displayName?: string | null;
+  phone?: string;
+  contactType?: string;
+  sentiment?: string;
+  consultype?: string;
+  assignedTo?: string | null;
+}) {
+  if (!isDbConfigured()) {
+    return null;
+  }
+
+  const sql = getSql();
+  const phone = input.phone ? normalizeWhatsAppRecipient(input.phone) : null;
+  const displayName = input.displayName?.trim() || null;
+  const contactType = input.contactType?.trim().toLowerCase() || "prospecto";
+  const sentiment = normalizeSentiment(input.sentiment);
+  const consultype = normalizeConsultype(input.consultype);
+
+  const rows = (await sql`
+    update contacts
+    set display_name = ${displayName},
+        phone = coalesce(${phone}, phone),
+        contact_type = ${contactType},
+        sentiment = ${sentiment},
+        consultype = ${consultype},
+        assigned_to = ${input.assignedTo ?? null}::uuid,
+        updated_at = now()
+    where id = ${input.contactId}
+    returning id::text
+  `) as Array<{ id: string }>;
+
+  if (input.assignedTo !== undefined) {
+    await sql`
+      update conversations
+      set assigned_to = ${input.assignedTo ?? null}::uuid,
+          updated_at = now()
+      where contact_id = ${input.contactId}
+        and status in ('open', 'waiting', 'quoted', 'hot', 'handoff')
+    `;
+  }
+
+  return rows[0] ?? null;
 }
 
 export async function listConversationMessages(conversationId: string, limit = 120) {

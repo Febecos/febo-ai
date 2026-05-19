@@ -26,10 +26,19 @@ import {
   Square,
   UserCheck,
   UserPlus,
+  UsersRound,
   X
 } from "lucide-react";
 import { DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { AppUser, ConversationMessage, ConversationNote, ConversationSummary, MessageTemplate, UserAdminSummary } from "@/lib/crm";
+import type {
+  AppUser,
+  ContactSummary,
+  ConversationMessage,
+  ConversationNote,
+  ConversationSummary,
+  MessageTemplate,
+  UserAdminSummary
+} from "@/lib/crm";
 
 type Stats = {
   conversations: number;
@@ -221,7 +230,7 @@ function AdminToolWorkspace({
   currentUser: AppUser;
   users: AppUser[];
 }) {
-  const [activeTool, setActiveTool] = useState<"conversations" | "templates" | "users" | "ai">("conversations");
+  const [activeTool, setActiveTool] = useState<"conversations" | "contacts" | "templates" | "users" | "ai">("conversations");
 
   return (
     <section className="admin-workspace">
@@ -241,6 +250,14 @@ function AdminToolWorkspace({
         >
           <MessageSquareText size={18} />
           Plantillas
+        </button>
+        <button
+          className={activeTool === "contacts" ? "active" : ""}
+          onClick={() => setActiveTool("contacts")}
+          type="button"
+        >
+          <UsersRound size={18} />
+          Contactos
         </button>
         <button className={activeTool === "users" ? "active" : ""} onClick={() => setActiveTool("users")} type="button">
           <ShieldCheck size={18} />
@@ -267,8 +284,224 @@ function AdminToolWorkspace({
           <InboxList conversations={conversations} currentUser={currentUser} users={users} />
         ) : null}
         {activeTool === "templates" ? <TemplatesPanel /> : null}
+        {activeTool === "contacts" ? <ContactsPanel users={users} /> : null}
         {activeTool === "users" ? <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} /> : null}
         {activeTool === "ai" ? <AgentTester /> : null}
+      </div>
+    </section>
+  );
+}
+
+function ContactsPanel({ users }: { users: AppUser[] }) {
+  const [contacts, setContacts] = useState<ContactSummary[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const selected = useMemo(() => contacts.find((contact) => contact.id === selectedId) ?? contacts[0], [contacts, selectedId]);
+  const [form, setForm] = useState({
+    displayName: "",
+    phone: "",
+    contactType: "prospecto",
+    sentiment: "neutral",
+    consultype: "otro",
+    assignedTo: ""
+  });
+
+  useEffect(() => {
+    void loadContacts();
+  }, []);
+
+  useEffect(() => {
+    if (!selected) {
+      return;
+    }
+
+    setForm({
+      displayName: selected.display_name ?? "",
+      phone: selected.phone,
+      contactType: selected.contact_type || "prospecto",
+      sentiment: selected.sentiment || "neutral",
+      consultype: selected.consultype || "otro",
+      assignedTo: selected.assigned_to ?? ""
+    });
+  }, [selected?.id]);
+
+  async function loadContacts(nextQuery = query) {
+    setLoading(true);
+    setMessage("");
+    const params = new URLSearchParams();
+
+    if (nextQuery.trim()) {
+      params.set("q", nextQuery.trim());
+    }
+
+    const response = await fetch(`/api/contacts?${params.toString()}`);
+    const payload = await readJsonResponse(response);
+    setLoading(false);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos cargar contactos.");
+      return;
+    }
+
+    const nextContacts = payload?.contacts ?? [];
+    setContacts(nextContacts);
+
+    if (!nextContacts.some((contact: ContactSummary) => contact.id === selectedId)) {
+      setSelectedId(nextContacts[0]?.id ?? "");
+    }
+  }
+
+  async function saveContact(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selected) {
+      return;
+    }
+
+    setSaving(true);
+    setMessage("");
+    const response = await fetch("/api/contacts", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        contactId: selected.id,
+        displayName: form.displayName,
+        phone: form.phone,
+        contactType: form.contactType,
+        sentiment: form.sentiment,
+        consultype: form.consultype,
+        assignedTo: form.assignedTo || null
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setSaving(false);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos guardar el contacto.");
+      return;
+    }
+
+    setContacts(payload?.contacts ?? []);
+    setMessage("Contacto guardado.");
+  }
+
+  function searchContacts(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void loadContacts(query);
+  }
+
+  return (
+    <section className="contacts-manager">
+      <div className="contacts-list-panel">
+        <div className="panel-title">
+          <UsersRound size={18} />
+          Contactos
+          <span>{contacts.length}</span>
+        </div>
+        <form className="contacts-search" onSubmit={searchContacts}>
+          <label className="search-field">
+            <Search size={16} />
+            <input
+              placeholder="Buscar nombre o telefono"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <button className="secondary" disabled={loading} type="submit">
+            <Search size={16} />
+          </button>
+        </form>
+        <div className="contacts-list">
+          {contacts.map((contact) => (
+            <button
+              className={`contact-row ${contact.id === selected?.id ? "active" : ""}`}
+              key={contact.id}
+              onClick={() => setSelectedId(contact.id)}
+              type="button"
+            >
+              <span className="row-main">
+                <strong>{contact.display_name || contact.phone}</strong>
+                <small>{contact.phone}</small>
+              </span>
+              <span className={`tag ${contact.consultype}`}>{contact.consultype}</span>
+            </button>
+          ))}
+          {!contacts.length ? <div className="empty-state">{loading ? "Cargando contactos..." : "No encontramos contactos."}</div> : null}
+        </div>
+      </div>
+
+      <div className="contact-editor">
+        {selected ? (
+          <form className="admin-form" onSubmit={saveContact}>
+            <div className="panel-title">
+              <UsersRound size={18} />
+              Datos del contacto
+            </div>
+            <div className="form-grid">
+              <label className="field">
+                Nombre
+                <input value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} />
+              </label>
+              <label className="field">
+                WhatsApp
+                <input required value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+              </label>
+              <label className="field">
+                Tipo
+                <select value={form.contactType} onChange={(event) => setForm({ ...form, contactType: event.target.value })}>
+                  <option value="prospecto">Prospecto</option>
+                  <option value="cliente">Cliente</option>
+                  <option value="revendedor">Revendedor</option>
+                  <option value="tecnico">Tecnico</option>
+                </select>
+              </label>
+              <label className="field">
+                Etiqueta
+                <select value={form.consultype} onChange={(event) => setForm({ ...form, consultype: event.target.value })}>
+                  {CONSULTYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                Sentimiento
+                <select value={form.sentiment} onChange={(event) => setForm({ ...form, sentiment: event.target.value })}>
+                  <option value="positivo">Positivo</option>
+                  <option value="neutral">Neutral</option>
+                  <option value="preocupado">Preocupado</option>
+                  <option value="molesto">Molesto</option>
+                </select>
+              </label>
+              <label className="field">
+                Asignado a
+                <select value={form.assignedTo} onChange={(event) => setForm({ ...form, assignedTo: event.target.value })}>
+                  <option value="">Sin asignar</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.full_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="contact-meta">
+              <span>Origen: {selected.imported_from || selected.source || "manual"}</span>
+              <span>Ultimo contacto: {formatMessageTime(selected.last_seen_at)}</span>
+            </div>
+            <button className="primary" disabled={saving} type="submit">
+              <Save size={17} />
+              {saving ? "Guardando" : "Guardar datos"}
+            </button>
+            {message ? <span className={message.includes("guardado") ? "ok inline" : "warn"}>{message}</span> : null}
+          </form>
+        ) : (
+          <div className="empty-state">Selecciona un contacto.</div>
+        )}
       </div>
     </section>
   );

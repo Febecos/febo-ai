@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { Mp3Encoder } from "lamejs";
 import { getCurrentUser } from "@/lib/auth";
 import { getConversationReplyTarget, listConversationMessages, recordManualOutboundMessage, saveMessageMedia } from "@/lib/crm";
 import {
@@ -217,7 +216,7 @@ async function prepareAttachmentForWhatsApp(file: File) {
 
 async function convertWavToMp3File(file: File) {
   const wav = parseWavPcm16(await file.arrayBuffer());
-  const encoder = new Mp3Encoder(1, wav.sampleRate, 64);
+  const encoder = createMp3Encoder(wav.sampleRate);
   const mp3Chunks: Uint8Array[] = [];
 
   for (const chunk of wav.chunks) {
@@ -248,6 +247,19 @@ async function convertWavToMp3File(file: File) {
   });
 
   return new File(blobParts, filename, { type: "audio/mpeg" });
+}
+
+function createMp3Encoder(sampleRate: number) {
+  const runtimeGlobal = globalThis as typeof globalThis & {
+    Lame?: unknown;
+    MPEGMode?: unknown;
+  };
+
+  runtimeGlobal.MPEGMode ??= require("lamejs/src/js/MPEGMode.js");
+  runtimeGlobal.Lame ??= require("lamejs/src/js/Lame.js");
+
+  const { Mp3Encoder } = require("lamejs") as typeof import("lamejs");
+  return new Mp3Encoder(1, sampleRate, 64);
 }
 
 function parseWavPcm16(arrayBuffer: ArrayBuffer) {

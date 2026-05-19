@@ -50,32 +50,32 @@ button:disabled {
 
 .app-shell {
   display: grid;
-  gap: 18px;
+  gap: 12px;
   margin: 0 auto;
   max-width: 1280px;
-  padding: 24px;
+  padding: 16px 24px;
 }
 
 .app-header {
   align-items: center;
   display: flex;
-  gap: 16px;
+  gap: 10px;
   justify-content: space-between;
 }
 
 .app-header h1,
 .login-brand h1 {
-  font-size: 28px;
+  font-size: 23px;
   line-height: 1.1;
   margin: 0;
 }
 
 .eyebrow {
   color: var(--green);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   text-transform: uppercase;
 }
 
@@ -87,7 +87,7 @@ button:disabled {
 .header-actions {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .install-hint,
@@ -98,8 +98,8 @@ button:disabled {
   display: inline-flex;
   font-size: 12px;
   gap: 6px;
-  min-height: 28px;
-  padding: 0 10px;
+  min-height: 26px;
+  padding: 0 8px;
   white-space: nowrap;
 }
 
@@ -248,6 +248,15 @@ button:disabled {
   padding: 8px;
   position: sticky;
   top: 16px;
+}
+
+.tool-sidebar-bottom {
+  align-self: end;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 6px;
 }
 
 .tool-sidebar button {
@@ -1147,21 +1156,25 @@ select {
 
   .app-header {
     align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
+    display: grid;
+    gap: 6px;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .app-header h1 {
-    font-size: 24px;
+    font-size: 20px;
   }
 
   .header-actions {
-    width: 100%;
+    justify-content: flex-end;
   }
 
   .install-hint {
-    flex: 1;
-    justify-content: center;
+    font-size: 11px;
+    gap: 4px;
+    justify-content: flex-end;
+    min-height: 24px;
+    padding: 0 7px;
   }
 
   .stat-grid,
@@ -1184,8 +1197,9 @@ select {
 
   .tool-sidebar {
     border-radius: 8px;
-    display: grid;
-    align-content: start;
+    display: flex;
+    align-content: flex-start;
+    flex-direction: column;
     gap: 2px;
     height: calc(100vh - 20px);
     max-height: calc(100vh - 20px);
@@ -1206,6 +1220,11 @@ select {
     padding: 0;
     white-space: nowrap;
     width: 38px;
+  }
+
+  .tool-sidebar-bottom {
+    gap: 2px;
+    padding-top: 3px;
   }
 
   .tool-sidebar button svg {
@@ -1278,10 +1297,11 @@ select {
 
   .toolbar > button {
     flex: 0 0 auto;
-    font-size: 14px;
+    font-size: 13px;
     gap: 5px;
+    min-height: 34px;
     min-width: 0;
-    padding: 0 8px;
+    padding: 0 7px;
   }
 
   .toolbar-field {

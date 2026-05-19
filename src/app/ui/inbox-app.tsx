@@ -89,12 +89,16 @@ export function InboxApp({
             <Smartphone size={16} />
             PWA lista para celu
           </span>
-          <button className="icon-button" onClick={() => window.location.reload()} title="Actualizar" type="button">
-            <RefreshCcw size={18} />
-          </button>
-          <button className="icon-button" onClick={logout} title="Salir" type="button">
-            <LogOut size={18} />
-          </button>
+          {currentUser.role !== "admin" ? (
+            <>
+              <button className="icon-button" onClick={() => window.location.reload()} title="Actualizar" type="button">
+                <RefreshCcw size={18} />
+              </button>
+              <button className="icon-button" onClick={logout} title="Salir" type="button">
+                <LogOut size={18} />
+              </button>
+            </>
+          ) : null}
         </div>
       </header>
 
@@ -236,6 +240,16 @@ function AdminToolWorkspace({
           <Bot size={18} />
           Probar IA
         </button>
+        <div className="tool-sidebar-bottom">
+          <button onClick={() => window.location.reload()} title="Actualizar" type="button">
+            <RefreshCcw size={18} />
+            Actualizar
+          </button>
+          <button onClick={logout} title="Salir" type="button">
+            <LogOut size={18} />
+            Salir
+          </button>
+        </div>
       </nav>
 
       <div className="tool-content">

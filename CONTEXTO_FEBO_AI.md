@@ -2,6 +2,27 @@
 
 Fecha de armado: 18 de mayo de 2026
 
+## Contexto compartido con Claude/Codex
+
+Documento vivo en Google Drive:
+
+`https://docs.google.com/document/d/1nEbTOZlYDkrNH35POK_yuAt5nBcipIMt4yv7XTOsTLM/edit`
+
+Titulo:
+
+`FEBECOS_CONTEXTO_ACTIVO.md`
+
+Seccion operativa para este proyecto:
+
+`Notas de Codex / FEBO.AI`
+
+Uso acordado:
+
+- Claude y Codex leen ese documento al iniciar una sesion de Febecos.
+- Codex deja avances de FEBO.AI en repo/GitHub y, cuando sea posible, tambien en la seccion compartida del Doc.
+- Si el conector de Google Drive no permite escritura directa, Codex debe dejar el bloque de actualizacion listo para pegar.
+- No guardar secretos, tokens ni claves completas en Drive, Markdown ni GitHub.
+
 ## Objetivo
 
 Febo AI es la plataforma propia de FEBECOS para reemplazar lo minimo necesario de Hariaz en la atencion de WhatsApp, sin seguir pagando una suite grande que hoy no se rentabiliza.

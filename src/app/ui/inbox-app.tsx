@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   SendHorizonal,
   Smartphone,
+  Square,
   UserCheck,
   UserPlus,
   X
@@ -500,8 +501,13 @@ function InboxList({
   const [sendingReply, setSendingReply] = useState(false);
   const [replyError, setReplyError] = useState("");
   const [draggingFile, setDraggingFile] = useState(false);
-  const audioInputRef = useRef<HTMLInputElement>(null);
+  const [recording, setRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingTimerRef = useRef<number | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const selectedIdRef = useRef(selectedId);
   const [filters, setFilters] = useState({
@@ -517,6 +523,13 @@ function InboxList({
   }, [selectedId]);
 
   useEffect(() => {
+    return () => {
+      stopRecorderTracks();
+      clearRecordingTimer();
+    };
+  }, []);
+
+  useEffect(() => {
     threadEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length, selected?.id]);
 
@@ -526,7 +539,7 @@ function InboxList({
 
   useEffect(() => {
     async function refreshVisibleInbox() {
-      if (document.hidden || sendingReply) {
+      if (document.hidden || sendingReply || recording) {
         return;
       }
 
@@ -546,7 +559,7 @@ function InboxList({
       window.removeEventListener("focus", refreshVisibleInbox);
       document.removeEventListener("visibilitychange", refreshVisibleInbox);
     };
-  }, [filters, sendingReply]);
+  }, [filters, recording, sendingReply]);
 
   async function loadConversationMessages(conversationId?: string, options: { silent?: boolean } = {}) {
     if (!conversationId) {
@@ -708,6 +721,85 @@ function InboxList({
     event.preventDefault();
     setDraggingFile(false);
     setAttachment(event.dataTransfer.files?.[0] ?? null);
+  }
+
+  async function startRecording() {
+    setReplyError("");
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setReplyError("Este navegador no permite grabar audio directo. Proba con Adjuntar.");
+      return;
+    }
+
+    const mimeType = getPreferredRecordingMimeType();
+
+    if (!mimeType) {
+      setReplyError("Este navegador no ofrece un formato de audio compatible con WhatsApp. Proba desde Chrome/Android o adjunta un M4A/MP3.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recordingChunksRef.current = [];
+      recordingStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordingChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const recordingMimeType = recorder.mimeType || mimeType;
+        const blob = new Blob(recordingChunksRef.current, { type: recordingMimeType });
+
+        if (blob.size > 0) {
+          const extension = audioExtensionForMime(recordingMimeType);
+          setAttachment(new File([blob], `audio-febo-${Date.now()}.${extension}`, { type: recordingMimeType }));
+          setReplyText("");
+        }
+
+        stopRecorderTracks();
+        clearRecordingTimer();
+        setRecording(false);
+      };
+
+      recorder.start();
+      setReplyFile(null);
+      setRecording(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingSeconds((seconds) => seconds + 1);
+      }, 1000);
+    } catch {
+      setReplyError("No pudimos acceder al microfono. Revisa permisos del navegador.");
+      stopRecorderTracks();
+      clearRecordingTimer();
+      setRecording(false);
+    }
+  }
+
+  function stopRecording() {
+    const recorder = mediaRecorderRef.current;
+
+    if (recorder?.state === "recording") {
+      recorder.stop();
+    }
+  }
+
+  function stopRecorderTracks() {
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingStreamRef.current = null;
+    mediaRecorderRef.current = null;
+  }
+
+  function clearRecordingTimer() {
+    if (recordingTimerRef.current) {
+      window.clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
   }
 
   return (
@@ -886,14 +978,6 @@ function InboxList({
               onSubmit={sendManualReply}
             >
               <input
-                accept="audio/mp4,audio/aac,audio/amr,audio/mpeg,audio/ogg,.m4a,.aac,.amr,.mp3,.ogg"
-                capture="user"
-                hidden
-                onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
-                ref={audioInputRef}
-                type="file"
-              />
-              <input
                 accept="image/png,image/jpeg,image/webp,video/mp4,video/3gpp,.mp4,.3gp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
                 hidden
                 onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
@@ -910,6 +994,7 @@ function InboxList({
                 placeholder={replyFile ? "Mensaje opcional para acompanar el archivo" : "Escribir respuesta"}
                 value={replyText}
               />
+              {recording ? <div className="recording-pill">Grabando {formatRecordingSeconds(recordingSeconds)}</div> : null}
               {replyFile ? (
                 <div className="attachment-draft">
                   {replyFile.type.startsWith("image/") ? <ImageIcon size={16} /> : <FileText size={16} />}
@@ -920,18 +1005,20 @@ function InboxList({
                 </div>
               ) : null}
               <div className="composer-actions">
+                {recording ? (
+                  <button className="secondary recording-stop" disabled={sendingReply} onClick={stopRecording} type="button">
+                    <Square size={16} />
+                    Detener
+                  </button>
+                ) : (
+                  <button className="secondary" disabled={sendingReply} onClick={startRecording} type="button">
+                    <Mic size={18} />
+                    Grabar
+                  </button>
+                )}
                 <button
                   className="secondary"
-                  disabled={sendingReply}
-                  onClick={() => audioInputRef.current?.click()}
-                  type="button"
-                >
-                  <Mic size={18} />
-                  Audio
-                </button>
-                <button
-                  className="secondary"
-                  disabled={sendingReply}
+                  disabled={sendingReply || recording}
                   onClick={() => attachmentInputRef.current?.click()}
                   type="button"
                 >
@@ -1031,6 +1118,52 @@ function getAttachmentSendLabel(file: File) {
   }
 
   return "Enviar archivo";
+}
+
+function getPreferredRecordingMimeType() {
+  if (typeof MediaRecorder === "undefined") {
+    return "";
+  }
+
+  const candidates = [
+    "audio/ogg;codecs=opus",
+    "audio/ogg",
+    "audio/mp4;codecs=mp4a.40.2",
+    "audio/aac",
+    "audio/mpeg"
+  ];
+
+  return candidates.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? "";
+}
+
+function audioExtensionForMime(mimeType: string) {
+  const normalized = mimeType.toLowerCase();
+
+  if (normalized.includes("ogg")) {
+    return "ogg";
+  }
+
+  if (normalized.includes("aac")) {
+    return "aac";
+  }
+
+  if (normalized.includes("mpeg")) {
+    return "mp3";
+  }
+
+  if (normalized.includes("mp4")) {
+    return "m4a";
+  }
+
+  return "audio";
+}
+
+function formatRecordingSeconds(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60)
+    .toString()
+    .padStart(2, "0");
+  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${seconds}`;
 }
 
 function Info({ label, value }: { label: string; value: string }) {

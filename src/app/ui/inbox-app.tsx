@@ -44,6 +44,17 @@ type AgentTestResponse = {
   escalar: boolean;
 };
 
+const CONSULTYPE_OPTIONS = [
+  { value: "caliente", label: "Caliente" },
+  { value: "comparador", label: "Comparador" },
+  { value: "sin-perforacion", label: "Sin perforacion" },
+  { value: "proyecto-futuro", label: "Proyecto futuro" },
+  { value: "informacion", label: "Informacion" },
+  { value: "seguimiento", label: "Seguimiento" },
+  { value: "accion", label: "Accion" },
+  { value: "otro", label: "Otro" }
+];
+
 export function InboxApp({
   conversations,
   currentUser,
@@ -1020,6 +1031,7 @@ function InboxList({
     await refreshConversations();
     if (conversationId === selected?.id) {
       await loadConversationMessages(conversationId);
+      await loadConversationNotes(conversationId, { silent: true });
     }
   }
 
@@ -1277,13 +1289,11 @@ function InboxList({
             <Filter size={16} />
             <select onChange={(event) => updateFilters({ consultype: event.target.value })} value={filters.consultype}>
               <option value="all">Todas las etiquetas</option>
-              <option value="caliente">Caliente</option>
-              <option value="comparador">Comparador</option>
-              <option value="sin-perforacion">Sin perforacion</option>
-              <option value="proyecto-futuro">Proyecto futuro</option>
-              <option value="informacion">Informacion</option>
-              <option value="seguimiento">Seguimiento</option>
-              <option value="otro">Otro</option>
+              {CONSULTYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
             <select onChange={(event) => updateFilters({ status: event.target.value })} value={filters.status}>
               <option value="all">Todos los estados</option>
@@ -1366,29 +1376,54 @@ function InboxList({
                 <FileText size={17} />
                 Plantilla
               </button>
-              <select
-                onChange={(event) => patchConversation(selected.id, { assignedTo: event.target.value || null })}
-                value={selected.assigned_to ?? ""}
-              >
-                <option value="">Sin asignar</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.full_name}
-                  </option>
-                ))}
-              </select>
-              <select
-                onChange={(event) => patchConversation(selected.id, { status: event.target.value })}
-                value={selected.status}
-              >
-                <option value="open">Abierta</option>
-                <option value="waiting">Esperando</option>
-                <option value="quoted">Cotizada</option>
-                <option value="hot">Caliente</option>
-                <option value="handoff">Humano</option>
-                <option value="closed">Cerrada</option>
-                <option value="lost">Perdida</option>
-              </select>
+              <label className="toolbar-field">
+                Transferir a
+                <select
+                  onChange={(event) =>
+                    patchConversation(selected.id, {
+                      assignedTo: event.target.value || null,
+                      aiEnabled: false,
+                      status: event.target.value ? "handoff" : selected.status
+                    })
+                  }
+                  value={selected.assigned_to ?? ""}
+                >
+                  <option value="">Sin asignar</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.full_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="toolbar-field">
+                Estado
+                <select
+                  onChange={(event) => patchConversation(selected.id, { status: event.target.value })}
+                  value={selected.status}
+                >
+                  <option value="open">Abierta</option>
+                  <option value="waiting">Esperando</option>
+                  <option value="quoted">Cotizada</option>
+                  <option value="hot">Caliente</option>
+                  <option value="handoff">Humano</option>
+                  <option value="closed">Cerrada</option>
+                  <option value="lost">Perdida</option>
+                </select>
+              </label>
+              <label className="toolbar-field">
+                Etiqueta
+                <select
+                  onChange={(event) => patchConversation(selected.id, { consultype: event.target.value })}
+                  value={selected.consultype}
+                >
+                  {CONSULTYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             {templateComposerOpen ? (

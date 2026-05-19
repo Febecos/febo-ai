@@ -919,12 +919,22 @@ export async function updateConversation(input: {
   status?: string;
   aiEnabled?: boolean;
   assignedTo?: string | null;
+  consultype?: string;
 }) {
   const sql = getSql();
   const status = input.status ?? null;
   const aiEnabled = input.aiEnabled ?? null;
   const assignedTo = input.assignedTo === undefined ? null : input.assignedTo;
   const changeAssigned = input.assignedTo !== undefined;
+  const consultype = input.consultype ? normalizeConsultype(input.consultype) : null;
+
+  const previous = (await sql`
+    select c.assigned_to::text as assigned_to, u.full_name as assigned_name
+    from conversations c
+    left join app_users u on u.id = c.assigned_to
+    where c.id = ${input.conversationId}
+    limit 1
+  `) as Array<{ assigned_to: string | null; assigned_name: string | null }>;
 
   await sql`
     update conversations
@@ -934,4 +944,43 @@ export async function updateConversation(input: {
         updated_at = now()
     where id = ${input.conversationId}
   `;
+
+  if (changeAssigned) {
+    await sql`
+      update contacts ct
+      set assigned_to = ${assignedTo}::uuid,
+          updated_at = now()
+      from conversations c
+      where c.contact_id = ct.id
+        and c.id = ${input.conversationId}
+    `;
+  }
+
+  if (consultype) {
+    await sql`
+      update contacts ct
+      set consultype = ${consultype},
+          updated_at = now()
+      from conversations c
+      where c.contact_id = ct.id
+        and c.id = ${input.conversationId}
+    `;
+  }
+
+  if (!changeAssigned) {
+    return { assignedChanged: false, assignedName: previous[0]?.assigned_name ?? null };
+  }
+
+  const next = (await sql`
+    select c.assigned_to::text as assigned_to, u.full_name as assigned_name
+    from conversations c
+    left join app_users u on u.id = c.assigned_to
+    where c.id = ${input.conversationId}
+    limit 1
+  `) as Array<{ assigned_to: string | null; assigned_name: string | null }>;
+
+  return {
+    assignedChanged: previous[0]?.assigned_to !== next[0]?.assigned_to,
+    assignedName: next[0]?.assigned_name ?? null
+  };
 }

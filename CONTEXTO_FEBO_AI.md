@@ -244,3 +244,34 @@ Notas:
 - Las plantillas de Meta quedan activas solo si vienen con status `APPROVED`.
 - El envio sigue usando `WHATSAPP_ACCESS_TOKEN` y `WHATSAPP_PHONE_NUMBER_ID`.
 - Si falla la sincronizacion, revisar que `WHATSAPP_BUSINESS_ACCOUNT_ID` este en Vercel y que el token tenga permisos sobre la cuenta de WhatsApp.
+
+### Sesion 19/05 - Operativa mobile, etiquetas y transferencia
+
+Se agrego edicion manual de etiquetas desde la conversacion.
+
+Etiquetas disponibles en UI:
+
+- `caliente`
+- `comparador`
+- `sin-perforacion`
+- `proyecto-futuro`
+- `informacion`
+- `seguimiento`
+- `accion`
+- `otro`
+
+Transferencia:
+
+- El selector `Transferir a` asigna la conversacion a un vendedor.
+- Al transferir, se pausa la IA y el estado pasa a `handoff`/`Humano`.
+- Se crea una nota interna automatica indicando quien transfirio y a quien.
+- La asignacion tambien queda reflejada en el contacto.
+
+Mobile:
+
+- Se ajusto el layout para uso desde celular.
+- Menu admin horizontal.
+- Composer sticky abajo.
+- Dropzone de archivos oculta en celular para no ocupar pantalla.
+- Conversacion con alto limitado y burbujas mas anchas.
+- Metricas ocultas en pantallas muy chicas.

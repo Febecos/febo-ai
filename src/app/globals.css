@@ -1025,23 +1025,6 @@ button:disabled {
   color: #ffffff;
 }
 
-.conversation-row.unread::before {
-  background: #ff334b;
-  border: 2px solid #20252a;
-  border-radius: 999px;
-  content: "";
-  height: 10px;
-  position: absolute;
-  right: 38px;
-  top: 14px;
-  width: 10px;
-  z-index: 2;
-}
-
-.conversation-row.active.unread::before {
-  border-color: var(--blue);
-}
-
 .row-main {
   display: grid;
   gap: 4px;
@@ -1057,6 +1040,15 @@ button:disabled {
   min-width: 0;
   padding: 10px 12px;
   text-align: left;
+}
+
+.conversation-row-main .tag {
+  font-size: 11px;
+  font-weight: 800;
+  justify-self: start;
+  min-height: 22px;
+  padding: 0 9px;
+  width: max-content;
 }
 
 .row-meta {
@@ -1105,6 +1097,24 @@ button:disabled {
   align-self: end;
   margin: 0 10px 10px 0;
   position: relative;
+}
+
+.conversation-row.unread .row-menu::before {
+  background: #ff334b;
+  border: 2px solid #20252a;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px rgba(255, 51, 75, 0.12);
+  content: "";
+  height: 10px;
+  left: -17px;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+}
+
+.conversation-row.active.unread .row-menu::before {
+  border-color: var(--blue);
 }
 
 .row-menu summary,
@@ -1281,6 +1291,14 @@ button:disabled {
   text-transform: uppercase;
 }
 
+.tag::before {
+  background: #94a3b8;
+  border-radius: 999px;
+  content: "";
+  height: 7px;
+  width: 7px;
+}
+
 .tag.caliente,
 .status.hot {
   background: rgba(239, 68, 68, 0.18);
@@ -1288,11 +1306,19 @@ button:disabled {
   color: #ffd3d3;
 }
 
+.tag.caliente::before {
+  background: #ef4444;
+}
+
 .tag.comparador,
 .status.quoted {
   background: rgba(234, 179, 8, 0.18);
   border-color: rgba(250, 204, 21, 0.5);
   color: #ffe8a3;
+}
+
+.tag.comparador::before {
+  background: #eab308;
 }
 
 .tag.proyecto-futuro,
@@ -1303,12 +1329,23 @@ button:disabled {
   color: #cfe3ff;
 }
 
+.tag.proyecto-futuro::before,
+.tag.sin-perforacion::before {
+  background: #60a5fa;
+}
+
 .tag.informacion,
 .tag.seguimiento,
 .tag.accion {
   background: rgba(20, 184, 166, 0.15);
   border-color: rgba(45, 212, 191, 0.42);
   color: #c8fff5;
+}
+
+.tag.informacion::before,
+.tag.seguimiento::before,
+.tag.accion::before {
+  background: #14b8a6;
 }
 
 .tag.cliente,
@@ -1318,12 +1355,23 @@ button:disabled {
   color: #d4f8dd;
 }
 
+.tag.cliente::before,
+.tag.cotizado::before {
+  background: #22c55e;
+}
+
 .tag.no-leido,
 .tag.esperando-respuesta,
 .tag.fuera-de-horario {
   background: rgba(168, 85, 247, 0.16);
   border-color: rgba(196, 181, 253, 0.42);
   color: #eadcff;
+}
+
+.tag.no-leido::before,
+.tag.esperando-respuesta::before,
+.tag.fuera-de-horario::before {
+  background: #a855f7;
 }
 
 .conversation-detail {

@@ -289,7 +289,7 @@ function ToolWorkspace({
           Contactos
         </button>
         <button
-          className={activeTool === "crm" ? "active" : ""}
+          className={`mobile-hidden-tool ${activeTool === "crm" ? "active" : ""}`}
           onClick={() => setActiveTool("crm")}
           type="button"
         >

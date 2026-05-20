@@ -2795,8 +2795,15 @@ select {
   }
 
   .conversation-list {
+    height: 100%;
     max-height: none;
-    overflow: visible;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tool-sidebar .mobile-hidden-tool,
+  .crm-panel {
+    display: none;
   }
 
   .contacts-list-panel {

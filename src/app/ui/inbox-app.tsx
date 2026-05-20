@@ -244,6 +244,16 @@ function ToolWorkspace({
     );
   }
 
+  function setConversationFavorite(conversationId: string, active: boolean) {
+    setFavoriteIds((current) => {
+      if (active) {
+        return current.includes(conversationId) ? current : [...current, conversationId];
+      }
+
+      return current.filter((id) => id !== conversationId);
+    });
+  }
+
   return (
     <section className="admin-workspace">
       <nav className="tool-sidebar" aria-label="Herramientas de trabajo">
@@ -333,6 +343,7 @@ function ToolWorkspace({
             onConversationsChange={setWorkspaceConversations}
             focusedConversation={focusedConversation}
             resetMobileDetailSignal={conversationNavSignal}
+            onSetFavorite={setConversationFavorite}
             onToggleFavorite={toggleFavorite}
             users={users}
           />
@@ -1312,6 +1323,7 @@ function InboxList({
   favoriteIds,
   focusedConversation,
   onConversationsChange,
+  onSetFavorite,
   resetMobileDetailSignal,
   onToggleFavorite,
   users
@@ -1321,6 +1333,7 @@ function InboxList({
   favoriteIds: string[];
   focusedConversation: { id: string; signal: number };
   onConversationsChange: (conversations: ConversationSummary[]) => void;
+  onSetFavorite: (conversationId: string, active: boolean) => void;
   resetMobileDetailSignal: number;
   onToggleFavorite: (conversationId: string) => void;
   users: AppUser[];
@@ -1790,6 +1803,20 @@ function InboxList({
   }
 
   async function changeConversationType(conversationId: string, consultype: string) {
+    if (consultype === "caliente") {
+      onSetFavorite(conversationId, true);
+      await patchConversation(conversationId, { consultype, status: "hot" });
+      closeConversationMenus();
+      return;
+    }
+
+    if (consultype === "comparador") {
+      onSetFavorite(conversationId, false);
+      await patchConversation(conversationId, { consultype, status: "open" });
+      closeConversationMenus();
+      return;
+    }
+
     await patchConversation(conversationId, { consultype });
     closeConversationMenus();
   }

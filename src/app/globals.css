@@ -383,13 +383,24 @@ button:disabled {
   white-space: nowrap;
 }
 
-.crm-card > span {
+.crm-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.crm-card-tags span {
   background: rgba(39, 181, 107, 0.18);
   border: 1px solid rgba(74, 222, 128, 0.42);
   border-radius: 999px;
   font-size: 11px;
-  justify-self: start;
   padding: 3px 8px;
+}
+
+.crm-card-tags span.hot {
+  background: rgba(244, 63, 94, 0.18);
+  border-color: rgba(244, 63, 94, 0.58);
+  color: #ffb3bf;
 }
 
 .crm-card p {
@@ -402,13 +413,13 @@ button:disabled {
   -webkit-line-clamp: 3;
 }
 
-.crm-card div {
+.crm-card-actions {
   display: grid;
   gap: 5px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.crm-card div select {
+.crm-card-actions select {
   grid-column: 1 / -1;
 }
 

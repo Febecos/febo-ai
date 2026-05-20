@@ -321,7 +321,29 @@ function ToolWorkspace({
         ) : null}
         {activeTool === "metrics" ? <MetricsPanel stats={stats} /> : null}
         {activeTool === "templates" ? <TemplatesPanel /> : null}
-        {activeTool === "contacts" ? <ContactsPanel focusedContact={focusedContact} users={users} /> : null}
+        {activeTool === "contacts" ? (
+          <ContactsPanel
+            focusedContact={focusedContact}
+            onContactSaved={(contact) => {
+              setWorkspaceConversations((current) =>
+                current.map((conversation) =>
+                  conversation.contact_id === contact.id
+                    ? {
+                        ...conversation,
+                        assigned_name: contact.assigned_name,
+                        assigned_to: contact.assigned_to,
+                        consultype: contact.consultype,
+                        display_name: contact.display_name,
+                        phone: contact.phone,
+                        sentiment: contact.sentiment
+                      }
+                    : conversation
+                )
+              );
+            }}
+            users={users}
+          />
+        ) : null}
         {activeTool === "crm" ? (
           <CrmBoardPanel
             conversations={workspaceConversations}
@@ -503,9 +525,12 @@ function CrmBoardPanel({
                   }}
                 >
                   <strong>{conversation.display_name || conversation.phone}</strong>
-                  <span>{getCrmCardStatusLabel(conversation)}</span>
+                  <div className="crm-card-tags">
+                    <span>{getCrmPlatformLabel(conversation)}</span>
+                    {isHotCrmConversation(conversation) ? <span className="hot">Caliente</span> : null}
+                  </div>
                   <p>{conversation.last_message || "Sin descripcion comercial"}</p>
-                  <div>
+                  <div className="crm-card-actions">
                     <button onClick={() => onOpenChat(conversation.id)} type="button">Chat</button>
                     <button onClick={() => onOpenContact(conversation.contact_id)} type="button">Editar</button>
                     <select
@@ -542,17 +567,18 @@ function getCrmColumnCards(columnId: string, conversations: ConversationSummary[
     return conversations.filter((conversation) => favoriteIds.includes(conversation.id));
   }
 
+  const boardConversations = conversations.filter((conversation) => !favoriteIds.includes(conversation.id));
+
   if (columnId === "nuevo") {
-    return conversations.filter((conversation) =>
+    return boardConversations.filter((conversation) =>
       !conversation.assigned_to &&
-      (conversation.status === "open" ||
-        conversation.status === "hot" ||
-        conversation.consultype === "caliente")
+      isHotCrmConversation(conversation) &&
+      !["handoff", "quoted", "closed", "lost"].includes(conversation.status)
     );
   }
 
   if (columnId === "contacto") {
-    return conversations.filter(
+    return boardConversations.filter(
       (conversation) =>
         conversation.status === "handoff" ||
         (Boolean(conversation.assigned_to) && !["quoted", "closed", "lost"].includes(conversation.status))
@@ -560,22 +586,24 @@ function getCrmColumnCards(columnId: string, conversations: ConversationSummary[
   }
 
   const column = CRM_BOARD_COLUMNS.find((item) => item.id === columnId);
-  return conversations.filter((conversation) => conversation.status === column?.status);
+  return boardConversations.filter((conversation) => conversation.status === column?.status);
 }
 
-function getCrmCardStatusLabel(conversation: ConversationSummary) {
-  if (conversation.consultype === "caliente" || conversation.status === "hot") {
-    return "Caliente";
-  }
+function isHotCrmConversation(conversation: ConversationSummary) {
+  return conversation.consultype === "caliente" || conversation.status === "hot";
+}
 
-  return "WhatsApp";
+function getCrmPlatformLabel(conversation: ConversationSummary) {
+  return conversation.platform || "WhatsApp";
 }
 
 function ContactsPanel({
   focusedContact,
+  onContactSaved,
   users
 }: {
   focusedContact: { id: string; signal: number };
+  onContactSaved: (contact: ContactSummary) => void;
   users: AppUser[];
 }) {
   const [contacts, setContacts] = useState<ContactSummary[]>([]);
@@ -679,7 +707,12 @@ function ContactsPanel({
       return;
     }
 
-    setContacts(payload?.contacts ?? []);
+    const nextContacts = payload?.contacts ?? [];
+    setContacts(nextContacts);
+    const savedContact = nextContacts.find((contact: ContactSummary) => contact.id === selected.id);
+    if (savedContact) {
+      onContactSaved(savedContact);
+    }
     setMessage("Contacto guardado.");
   }
 

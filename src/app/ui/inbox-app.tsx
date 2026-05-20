@@ -1396,7 +1396,8 @@ function InboxList({
     assignedTo: "all"
   });
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
-  const activeFiltersCount = selectedTags.length + selectedClassifications.length;
+  const activeFiltersCount =
+    selectedTags.length + selectedClassifications.length + (filters.assignedTo !== "all" ? 1 : 0);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -2175,6 +2176,43 @@ function InboxList({
                     type="checkbox"
                   />
                   {option.label}
+                </label>
+              ))}
+            </div>
+            <div className="filter-group">
+              <span>VENDEDOR</span>
+              <label className={filters.assignedTo === "all" ? "selected" : ""}>
+                <input
+                  checked={filters.assignedTo === "all"}
+                  onChange={() => updateFilters({ assignedTo: "all" })}
+                  type="radio"
+                />
+                Todos
+              </label>
+              <label className={filters.assignedTo === "mine" ? "selected" : ""}>
+                <input
+                  checked={filters.assignedTo === "mine"}
+                  onChange={() => updateFilters({ assignedTo: "mine" })}
+                  type="radio"
+                />
+                Mis conversaciones
+              </label>
+              <label className={filters.assignedTo === "unassigned" ? "selected" : ""}>
+                <input
+                  checked={filters.assignedTo === "unassigned"}
+                  onChange={() => updateFilters({ assignedTo: "unassigned" })}
+                  type="radio"
+                />
+                Sin asignar
+              </label>
+              {users.map((user) => (
+                <label className={filters.assignedTo === user.id ? "selected" : ""} key={user.id}>
+                  <input
+                    checked={filters.assignedTo === user.id}
+                    onChange={() => updateFilters({ assignedTo: user.id })}
+                    type="radio"
+                  />
+                  {user.full_name}
                 </label>
               ))}
             </div>

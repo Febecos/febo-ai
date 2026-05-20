@@ -585,7 +585,12 @@ export async function listConversations(filters: ConversationFilters = {}) {
   const consultype = filters.consultype && filters.consultype !== "all" ? filters.consultype : null;
   const status = filters.status && filters.status !== "all" ? filters.status : null;
   const assignedTo =
-    filters.assignedTo && filters.assignedTo !== "all" && filters.assignedTo !== "mine" ? filters.assignedTo : null;
+    filters.assignedTo &&
+    filters.assignedTo !== "all" &&
+    filters.assignedTo !== "mine" &&
+    filters.assignedTo !== "unassigned"
+      ? filters.assignedTo
+      : null;
   const onlyUnassigned = filters.assignedTo === "unassigned";
   const limit = Math.min(Math.max(filters.limit ?? 300, 20), 1000);
 

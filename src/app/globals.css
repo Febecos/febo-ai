@@ -2566,15 +2566,25 @@ select {
   }
 
   .conversation-tabs {
+    display: grid;
     grid-column: 1 / -1;
     gap: 4px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding: 0;
+    width: 100%;
   }
 
   .conversation-tabs button {
     font-size: 13px;
     gap: 4px;
     min-height: 32px;
+    min-width: 0;
     padding: 0 6px;
+  }
+
+  .conversation-tabs button svg,
+  .conversation-tabs span {
+    flex: 0 0 auto;
   }
 
   .conversation-tabs span {

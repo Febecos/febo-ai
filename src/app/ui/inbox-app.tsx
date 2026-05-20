@@ -9,6 +9,8 @@ import {
   ChevronLeft,
   CircleUserRound,
   Clock3,
+  Calendar,
+  Edit3,
   FileText,
   Filter,
   ImageIcon,
@@ -17,15 +19,21 @@ import {
   LogOut,
   MessageSquareText,
   Mic,
+  MoreVertical,
   Paperclip,
+  Radio,
   RefreshCcw,
   Save,
   Search,
   ShieldCheck,
   SendHorizonal,
   Square,
+  Star,
+  Tag,
+  Trash2,
   UserCheck,
   UserPlus,
+  Zap,
   UsersRound,
   X
 } from "lucide-react";
@@ -72,6 +80,21 @@ const STATUS_OPTIONS = [
   { value: "handoff", label: "Humano" },
   { value: "closed", label: "Cerrada" },
   { value: "lost", label: "Perdida" }
+];
+
+const SENTIMENT_FILTERS = ["muy-negativo", "negativo", "neutro", "positivo", "muy-positivo"];
+const TAG_FILTERS = [
+  "caliente",
+  "cliente",
+  "comparador",
+  "contacto-de-bobbio",
+  "cotizado",
+  "esperando-respuesta",
+  "fuera-de-horario",
+  "no-leido",
+  "pasar-presupuesto",
+  "pocero-instalador",
+  "presupuesto-enviado"
 ];
 
 export function InboxApp({
@@ -958,20 +981,17 @@ function InboxList({
   const [preparingRecording, setPreparingRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
-  const [newContactOpen, setNewContactOpen] = useState(false);
-  const [creatingContact, setCreatingContact] = useState(false);
   const [templateComposerOpen, setTemplateComposerOpen] = useState(false);
+  const [tagPanelOpen, setTagPanelOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [quickRepliesOpen, setQuickRepliesOpen] = useState(false);
+  const [eventMenuOpen, setEventMenuOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [chatName, setChatName] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateParameters, setTemplateParameters] = useState("");
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const [templateMessage, setTemplateMessage] = useState("");
-  const [newContact, setNewContact] = useState({
-    displayName: "",
-    phone: "",
-    templateId: "",
-    parameters: ""
-  });
-  const [newContactMessage, setNewContactMessage] = useState("");
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioProcessorRef = useRef<ScriptProcessorNode | null>(null);
@@ -987,7 +1007,8 @@ function InboxList({
     query: "",
     consultype: "all",
     status: "all",
-    assignedTo: "all"
+    assignedTo: "all",
+    sentiment: "all"
   });
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
 
@@ -1033,6 +1054,12 @@ function InboxList({
   useEffect(() => {
     setNoteText("");
     setNoteError("");
+    setChatName(selected?.display_name || "");
+    setTagPanelOpen(false);
+    setSummaryOpen(false);
+    setQuickRepliesOpen(false);
+    setEventMenuOpen(false);
+    setTemplateComposerOpen(false);
     void loadConversationMessages(selected?.id);
     void loadConversationNotes(selected?.id);
   }, [selected?.id]);
@@ -1187,7 +1214,9 @@ function InboxList({
       return;
     }
 
-    const nextItems = payload?.conversations ?? [];
+    const rawItems = payload?.conversations ?? [];
+    const nextItems =
+      nextFilters.sentiment === "all" ? rawItems : rawItems.filter((item: ConversationSummary) => item.sentiment === nextFilters.sentiment);
     setItems(nextItems);
 
     if (!nextItems.some((item: ConversationSummary) => item.id === selectedIdRef.current)) {
@@ -1205,7 +1234,6 @@ function InboxList({
     if (response.ok) {
       const activeTemplates = (payload?.templates ?? []).filter((template: MessageTemplate) => template.active);
       setTemplates(activeTemplates);
-      setNewContact((current) => ({ ...current, templateId: current.templateId || activeTemplates[0]?.id || "" }));
       setSelectedTemplateId((current) => current || activeTemplates[0]?.id || "");
     }
   }
@@ -1249,39 +1277,6 @@ function InboxList({
     await refreshConversations(filters, { silent: true });
   }
 
-  async function createContactWithTemplate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setNewContactMessage("");
-    setCreatingContact(true);
-    const response = await fetch("/api/contacts", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        phone: newContact.phone,
-        displayName: newContact.displayName,
-        templateId: newContact.templateId || undefined,
-        parameters: newContact.parameters
-          .split(/\r?\n|,/)
-          .map((value) => value.trim())
-          .filter(Boolean)
-      })
-    });
-    const payload = await readJsonResponse(response);
-    setCreatingContact(false);
-
-    if (!response.ok) {
-      setNewContactMessage(payload?.error ?? "No pudimos crear el contacto.");
-      return;
-    }
-
-    setItems(payload?.conversations ?? []);
-    setSelectedId(payload?.conversationId ?? "");
-    setMessages(payload?.messages ?? []);
-    setNewContact({ displayName: "", phone: "", templateId: templates[0]?.id ?? "", parameters: "" });
-    setNewContactOpen(false);
-    setMobileDetailOpen(true);
-  }
-
   function updateFilters(next: Partial<typeof filters>) {
     const nextFilters = { ...filters, ...next };
     setFilters(nextFilters);
@@ -1304,6 +1299,35 @@ function InboxList({
       await loadConversationMessages(conversationId);
       await loadConversationNotes(conversationId, { silent: true });
     }
+  }
+
+  async function saveChatName() {
+    if (!selected?.id) {
+      return;
+    }
+
+    await patchConversation(selected.id, { displayName: chatName.trim() || null });
+  }
+
+  function resetFilters() {
+    const nextFilters = { query: "", consultype: "all", status: "all", assignedTo: "all", sentiment: "all" };
+    setFilters(nextFilters);
+    void refreshConversations(nextFilters);
+  }
+
+  function buildConversationSummary() {
+    const visibleMessages = messages
+      .filter((message) => message.body?.trim())
+      .slice(-8)
+      .map((message) => `${message.direction === "inbound" ? "Cliente" : "Febo AI"}: ${message.body.trim()}`);
+
+    if (!visibleMessages.length) {
+      return "Todavia no hay suficiente historial para resumir esta conversacion.";
+    }
+
+    return `Resumen operativo de ${selected?.display_name || selected?.phone}: ${visibleMessages.join(" ")}`
+      .replace(/\s+/g, " ")
+      .slice(0, 900);
   }
 
   async function sendManualReply(event: FormEvent<HTMLFormElement>) {
@@ -1497,116 +1521,107 @@ function InboxList({
     <div className={`inbox-panel ${mobileDetailOpen ? "show-detail" : "show-list"}`}>
       <div className="conversation-list">
         <div className="panel-title">
-          <MessageSquareText size={18} />
           Conversaciones
-          <span>{items.length}</span>
+        </div>
+        <div className="list-tabs">
+          <button className={filters.status === "all" ? "active" : ""} onClick={() => updateFilters({ status: "all" })} type="button">
+            Todos
+          </button>
+          <button className={filters.status === "handoff" ? "active" : ""} onClick={() => updateFilters({ status: "handoff" })} type="button">
+            Escalados
+            <span>358</span>
+          </button>
+          <button className={filtersOpen ? "open" : ""} onClick={() => setFiltersOpen(!filtersOpen)} type="button">
+            <Filter size={16} />
+            Filtros
+          </button>
         </div>
         <div className="list-quick-actions">
-          <button className="secondary new-contact-button" onClick={() => setNewContactOpen(!newContactOpen)} type="button">
-            <UserPlus size={17} />
-            Nuevo contacto
-          </button>
           <label className="search-field">
             <Search size={16} />
             <input
-              placeholder="Buscar nombre o telefono"
+              placeholder="Buscar mensajes"
               value={filters.query}
               onChange={(event) => updateFilters({ query: event.target.value })}
             />
           </label>
         </div>
-        {newContactOpen ? (
-          <form className="new-contact-card" onSubmit={createContactWithTemplate}>
-            <label className="field">
-              Nombre
-              <input value={newContact.displayName} onChange={(event) => setNewContact({ ...newContact, displayName: event.target.value })} />
-            </label>
-            <label className="field">
-              WhatsApp
-              <input
-                placeholder="Ej: 1125750323"
-                value={newContact.phone}
-                onChange={(event) => setNewContact({ ...newContact, phone: event.target.value })}
-                required
-              />
-            </label>
-            <label className="field">
-              Plantilla
-              <select value={newContact.templateId} onChange={(event) => setNewContact({ ...newContact, templateId: event.target.value })}>
-                <option value="">Crear sin enviar</option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.label} - {template.language_code}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              Variables
-              <textarea
-                placeholder="Una por linea si la plantilla usa {{1}}, {{2}}"
-                value={newContact.parameters}
-                onChange={(event) => setNewContact({ ...newContact, parameters: event.target.value })}
-              />
-            </label>
-            <button className="primary" disabled={creatingContact} type="submit">
-              <SendHorizonal size={17} />
-              {creatingContact ? "Enviando" : newContact.templateId ? "Crear y enviar" : "Crear contacto"}
-            </button>
-            {!templates.length ? <span className="muted">Primero carga una plantilla aprobada en la solapa Plantillas.</span> : null}
-            {newContactMessage ? <span className="warn">{newContactMessage}</span> : null}
-          </form>
-        ) : null}
-        <div className="filters">
-          <div className="filter-row">
-            <Filter size={16} />
-            <select onChange={(event) => updateFilters({ consultype: event.target.value })} value={filters.consultype}>
-              <option value="all">Todas las etiquetas</option>
+        {filtersOpen ? (
+          <div className="filters-popover">
+            <div className="filters-head">
+              <strong>Filtros</strong>
+              <button onClick={resetFilters} type="button">Limpiar</button>
+            </div>
+            <div className="filter-group">
+              <span>CLASIFICACION</span>
+              {SENTIMENT_FILTERS.map((sentiment) => (
+                <label className={filters.sentiment === sentiment ? "selected" : ""} key={sentiment}>
+                  <input
+                    checked={filters.sentiment === sentiment}
+                    onChange={() => updateFilters({ sentiment: filters.sentiment === sentiment ? "all" : sentiment })}
+                    type="checkbox"
+                  />
+                  {sentiment}
+                </label>
+              ))}
+            </div>
+            <div className="filter-group">
+              <span>CONSULTYPE</span>
               {CONSULTYPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
+                <label className={filters.consultype === option.value ? "selected" : ""} key={option.value}>
+                  <input
+                    checked={filters.consultype === option.value}
+                    onChange={() => updateFilters({ consultype: filters.consultype === option.value ? "all" : option.value })}
+                    type="checkbox"
+                  />
                   {option.label}
-                </option>
+                </label>
               ))}
-            </select>
-            <select onChange={(event) => updateFilters({ status: event.target.value })} value={filters.status}>
-              <option value="all">Todos los estados</option>
-              <option value="open">Abiertas</option>
-              <option value="waiting">Esperando</option>
-              <option value="quoted">Cotizadas</option>
-              <option value="hot">Calientes</option>
-              <option value="handoff">Humano</option>
-              <option value="closed">Cerradas</option>
-              <option value="lost">Perdidas</option>
-            </select>
-            <select onChange={(event) => updateFilters({ assignedTo: event.target.value })} value={filters.assignedTo}>
-              <option value="all">Todos</option>
-              <option value="mine">Mias</option>
-              <option value="unassigned">Sin asignar</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.full_name}
-                </option>
+            </div>
+            <div className="filter-group">
+              <span>ETIQUETAS</span>
+              {TAG_FILTERS.map((tagName) => (
+                <label className={filters.consultype === tagName ? "selected" : ""} key={tagName}>
+                  <input
+                    checked={filters.consultype === tagName}
+                    onChange={() => updateFilters({ consultype: filters.consultype === tagName ? "all" : tagName })}
+                    type="checkbox"
+                  />
+                  {humanizeTemplateName(tagName)}
+                </label>
               ))}
-            </select>
+            </div>
           </div>
-        </div>
+        ) : null}
         {items.length ? (
           items.map((conversation) => (
-            <button
-              className={`conversation-row ${conversation.id === selected?.id ? "active" : ""}`}
-              key={conversation.id}
-              onClick={() => {
-                setSelectedId(conversation.id);
-                setMobileDetailOpen(true);
-              }}
-              type="button"
-            >
-              <span className="row-main">
+            <article className={`conversation-row ${conversation.id === selected?.id ? "active" : ""}`} key={conversation.id}>
+              <button
+                className="conversation-row-main"
+                onClick={() => {
+                  setSelectedId(conversation.id);
+                  setMobileDetailOpen(true);
+                }}
+                type="button"
+              >
+                <span className="row-meta">
+                  <span className="channel-pill">WHATSAPP</span>
+                  <time>{formatListDate(conversation.last_message_at)}</time>
+                </span>
                 <strong>{conversation.display_name || conversation.phone}</strong>
-                <small>{conversation.last_message || "Importado desde Hariaz"}</small>
-              </span>
-              <span className={`tag ${conversation.consultype}`}>{conversation.consultype}</span>
-            </button>
+                <small>Sentimiento: {conversation.sentiment || "neutro"}</small>
+                <span className={`tag ${conversation.consultype}`}>{getConsultypeLabel(conversation.consultype)}</span>
+                <span className="assigned-pill">asignado: {conversation.assigned_name || "Sin asignar"}</span>
+              </button>
+              <details className="row-menu">
+                <summary aria-label="Acciones"><MoreVertical size={18} /></summary>
+                <button onClick={() => patchConversation(conversation.id, { status: "open" })} type="button">Desescalar</button>
+                <button type="button">Marcar como no leido</button>
+                <button onClick={() => patchConversation(conversation.id, { consultype: "otro" })} type="button">Cambiar tipo</button>
+                <button type="button">Bloquear</button>
+                <button className="danger" type="button">Eliminar chat</button>
+              </details>
+            </article>
           ))
         ) : (
           <div className="empty-state">Cuando importemos Hariaz o entren mensajes, van a aparecer aca.</div>
@@ -1621,120 +1636,163 @@ function InboxList({
               Volver
             </button>
             <div className="detail-head">
-              <div>
-                <h2>{selected.display_name || "Sin nombre"}</h2>
-                <span>{selected.phone}</span>
+              <div className="detail-channel">
+                <strong>WHATSAPP</strong>
+                <span>| {selected.phone}</span>
               </div>
-              <span className={`status ${selected.status}`}>{getStatusLabel(selected.status)}</span>
+              <div className="detail-actions">
+                <button
+                  className={`ia-toggle ${selected.ai_enabled ? "on" : ""}`}
+                  onClick={() => patchConversation(selected.id, { aiEnabled: !selected.ai_enabled })}
+                  type="button"
+                >
+                  <span />
+                  IA Activa
+                </button>
+                <button className="icon-action" title="Tablero CRM" type="button"><Star size={18} /></button>
+                <button className="warning-action" onClick={() => patchConversation(selected.id, { assignedTo: null, status: "open" })} type="button">
+                  Desasignar
+                </button>
+                <details className="transfer-menu">
+                  <summary>Transferir</summary>
+                  <select
+                    onChange={(event) =>
+                      patchConversation(selected.id, {
+                        assignedTo: event.target.value || null,
+                        aiEnabled: false,
+                        status: event.target.value ? "handoff" : selected.status
+                      })
+                    }
+                    value={selected.assigned_to ?? ""}
+                  >
+                    <option value="">Sin asignar</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>{user.full_name}</option>
+                    ))}
+                  </select>
+                </details>
+                <details className="chat-actions-menu">
+                  <summary aria-label="Mas acciones"><MoreVertical size={20} /></summary>
+                  <button onClick={() => patchConversation(selected.id, { status: "open" })} type="button">Desescalar</button>
+                  <button type="button">Marcar como no leido</button>
+                  <button onClick={() => patchConversation(selected.id, { consultype: "otro" })} type="button">Cambiar tipo</button>
+                  <button type="button">Bloquear</button>
+                  <button className="danger" type="button"><Trash2 size={14} /> Eliminar chat</button>
+                </details>
+              </div>
             </div>
 
             <div className="toolbar">
-              <button
-                className="secondary"
-                onClick={() => patchConversation(selected.id, { assignedTo: currentUser.id })}
-                type="button"
-              >
-                <CircleUserRound size={17} />
-                Tomar
-              </button>
-              <button
-                className="secondary"
-                onClick={() => patchConversation(selected.id, { aiEnabled: !selected.ai_enabled })}
-                type="button"
-              >
-                <Bot size={17} />
-                {selected.ai_enabled ? "Pausar IA" : "Activar IA"}
-              </button>
-              <button className="secondary" onClick={() => setTemplateComposerOpen(!templateComposerOpen)} type="button">
-                <FileText size={17} />
-                Plantilla
-              </button>
-              <details className="toolbar-menu">
-                <summary>Transferir</summary>
-                <select
-                  onChange={(event) =>
-                    patchConversation(selected.id, {
-                      assignedTo: event.target.value || null,
-                      aiEnabled: false,
-                      status: event.target.value ? "handoff" : selected.status
-                    })
-                  }
-                  value={selected.assigned_to ?? ""}
-                >
-                  <option value="">Sin asignar</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.full_name}
-                    </option>
-                  ))}
-                </select>
-              </details>
-              <details className="toolbar-menu">
-                <summary>{getStatusLabel(selected.status)}</summary>
-                <select onChange={(event) => patchConversation(selected.id, { status: event.target.value })} value={selected.status}>
-                  {STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </details>
-              <details className="toolbar-menu">
-                <summary>{getConsultypeLabel(selected.consultype)}</summary>
-                <select
-                  onChange={(event) => patchConversation(selected.id, { consultype: event.target.value })}
-                  value={selected.consultype}
-                >
-                  {CONSULTYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </details>
+              <label className="chat-name-field">
+                Nombre chat:
+                <input value={chatName} onChange={(event) => setChatName(event.target.value)} />
+              </label>
+              <button className="secondary" onClick={saveChatName} type="button">Guardar</button>
+              <div className="toolbar-icons">
+                <button className="icon-action" onClick={() => setTagPanelOpen(!tagPanelOpen)} title="Editar etiqueta" type="button"><Tag size={17} /></button>
+                <button className="icon-action" onClick={() => setSummaryOpen(true)} title="Generar resumen" type="button"><Edit3 size={17} /></button>
+                <button className="icon-action active" onClick={() => setTemplateComposerOpen(true)} title="Enviar plantilla" type="button"><Radio size={17} /></button>
+                <button className="icon-action" onClick={() => setQuickRepliesOpen(true)} title="Respuestas rapidas" type="button"><Zap size={17} /></button>
+                <details className="event-menu" open={eventMenuOpen}>
+                  <summary onClick={(event) => { event.preventDefault(); setEventMenuOpen(!eventMenuOpen); }}>
+                    <Calendar size={17} />
+                    Enviar evento
+                    <span>2</span>
+                  </summary>
+                  <div>
+                    <strong>ENVIAR EVENTO</strong>
+                    <button type="button"><Calendar size={17} /> <span>Compra<small>Purchase</small></span><b>Enviar</b></button>
+                    <button type="button"><Calendar size={17} /> <span>Lead</span><b>Enviar</b></button>
+                  </div>
+                </details>
+              </div>
             </div>
 
-            {templateComposerOpen ? (
-              <form className="template-composer" onSubmit={sendTemplateToSelected}>
-                <label className="field">
-                  Plantilla para este contacto
-                  <select value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)}>
-                    <option value="">Elegir plantilla</option>
-                    {templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.label} - {template.language_code}
-                      </option>
+            {tagPanelOpen ? (
+              <div className="tag-editor-panel">
+                <input placeholder="Buscar o crear etiqueta..." />
+                {TAG_FILTERS.slice(0, 8).map((tagName) => (
+                  <div className="tag-editor-row" key={tagName}>
+                    <span className={`tag-dot ${tagName}`} />
+                    <strong>{humanizeTemplateName(tagName)}</strong>
+                    <button onClick={() => patchConversation(selected.id, { consultype: tagName })} type="button">Agregar</button>
+                    <button className="icon-action danger" type="button"><Trash2 size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {summaryOpen ? (
+              <div className="modal-backdrop">
+                <section className="dialog small-dialog">
+                  <header>
+                    <h3>Resumen de la conversacion</h3>
+                    <button onClick={() => setSummaryOpen(false)} type="button"><X size={22} /></button>
+                  </header>
+                  <p>{buildConversationSummary()}</p>
+                  <footer><button className="secondary" onClick={() => setSummaryOpen(false)} type="button">Cerrar</button></footer>
+                </section>
+              </div>
+            ) : null}
+
+            {quickRepliesOpen ? (
+              <div className="modal-backdrop">
+                <section className="dialog quick-dialog">
+                  <header>
+                    <h3>Respuestas rapidas</h3>
+                    <button onClick={() => setQuickRepliesOpen(false)} type="button"><X size={22} /></button>
+                  </header>
+                  <div className="quick-form-grid">
+                    <label className="field">Nombre<input placeholder="Saludo Inicial" /></label>
+                    <label className="field">Atajo (sin "/")<input placeholder="saludo_inicial" /></label>
+                    <label className="field">Disponibilidad<select defaultValue="global"><option value="global">Global</option></select></label>
+                  </div>
+                  <label className="field">Contenido<textarea placeholder="Hola, como estas?" /></label>
+                  <div className="template-actions"><button className="primary" type="button">Guardar</button><button className="secondary" type="button">Nuevo</button></div>
+                  <div className="quick-table">
+                    {["dale", "Guille firma", "invito"].map((name) => (
+                      <div key={name}><strong>{name}</strong><span>/{name.toLowerCase().replace(/\s+/g, "_")}</span><p>por favor leer detenidamente el presupuesto...</p><button type="button">Editar</button></div>
                     ))}
-                  </select>
-                </label>
-                <label className="field">
-                  Variables
-                  <textarea
-                    placeholder="Solo si la plantilla usa {{1}}, {{2}}"
-                    value={templateParameters}
-                    onChange={(event) => setTemplateParameters(event.target.value)}
-                  />
-                </label>
-                <div className="template-actions">
-                  <button className="primary" disabled={sendingTemplate || !selectedTemplateId} type="submit">
-                    <SendHorizonal size={17} />
-                    {sendingTemplate ? "Enviando" : "Enviar plantilla"}
-                  </button>
-                  <button
-                    className="secondary"
-                    disabled={sendingTemplate}
-                    onClick={() => {
-                      setTemplateComposerOpen(false);
-                      setTemplateMessage("");
-                    }}
-                    type="button"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-                {!templates.length ? <span className="muted">Primero carga una plantilla aprobada en la solapa Plantillas.</span> : null}
-                {templateMessage ? <span className={templateMessage.includes("enviada") ? "ok inline" : "warn"}>{templateMessage}</span> : null}
-              </form>
+                  </div>
+                  <footer><button className="secondary" onClick={() => setQuickRepliesOpen(false)} type="button">Cerrar</button></footer>
+                </section>
+              </div>
+            ) : null}
+
+            {templateComposerOpen ? (
+              <div className="modal-backdrop">
+                <form className="dialog template-dialog" onSubmit={sendTemplateToSelected}>
+                  <header>
+                    <h3>Enviar plantilla (WhatsApp)</h3>
+                    <button onClick={() => setTemplateComposerOpen(false)} type="button"><X size={22} /></button>
+                  </header>
+                  <div className="template-destination">Destino: {selected.display_name || selected.phone}</div>
+                  <div className="template-modal-grid">
+                    <label className="field">
+                      Plantilla
+                      <select value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)}>
+                        <option value="">Seleccionar...</option>
+                        {templates.map((template) => (
+                          <option key={template.id} value={template.id}>{template.label} - {template.language_code}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">Idioma<input value="es_AR" readOnly /></label>
+                    <label className="field">Categoria<select defaultValue="utility"><option value="utility">Utility</option></select></label>
+                  </div>
+                  <label className="field">
+                    Variables del body
+                    <textarea placeholder="Esta plantilla no requiere variables de body." value={templateParameters} onChange={(event) => setTemplateParameters(event.target.value)} />
+                  </label>
+                  <div className="template-preview">Selecciona una plantilla para ver el contenido.</div>
+                  <div className="template-warning">Recorda: Marketing requiere opt-in del contacto y se contabiliza como business-initiated si pasaron 24 h.</div>
+                  <footer>
+                    <button className="secondary" onClick={() => setTemplateComposerOpen(false)} type="button">Cancelar</button>
+                    <button className="primary" disabled={sendingTemplate || !selectedTemplateId} type="submit">{sendingTemplate ? "Enviando" : "Enviar"}</button>
+                  </footer>
+                  {templateMessage ? <span className={templateMessage.includes("enviada") ? "ok inline" : "warn"}>{templateMessage}</span> : null}
+                </form>
+              </div>
             ) : null}
 
             <div className="conversation-tabs">
@@ -1914,6 +1972,14 @@ function formatMessageTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
     month: "2-digit"
+  }).format(new Date(value));
+}
+
+function formatListDate(value: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
   }).format(new Date(value));
 }
 

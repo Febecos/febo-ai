@@ -26,6 +26,7 @@ export type ConversationSummary = {
   contact_id: string;
   phone: string;
   display_name: string | null;
+  platform: string;
   sentiment: string;
   consultype: string;
   assigned_to: string | null;
@@ -597,6 +598,7 @@ export async function listConversations(filters: ConversationFilters = {}) {
       ct.id as contact_id,
       ct.phone,
       ct.display_name,
+      ct.platform,
       ct.sentiment,
       ct.consultype,
       c.assigned_to::text,
@@ -1031,6 +1033,7 @@ export async function updateConversation(input: {
   aiEnabled?: boolean;
   assignedTo?: string | null;
   consultype?: string;
+  displayName?: string | null;
 }) {
   const sql = getSql();
   const status = input.status ?? null;
@@ -1038,6 +1041,7 @@ export async function updateConversation(input: {
   const assignedTo = input.assignedTo === undefined ? null : input.assignedTo;
   const changeAssigned = input.assignedTo !== undefined;
   const consultype = input.consultype ? normalizeConsultype(input.consultype) : null;
+  const displayName = input.displayName === undefined ? undefined : input.displayName?.trim() || null;
 
   const previous = (await sql`
     select c.assigned_to::text as assigned_to, u.full_name as assigned_name
@@ -1071,6 +1075,17 @@ export async function updateConversation(input: {
     await sql`
       update contacts ct
       set consultype = ${consultype},
+          updated_at = now()
+      from conversations c
+      where c.contact_id = ct.id
+        and c.id = ${input.conversationId}
+    `;
+  }
+
+  if (displayName !== undefined) {
+    await sql`
+      update contacts ct
+      set display_name = ${displayName},
           updated_at = now()
       from conversations c
       where c.contact_id = ct.id

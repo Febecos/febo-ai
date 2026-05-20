@@ -8,7 +8,8 @@ const updateSchema = z.object({
   status: z.string().optional(),
   aiEnabled: z.boolean().optional(),
   assignedTo: z.string().uuid().nullable().optional(),
-  consultype: z.string().optional()
+  consultype: z.string().optional(),
+  displayName: z.string().nullable().optional()
 });
 
 export async function GET(request: NextRequest) {

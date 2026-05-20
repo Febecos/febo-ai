@@ -1473,6 +1473,34 @@ function InboxList({
   }, [unreadIds]);
 
   useEffect(() => {
+    function closeMenusOnOutsideClick(event: PointerEvent) {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      if (event.target.closest(".row-menu, .chat-actions-menu")) {
+        return;
+      }
+
+      closeConversationMenus();
+    }
+
+    function closeMenusOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeConversationMenus();
+      }
+    }
+
+    document.addEventListener("pointerdown", closeMenusOnOutsideClick);
+    document.addEventListener("keydown", closeMenusOnEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeMenusOnOutsideClick);
+      document.removeEventListener("keydown", closeMenusOnEscape);
+    };
+  }, []);
+
+  useEffect(() => {
     async function refreshVisibleInbox() {
       if (document.hidden || sendingReply || recording) {
         return;
@@ -1758,6 +1786,20 @@ function InboxList({
     onConversationsChange(conversations.filter((conversation) => conversation.id !== conversationId));
     setUnreadIds((current) => current.filter((id) => id !== conversationId));
     await patchConversation(conversationId, { status });
+    closeConversationMenus();
+  }
+
+  async function changeConversationType(conversationId: string, consultype: string) {
+    await patchConversation(conversationId, { consultype });
+    closeConversationMenus();
+  }
+
+  function closeConversationMenus() {
+    document
+      .querySelectorAll<HTMLDetailsElement>(".row-menu[open], .chat-actions-menu[open], .type-submenu[open]")
+      .forEach((menu) => {
+        menu.open = false;
+      });
   }
 
   async function saveChatName() {
@@ -2165,7 +2207,7 @@ function InboxList({
                         <button
                           className={`type-choice ${option.value} ${conversation.consultype === option.value ? "active" : ""}`}
                           key={option.value}
-                          onClick={() => patchConversation(conversation.id, { consultype: option.value })}
+                          onClick={() => void changeConversationType(conversation.id, option.value)}
                           type="button"
                         >
                           <span />
@@ -2244,7 +2286,7 @@ function InboxList({
                           <button
                             className={`type-choice ${option.value} ${selected.consultype === option.value ? "active" : ""}`}
                             key={option.value}
-                            onClick={() => patchConversation(selected.id, { consultype: option.value })}
+                            onClick={() => void changeConversationType(selected.id, option.value)}
                             type="button"
                           >
                             <span />

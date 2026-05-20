@@ -1532,6 +1532,15 @@ button:disabled {
   padding: 0 11px;
 }
 
+.descale-button {
+  background: rgba(255, 212, 0, 0.08);
+  border: 1px solid rgba(255, 212, 0, 0.76);
+  border-radius: 4px;
+  color: #ffd400;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
 .transfer-button {
   background: #30353b;
   border: 1px solid #536274;
@@ -2896,6 +2905,12 @@ select {
   .transfer-button {
     min-height: 34px;
     padding: 0 9px;
+  }
+
+  .descale-button {
+    font-size: 12px;
+    min-height: 34px;
+    padding: 0 8px;
   }
 
   .modal-backdrop {

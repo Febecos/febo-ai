@@ -290,8 +290,8 @@ button:disabled {
 
 .crm-board {
   display: grid;
-  gap: 12px;
-  grid-auto-columns: 292px;
+  gap: 10px;
+  grid-auto-columns: clamp(300px, 19vw, 350px);
   grid-auto-flow: column;
   min-height: 320px;
   overflow-x: auto;
@@ -304,7 +304,8 @@ button:disabled {
   border-radius: 8px;
   display: grid;
   gap: 12px;
-  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
+  grid-auto-rows: max-content;
   min-height: 320px;
   padding: 12px;
 }
@@ -330,9 +331,9 @@ button:disabled {
   border: 1px solid #555d68;
   border-radius: 8px;
   display: grid;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
-  padding: 12px;
+  padding: 11px;
   position: relative;
 }
 
@@ -365,7 +366,6 @@ button:disabled {
   display: -webkit-box;
   line-clamp: 3;
   margin: 0;
-  min-height: 54px;
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -383,14 +383,18 @@ button:disabled {
   border: 1px solid #647080;
   border-radius: 6px;
   color: #ffffff;
-  min-height: 28px;
+  font-size: 12px;
+  font-weight: 700;
+  height: 30px;
   min-width: 0;
-  padding: 0 9px;
+  overflow: hidden;
+  padding: 0 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .crm-card select {
   appearance: none;
-  font-size: 12px;
 }
 
 .crm-card svg {
@@ -406,7 +410,8 @@ button:disabled {
   border-radius: 8px;
   color: #d8dde5;
   display: flex;
-  min-height: 82px;
+  font-size: 13px;
+  min-height: 126px;
   padding: 16px;
   text-align: center;
 }

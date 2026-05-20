@@ -4,6 +4,7 @@ import { upload } from "@vercel/blob/client";
 import {
   AlertCircle,
   BarChart3,
+  BellRing,
   Bot,
   Check,
   CheckCheck,
@@ -221,6 +222,7 @@ function ToolWorkspace({
   const [conversationNavSignal, setConversationNavSignal] = useState(0);
   const [focusedConversation, setFocusedConversation] = useState({ id: "", signal: 0 });
   const [focusedContact, setFocusedContact] = useState({ id: "", signal: 0 });
+  const [pushStatus, setPushStatus] = useState("Notificaciones");
 
   useEffect(() => {
     const storedFavorites = window.localStorage.getItem("febo-crm-favorites");
@@ -326,6 +328,10 @@ function ToolWorkspace({
           <button onClick={() => window.location.reload()} title="Actualizar" type="button">
             <RefreshCcw size={18} />
             Actualizar
+          </button>
+          <button onClick={() => void enablePushNotifications(setPushStatus)} title="Activar notificaciones" type="button">
+            <BellRing size={18} />
+            {pushStatus}
           </button>
           <button onClick={logout} title="Salir" type="button">
             <LogOut size={18} />
@@ -3205,6 +3211,58 @@ function getStatusLabel(value: string) {
 
 function getConsultypeLabel(value: string) {
   return CONSULTYPE_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
+async function enablePushNotifications(setStatus: (status: string) => void) {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    setStatus("No compatible");
+    return;
+  }
+
+  setStatus("Activando...");
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    setStatus("Sin permiso");
+    return;
+  }
+
+  const keyResponse = await fetch("/api/push/vapid-public-key");
+  const keyPayload = await readJsonResponse(keyResponse);
+
+  if (!keyResponse.ok || !keyPayload?.configured || !keyPayload.publicKey) {
+    setStatus("Falta config");
+    return;
+  }
+
+  const registration = await navigator.serviceWorker.register("/sw.js");
+  const subscription =
+    await registration.pushManager.getSubscription() ??
+    await registration.pushManager.subscribe({
+      applicationServerKey: urlBase64ToUint8Array(keyPayload.publicKey),
+      userVisibleOnly: true
+    });
+
+  const response = await fetch("/api/push/subscribe", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(subscription)
+  });
+
+  setStatus(response.ok ? "Activas" : "Error push");
+}
+
+function urlBase64ToUint8Array(value: string) {
+  const padding = "=".repeat((4 - value.length % 4) % 4);
+  const base64 = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const output = new Uint8Array(rawData.length);
+
+  for (let index = 0; index < rawData.length; index += 1) {
+    output[index] = rawData.charCodeAt(index);
+  }
+
+  return output;
 }
 
 function isMobileViewport() {

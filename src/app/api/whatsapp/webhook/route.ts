@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runFebecosAgent, transcribeAudio } from "@/lib/agent";
 import { config } from "@/lib/config";
 import { recordAgentReply, recordIncomingMessage, recordWhatsAppMessageStatuses, saveMessageMedia, updateMessageBody } from "@/lib/crm";
+import { sendPushNotificationToAll } from "@/lib/push";
 import {
   downloadWhatsAppMedia,
   extractInboundMessages,
@@ -58,6 +59,12 @@ export async function POST(request: NextRequest) {
     if (stored.duplicate) {
       continue;
     }
+
+    await sendPushNotificationToAll({
+      title: message.contactName ? `Nueva consulta de ${message.contactName}` : "Nueva consulta en Febo AI",
+      body: agentMessage || "Mensaje nuevo recibido por WhatsApp.",
+      url: "/"
+    });
 
     if (isWhatsAppAudioMessage(message) && stored.messageId) {
       try {

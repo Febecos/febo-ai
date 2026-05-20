@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  BarChart3,
   Bot,
   Check,
   CheckCheck,
@@ -22,7 +23,6 @@ import {
   Search,
   ShieldCheck,
   SendHorizonal,
-  Smartphone,
   Square,
   UserCheck,
   UserPlus,
@@ -95,37 +95,11 @@ export function InboxApp({
 
   return (
     <main className="app-shell">
-      <header className="app-header">
-        <div>
-          <p className="eyebrow">Febo AI CRM</p>
-          <h1>Inbox comercial</h1>
-          <span className="muted">
-            {currentUser.full_name} · {currentUser.role}
-          </span>
-        </div>
-        <div className="header-actions">
-          <span className="install-hint">
-            <Smartphone size={16} />
-            PWA lista para celu
-          </span>
-        </div>
-      </header>
-
-      {!dbConfigured ? (
-        <section className="notice">Falta configurar DATABASE_URL. El inbox queda listo, pero todavia no puede leer Neon.</section>
-      ) : null}
-
-      <section className="stat-grid">
-        <Metric label="Contactos" value={stats.contacts} />
-        <Metric label="Conversaciones" value={stats.conversations} />
-        <Metric label="Escaladas" value={stats.handoffs} />
-        <Metric label="Calientes" value={stats.hot} />
-      </section>
-
       <ToolWorkspace
         adminUsers={adminUsers}
         conversations={conversations}
         currentUser={currentUser}
+        stats={stats}
         users={users}
       />
     </main>
@@ -206,18 +180,24 @@ function ToolWorkspace({
   adminUsers,
   conversations,
   currentUser,
+  stats,
   users
 }: {
   adminUsers: UserAdminSummary[];
   conversations: ConversationSummary[];
   currentUser: AppUser;
+  stats: Stats;
   users: AppUser[];
 }) {
-  const [activeTool, setActiveTool] = useState<"conversations" | "contacts" | "templates" | "users" | "ai">("conversations");
+  const [activeTool, setActiveTool] = useState<"conversations" | "metrics" | "contacts" | "templates" | "users" | "ai">("conversations");
 
   return (
     <section className="admin-workspace">
       <nav className="tool-sidebar" aria-label="Herramientas de trabajo">
+        <div className="tool-brand">
+          <span className="brand-mark">F</span>
+          <strong>Febo AI</strong>
+        </div>
         <button
           className={activeTool === "conversations" ? "active" : ""}
           onClick={() => setActiveTool("conversations")}
@@ -227,12 +207,12 @@ function ToolWorkspace({
           Conversaciones
         </button>
         <button
-          className={activeTool === "templates" ? "active" : ""}
-          onClick={() => setActiveTool("templates")}
+          className={activeTool === "metrics" ? "active" : ""}
+          onClick={() => setActiveTool("metrics")}
           type="button"
         >
-          <MessageSquareText size={18} />
-          Plantillas
+          <BarChart3 size={18} />
+          M&eacute;tricas
         </button>
         <button
           className={activeTool === "contacts" ? "active" : ""}
@@ -241,6 +221,14 @@ function ToolWorkspace({
         >
           <UsersRound size={18} />
           Contactos
+        </button>
+        <button
+          className={activeTool === "templates" ? "active" : ""}
+          onClick={() => setActiveTool("templates")}
+          type="button"
+        >
+          <MessageSquareText size={18} />
+          ULIS
         </button>
         {currentUser.role === "admin" ? (
           <>
@@ -254,6 +242,12 @@ function ToolWorkspace({
             </button>
           </>
         ) : null}
+        <div className="sidebar-cycle-card">
+          <strong>Conversaciones</strong>
+          <span>Ciclo actual</span>
+          <b>{stats.conversations.toLocaleString("es-AR")}</b>
+          <small>20 abr - 20 may</small>
+        </div>
         <div className="tool-sidebar-bottom">
           <button onClick={() => window.location.reload()} title="Actualizar" type="button">
             <RefreshCcw size={18} />
@@ -270,12 +264,30 @@ function ToolWorkspace({
         {activeTool === "conversations" ? (
           <InboxList conversations={conversations} currentUser={currentUser} users={users} />
         ) : null}
+        {activeTool === "metrics" ? <MetricsPanel stats={stats} /> : null}
         {activeTool === "templates" ? <TemplatesPanel /> : null}
         {activeTool === "contacts" ? <ContactsPanel users={users} /> : null}
         {activeTool === "users" && currentUser.role === "admin" ? (
           <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} />
         ) : null}
         {activeTool === "ai" && currentUser.role === "admin" ? <AgentTester /> : null}
+      </div>
+    </section>
+  );
+}
+
+function MetricsPanel({ stats }: { stats: Stats }) {
+  return (
+    <section className="metrics-panel">
+      <div className="metrics-head">
+        <h2>M&eacute;tricas</h2>
+        <p>Resumen operativo de Febo AI</p>
+      </div>
+      <div className="metrics-grid">
+        <Metric label="Contactos" value={stats.contacts} />
+        <Metric label="Conversaciones" value={stats.conversations} />
+        <Metric label="Escaladas" value={stats.handoffs} />
+        <Metric label="Calientes" value={stats.hot} />
       </div>
     </section>
   );
@@ -650,8 +662,8 @@ function TemplatesPanel() {
         {templates.map((template) => (
           <div className="template-row" key={template.id}>
             <strong>{template.label}</strong>
-            <span>{template.name} · {template.language_code}</span>
-            <small>{template.active ? "activa" : "inactiva"} · {template.body || "Sin texto local"}</small>
+            <span>{template.name} - {template.language_code}</span>
+            <small>{template.active ? "activa" : "inactiva"} - {template.body || "Sin texto local"}</small>
           </div>
         ))}
       </div>
@@ -1202,7 +1214,7 @@ function InboxList({
     event.preventDefault();
 
     if (!selected?.phone || !selectedTemplateId) {
-      setTemplateMessage("Elegí una plantilla para enviar.");
+      setTemplateMessage("Elegi una plantilla para enviar.");
       return;
     }
 
@@ -1524,7 +1536,7 @@ function InboxList({
                 <option value="">Crear sin enviar</option>
                 {templates.map((template) => (
                   <option key={template.id} value={template.id}>
-                    {template.label} · {template.language_code}
+                    {template.label} - {template.language_code}
                   </option>
                 ))}
               </select>
@@ -1690,7 +1702,7 @@ function InboxList({
                     <option value="">Elegir plantilla</option>
                     {templates.map((template) => (
                       <option key={template.id} value={template.id}>
-                        {template.label} · {template.language_code}
+                        {template.label} - {template.language_code}
                       </option>
                     ))}
                   </select>
@@ -1757,7 +1769,7 @@ function InboxList({
                       {!isAudioMessage(message) && message.body ? <p>{message.body}</p> : null}
                       {message.media_id ? <MessageMedia message={message} /> : null}
                       <small>
-                        {message.direction === "inbound" ? "Cliente" : "Febo AI"} · {formatMessageTime(message.created_at)}
+                        {message.direction === "inbound" ? "Cliente" : "Febo AI"} - {formatMessageTime(message.created_at)}
                       </small>
                       {message.direction === "outbound" && message.whatsapp_status ? <DeliveryStatus message={message} /> : null}
                     </article>
@@ -2209,7 +2221,7 @@ function AgentTester() {
             <>
               <p>{answer.respuesta}</p>
               <span>
-                {answer.consultype} · {answer.escalar ? "escala" : "no escala"}
+                {answer.consultype} - {answer.escalar ? "escala" : "no escala"}
               </span>
             </>
           ) : (

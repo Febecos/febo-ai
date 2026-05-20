@@ -1499,17 +1499,32 @@ function InboxList({
       closeConversationMenus();
     }
 
+    function closeFiltersOnOutsideClick(event: PointerEvent) {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      if (event.target.closest(".filters-popover, .filters-toggle")) {
+        return;
+      }
+
+      setFiltersOpen(false);
+    }
+
     function closeMenusOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         closeConversationMenus();
+        setFiltersOpen(false);
       }
     }
 
     document.addEventListener("pointerdown", closeMenusOnOutsideClick);
+    document.addEventListener("pointerdown", closeFiltersOnOutsideClick);
     document.addEventListener("keydown", closeMenusOnEscape);
 
     return () => {
       document.removeEventListener("pointerdown", closeMenusOnOutsideClick);
+      document.removeEventListener("pointerdown", closeFiltersOnOutsideClick);
       document.removeEventListener("keydown", closeMenusOnEscape);
     };
   }, []);
@@ -2131,7 +2146,7 @@ function InboxList({
           <button className={filters.status === "handoff" ? "active" : ""} onClick={() => updateFilters({ status: "handoff" })} type="button">
             Escalados
           </button>
-          <button className={filtersOpen ? "open" : ""} onClick={() => setFiltersOpen(!filtersOpen)} type="button">
+          <button className={`filters-toggle ${filtersOpen ? "open" : ""}`} onClick={() => setFiltersOpen(!filtersOpen)} type="button">
             <Filter size={16} />
             Filtros
             {activeFiltersCount ? <span>{activeFiltersCount}</span> : null}

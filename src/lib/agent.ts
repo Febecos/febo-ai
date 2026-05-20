@@ -132,6 +132,18 @@ export async function runFebecosAgent(input: {
   const prompt = await getOperatingPrompt();
   const history = await listAgentConversationContext(input.conversationId, 30);
   const conversationHistory = buildConversationHistory(history);
+  const selectorCheckoutResult = buildSelectorCheckoutResult(input.message);
+
+  if (selectorCheckoutResult) {
+    await executeAgentAction({
+      phone: input.phone,
+      message: input.message,
+      result: selectorCheckoutResult
+    });
+
+    return selectorCheckoutResult;
+  }
+
   const paymentPreferenceResult = buildPaymentPreferenceResult(input.message, conversationHistory);
 
   if (paymentPreferenceResult) {
@@ -292,6 +304,42 @@ function buildConversationHistory(history: AgentConversationMessage[]) {
   }));
 }
 
+function buildSelectorCheckoutResult(message: string): AgentResult | null {
+  const normalized = normalizeSpanish(message);
+  const isSelectorCheckout =
+    normalized.includes("consulta desde el selector de febecos") ||
+    normalized.includes("quiero comprar el kit completo");
+
+  if (!isSelectorCheckout) {
+    return null;
+  }
+
+  const equipment = findSelectorField(message, /equipo:\s*([^\n]+)/i);
+  const price = findSelectorField(message, /precio total:\s*([^\n]+)/i);
+  const installments = findSelectorField(message, /(?:o\s+)?en\s+6\s+cuotas?\s+de:\s*([^\n]+)/i);
+
+  const summaryParts = [
+    equipment ? `el equipo ${equipment}` : "el equipo que elegiste en el selector",
+    price ? `con precio total ${price}` : null,
+    installments ? `y referencia de 6 cuotas de ${installments}` : null
+  ].filter(Boolean);
+
+  return {
+    respuesta: [
+      `Perfecto, recibimos tu seleccion del selector de Febecos: ${summaryParts.join(", ")}.`,
+      "Te paso con un asesor de Febecos para confirmar disponibilidad, forma de pago, envio y factura. Te va a escribir ahora."
+    ].join("\n\n"),
+    sentimiento: "positivo",
+    consultype: "caliente",
+    escalar: true,
+    nombre: null,
+    imagenes: [],
+    archivos: [],
+    action: "create_ticket",
+    actionSubject: "compra desde selector Febecos"
+  };
+}
+
 function buildPaymentPreferenceResult(
   message: string,
   history: ReturnType<typeof buildConversationHistory>
@@ -326,6 +374,10 @@ function buildPaymentPreferenceResult(
     action: "none",
     actionSubject: null
   };
+}
+
+function findSelectorField(message: string, pattern: RegExp) {
+  return message.match(pattern)?.[1]?.trim() ?? null;
 }
 
 function hasRecentQuote(history: ReturnType<typeof buildConversationHistory>) {

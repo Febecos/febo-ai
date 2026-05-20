@@ -2107,12 +2107,6 @@ function InboxList({
                 <Paperclip size={18} />
                 <span>Solta aca una imagen, video, PDF o archivo</span>
               </div>
-              <textarea
-                disabled={sendingReply}
-                onChange={(event) => setReplyText(event.target.value)}
-                placeholder={replyFile ? "Mensaje opcional para acompanar el archivo" : "Escribir respuesta"}
-                value={replyText}
-              />
               {recording ? <div className="recording-pill">Grabando {formatRecordingSeconds(recordingSeconds)}</div> : null}
               {preparingRecording ? <div className="recording-pill preparing">Preparando audio...</div> : null}
               {replyFile ? (
@@ -2127,7 +2121,23 @@ function InboxList({
                   </button>
                 </div>
               ) : null}
-              <div className="composer-actions">
+              <div className="composer-line">
+                <div className="composer-tabs">
+                  <button
+                    className="active"
+                    onClick={() => setActiveConversationTab("chat")}
+                    type="button"
+                  >
+                    Conversacion
+                  </button>
+                  <button
+                    className=""
+                    onClick={() => setActiveConversationTab("notes")}
+                    type="button"
+                  >
+                    Notas internas
+                  </button>
+                </div>
                 {recording ? (
                   <button
                     aria-label="Detener grabacion"
@@ -2161,6 +2171,12 @@ function InboxList({
                 >
                   <Paperclip size={18} />
                 </button>
+                <textarea
+                  disabled={sendingReply}
+                  onChange={(event) => setReplyText(event.target.value)}
+                  placeholder={replyFile ? "Mensaje opcional para acompanar el archivo" : "Escribir respuesta"}
+                  value={replyText}
+                />
                 <button className="primary" disabled={sendingReply || preparingRecording || (!replyText.trim() && !replyFile)} type="submit">
                   <SendHorizonal size={18} />
                   {sendingReply ? "Enviando" : replyFile ? getAttachmentSendLabel(replyFile) : "Enviar"}
@@ -2168,7 +2184,26 @@ function InboxList({
               </div>
               {replyError ? <span className="warn">{replyError}</span> : null}
               </form>
-            ) : null}
+            ) : (
+              <div className="conversation-bottom-bar">
+                <div className="composer-tabs">
+                  <button
+                    className=""
+                    onClick={() => setActiveConversationTab("chat")}
+                    type="button"
+                  >
+                    Conversacion
+                  </button>
+                  <button
+                    className="active"
+                    onClick={() => setActiveConversationTab("notes")}
+                    type="button"
+                  >
+                    Notas internas
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="empty-state">Selecciona una conversacion.</div>

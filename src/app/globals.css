@@ -1336,6 +1336,12 @@ button:disabled {
   padding: 2px 6px;
 }
 
+@media (min-width: 721px) {
+  .conversation-detail > .conversation-tabs {
+    display: none;
+  }
+}
+
 .thread-title {
   align-items: center;
   border-bottom: 1px solid var(--line);
@@ -2029,6 +2035,15 @@ select {
   padding: 8px;
 }
 
+.conversation-bottom-bar {
+  background: #2b3036;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+}
+
 .reply-composer.dragging {
   border-color: var(--blue);
   box-shadow: inset 0 0 0 1px var(--blue);
@@ -2052,7 +2067,7 @@ select {
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--ink);
-  min-height: 62px;
+  min-height: 40px;
   padding: 9px 10px;
   resize: vertical;
   width: 100%;
@@ -2120,16 +2135,37 @@ select {
   color: var(--red);
 }
 
-.composer-actions {
+.composer-line {
   align-items: center;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 6px;
-  justify-content: flex-start;
+  grid-template-columns: auto auto auto minmax(220px, 1fr) auto;
 }
 
-.composer-actions .primary {
-  margin-left: auto;
+.composer-tabs {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.composer-tabs button {
+  align-items: center;
+  background: #2f343a;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  display: inline-flex;
+  font-weight: 700;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.composer-tabs button.active {
+  background: var(--blue);
+  border-color: #4090ff;
+  color: #ffffff;
 }
 
 .composer-icon-button {
@@ -2622,6 +2658,11 @@ select {
     z-index: 7;
   }
 
+  .conversation-bottom-bar,
+  .composer-tabs {
+    display: none;
+  }
+
   .drop-zone {
     display: none;
   }
@@ -2630,23 +2671,19 @@ select {
     min-height: 46px;
   }
 
-  .composer-actions {
-    justify-content: flex-start;
+  .composer-line {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
   }
 
-  .composer-actions button {
+  .composer-line button {
     flex: 0 0 auto;
     min-height: 34px;
     padding: 0 9px;
   }
 
-  .composer-actions .composer-icon-button {
+  .composer-line .composer-icon-button {
     min-width: 36px;
     padding: 0;
-  }
-
-  .composer-actions .primary {
-    margin-left: auto;
   }
 }
 

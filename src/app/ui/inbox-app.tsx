@@ -1575,9 +1575,32 @@ function InboxList({
     setReplyFile(file);
   }
 
-  function handleDrop(event: DragEvent<HTMLFormElement>) {
+  function isFileDrag(event: DragEvent<HTMLElement>) {
+    return Array.from(event.dataTransfer.types).includes("Files");
+  }
+
+  function handleConversationDragOver(event: DragEvent<HTMLElement>) {
+    if (!isFileDrag(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setDraggingFile(true);
+  }
+
+  function handleConversationDragLeave(event: DragEvent<HTMLElement>) {
+    if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
+      return;
+    }
+
+    setDraggingFile(false);
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
     setDraggingFile(false);
+    setActiveConversationTab("chat");
     setAttachment(event.dataTransfer.files?.[0] ?? null);
   }
 
@@ -1818,7 +1841,12 @@ function InboxList({
         )}
       </div>
 
-      <div className="conversation-detail">
+      <div
+        className={`conversation-detail ${draggingFile ? "dragging-file" : ""}`}
+        onDragLeave={handleConversationDragLeave}
+        onDragOver={handleConversationDragOver}
+        onDrop={handleDrop}
+      >
         {selected ? (
           <>
             <button className="back-button" onClick={() => setMobileDetailOpen(false)} type="button">
@@ -2087,13 +2115,7 @@ function InboxList({
 
             {activeConversationTab === "chat" ? (
               <form
-              className={`reply-composer ${draggingFile ? "dragging" : ""}`}
-              onDragLeave={() => setDraggingFile(false)}
-              onDragOver={(event) => {
-                event.preventDefault();
-                setDraggingFile(true);
-              }}
-              onDrop={handleDrop}
+              className="reply-composer"
               onSubmit={sendManualReply}
             >
               <input

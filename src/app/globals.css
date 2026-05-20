@@ -2451,6 +2451,43 @@ select {
     padding: 0 9px;
   }
 
+  .modal-backdrop {
+    align-items: flex-start;
+    justify-content: center;
+    padding: 14px 10px;
+  }
+
+  .transfer-dialog {
+    margin-left: 0;
+    width: min(380px, calc(100vw - 20px));
+  }
+
+  .transfer-dialog header,
+  .transfer-dialog footer {
+    padding: 12px 14px;
+  }
+
+  .transfer-dialog h3 {
+    font-size: 18px;
+    line-height: 1.2;
+  }
+
+  .transfer-dialog .field {
+    margin: 14px;
+  }
+
+  .transfer-dialog footer {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .transfer-dialog footer button {
+    justify-content: center;
+    min-width: 0;
+    width: 100%;
+  }
+
   .filter-row {
     gap: 6px;
     grid-template-columns: 1fr;

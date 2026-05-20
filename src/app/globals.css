@@ -2376,7 +2376,7 @@ select {
 
   .conversation-detail {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto auto minmax(0, 1fr) auto;
     position: static;
     gap: 6px;
@@ -2424,7 +2424,9 @@ select {
     display: block;
     font-size: 16px;
     font-weight: 800;
-    grid-column: 1 / -1;
+    grid-column: 1;
+    grid-row: 2;
+    line-height: 34px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2508,10 +2510,13 @@ select {
   }
 
   .toolbar {
-    grid-column: 1 / -1;
-    gap: 6px;
-    justify-content: flex-start;
-    padding: 8px;
+    align-items: center;
+    grid-column: 2;
+    grid-row: 2;
+    gap: 0;
+    justify-content: flex-end;
+    min-width: max-content;
+    padding: 0;
   }
 
   .chat-name-field,
@@ -2520,8 +2525,9 @@ select {
   }
 
   .toolbar-icons {
+    gap: 6px;
     margin-left: 0;
-    width: 100%;
+    width: auto;
   }
 
   .toolbar-icons .event-menu {
@@ -2535,6 +2541,17 @@ select {
     min-height: 34px;
     min-width: 0;
     padding: 0 7px;
+  }
+
+  .toolbar-icons .icon-action {
+    min-height: 32px;
+    min-width: 32px;
+  }
+
+  .tag-editor-panel {
+    grid-column: 1 / -1;
+    position: static;
+    width: 100%;
   }
 
   .toolbar-menu summary {

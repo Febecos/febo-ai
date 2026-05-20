@@ -219,6 +219,8 @@ function ToolWorkspace({
   const [workspaceConversations, setWorkspaceConversations] = useState(conversations);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [conversationNavSignal, setConversationNavSignal] = useState(0);
+  const [focusedConversation, setFocusedConversation] = useState({ id: "", signal: 0 });
+  const [focusedContact, setFocusedContact] = useState({ id: "", signal: 0 });
 
   return (
     <section className="admin-workspace">
@@ -307,6 +309,7 @@ function ToolWorkspace({
             currentUser={currentUser}
             favoriteIds={favoriteIds}
             onConversationsChange={setWorkspaceConversations}
+            focusedConversation={focusedConversation}
             resetMobileDetailSignal={conversationNavSignal}
             onToggleFavorite={(conversationId) =>
               setFavoriteIds((current) =>
@@ -318,12 +321,20 @@ function ToolWorkspace({
         ) : null}
         {activeTool === "metrics" ? <MetricsPanel stats={stats} /> : null}
         {activeTool === "templates" ? <TemplatesPanel /> : null}
-        {activeTool === "contacts" ? <ContactsPanel users={users} /> : null}
+        {activeTool === "contacts" ? <ContactsPanel focusedContact={focusedContact} users={users} /> : null}
         {activeTool === "crm" ? (
           <CrmBoardPanel
             conversations={workspaceConversations}
             favoriteIds={favoriteIds}
             onConversationsChange={setWorkspaceConversations}
+            onOpenChat={(conversationId) => {
+              setFocusedConversation({ id: conversationId, signal: Date.now() });
+              setActiveTool("conversations");
+            }}
+            onOpenContact={(contactId) => {
+              setFocusedContact({ id: contactId, signal: Date.now() });
+              setActiveTool("contacts");
+            }}
           />
         ) : null}
         {activeTool === "users" && currentUser.role === "admin" ? (
@@ -364,11 +375,15 @@ const CRM_BOARD_COLUMNS = [
 function CrmBoardPanel({
   conversations,
   favoriteIds,
-  onConversationsChange
+  onConversationsChange,
+  onOpenChat,
+  onOpenContact
 }: {
   conversations: ConversationSummary[];
   favoriteIds: string[];
   onConversationsChange: (conversations: ConversationSummary[]) => void;
+  onOpenChat: (conversationId: string) => void;
+  onOpenContact: (contactId: string) => void;
 }) {
   const [draggingId, setDraggingId] = useState("");
   const [query, setQuery] = useState("");
@@ -491,8 +506,8 @@ function CrmBoardPanel({
                   <span>{getCrmCardStatusLabel(conversation)}</span>
                   <p>{conversation.last_message || "Sin descripcion comercial"}</p>
                   <div>
-                    <button type="button">Chat</button>
-                    <button type="button">Editar</button>
+                    <button onClick={() => onOpenChat(conversation.id)} type="button">Chat</button>
+                    <button onClick={() => onOpenContact(conversation.contact_id)} type="button">Editar</button>
                     <select
                       aria-label="Mover card"
                       onChange={(event) => {
@@ -556,7 +571,13 @@ function getCrmCardStatusLabel(conversation: ConversationSummary) {
   return "WhatsApp";
 }
 
-function ContactsPanel({ users }: { users: AppUser[] }) {
+function ContactsPanel({
+  focusedContact,
+  users
+}: {
+  focusedContact: { id: string; signal: number };
+  users: AppUser[];
+}) {
   const [contacts, setContacts] = useState<ContactSummary[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
@@ -576,6 +597,12 @@ function ContactsPanel({ users }: { users: AppUser[] }) {
   useEffect(() => {
     void loadContacts();
   }, []);
+
+  useEffect(() => {
+    if (focusedContact.id) {
+      setSelectedId(focusedContact.id);
+    }
+  }, [focusedContact.id, focusedContact.signal]);
 
   useEffect(() => {
     if (!selected) {
@@ -613,7 +640,11 @@ function ContactsPanel({ users }: { users: AppUser[] }) {
     const nextContacts = payload?.contacts ?? [];
     setContacts(nextContacts);
 
-    if (!nextContacts.some((contact: ContactSummary) => contact.id === selectedId)) {
+    const preferredId = focusedContact.id || selectedId;
+
+    if (nextContacts.some((contact: ContactSummary) => contact.id === preferredId)) {
+      setSelectedId(preferredId);
+    } else {
       setSelectedId(nextContacts[0]?.id ?? "");
     }
   }
@@ -1194,6 +1225,7 @@ function InboxList({
   conversations,
   currentUser,
   favoriteIds,
+  focusedConversation,
   onConversationsChange,
   resetMobileDetailSignal,
   onToggleFavorite,
@@ -1202,6 +1234,7 @@ function InboxList({
   conversations: ConversationSummary[];
   currentUser: AppUser;
   favoriteIds: string[];
+  focusedConversation: { id: string; signal: number };
   onConversationsChange: (conversations: ConversationSummary[]) => void;
   resetMobileDetailSignal: number;
   onToggleFavorite: (conversationId: string) => void;
@@ -1273,6 +1306,15 @@ function InboxList({
   useEffect(() => {
     setMobileDetailOpen(false);
   }, [resetMobileDetailSignal]);
+
+  useEffect(() => {
+    if (!focusedConversation.id) {
+      return;
+    }
+
+    setSelectedId(focusedConversation.id);
+    setMobileDetailOpen(true);
+  }, [focusedConversation.id, focusedConversation.signal]);
 
   useEffect(() => {
     return () => {

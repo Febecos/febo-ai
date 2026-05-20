@@ -455,16 +455,20 @@ function CrmBoardPanel({
       return;
     }
 
+    const nextStatus = column.id === "nuevo" ? "hot" : column.status;
+    const nextConsultype = column.id === "nuevo" ? "caliente" : "otro";
     const previous = conversations;
     const next = conversations.map((conversation) =>
-      conversation.id === conversationId ? { ...conversation, status: column.status } : conversation
+      conversation.id === conversationId
+        ? { ...conversation, consultype: nextConsultype, status: nextStatus }
+        : conversation
     );
     onConversationsChange(next);
 
     const response = await fetch("/api/conversations", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ conversationId, status: column.status })
+      body: JSON.stringify({ conversationId, consultype: nextConsultype, status: nextStatus })
     });
 
     if (!response.ok) {
@@ -536,7 +540,7 @@ function CrmBoardPanel({
               column.cards.map((conversation) => (
                 <article
                   className="crm-card"
-                  draggable={column.id !== "destacados"}
+                  draggable
                   key={`${column.id}-${conversation.id}`}
                   onDragEnd={() => setDraggingId("")}
                   onDragStart={(event) => {
@@ -1352,6 +1356,7 @@ function InboxList({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedClassifications, setSelectedClassifications] = useState<string[]>([]);
+  const [unreadIds, setUnreadIds] = useState<string[]>([]);
   const [transferUserId, setTransferUserId] = useState("");
   const [chatName, setChatName] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -1450,6 +1455,22 @@ function InboxList({
   useEffect(() => {
     void loadTemplatesForContactForm();
   }, []);
+
+  useEffect(() => {
+    const storedUnreadIds = window.localStorage.getItem("febo-unread-conversations");
+    try {
+      const parsedUnreadIds = storedUnreadIds ? JSON.parse(storedUnreadIds) : [];
+      if (Array.isArray(parsedUnreadIds)) {
+        setUnreadIds(parsedUnreadIds.filter((id) => typeof id === "string"));
+      }
+    } catch {
+      window.localStorage.removeItem("febo-unread-conversations");
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("febo-unread-conversations", JSON.stringify(unreadIds));
+  }, [unreadIds]);
 
   useEffect(() => {
     async function refreshVisibleInbox() {
@@ -1720,6 +1741,23 @@ function InboxList({
       await loadConversationMessages(conversationId);
       await loadConversationNotes(conversationId, { silent: true });
     }
+  }
+
+  function selectConversation(conversationId: string) {
+    setSelectedId(conversationId);
+    setMobileDetailOpen(true);
+    setUnreadIds((current) => current.filter((id) => id !== conversationId));
+  }
+
+  function markConversationUnread(conversationId: string) {
+    setUnreadIds((current) => (current.includes(conversationId) ? current : [...current, conversationId]));
+  }
+
+  async function hideConversation(conversationId: string, status: "blocked" | "deleted") {
+    setItems((current) => current.filter((conversation) => conversation.id !== conversationId));
+    onConversationsChange(conversations.filter((conversation) => conversation.id !== conversationId));
+    setUnreadIds((current) => current.filter((id) => id !== conversationId));
+    await patchConversation(conversationId, { status });
   }
 
   async function saveChatName() {
@@ -2096,13 +2134,13 @@ function InboxList({
         ) : null}
         {items.length ? (
           items.map((conversation) => (
-            <article className={`conversation-row ${conversation.id === selected?.id ? "active" : ""}`} key={conversation.id}>
+            <article
+              className={`conversation-row ${conversation.id === selected?.id ? "active" : ""} ${unreadIds.includes(conversation.id) ? "unread" : ""}`}
+              key={conversation.id}
+            >
               <button
                 className="conversation-row-main"
-                onClick={() => {
-                  setSelectedId(conversation.id);
-                  setMobileDetailOpen(true);
-                }}
+                onClick={() => selectConversation(conversation.id)}
                 type="button"
               >
                 <span className="row-meta">
@@ -2117,10 +2155,25 @@ function InboxList({
               <details className="row-menu">
                 <summary aria-label="Acciones"><MoreVertical size={18} /></summary>
                 <button onClick={() => patchConversation(conversation.id, { status: "open" })} type="button">Desescalar</button>
-                <button type="button">Marcar como no leido</button>
-                <button onClick={() => patchConversation(conversation.id, { consultype: "otro" })} type="button">Cambiar tipo</button>
-                <button type="button">Bloquear</button>
-                <button className="danger" type="button">Eliminar chat</button>
+                <button onClick={() => markConversationUnread(conversation.id)} type="button">Marcar como no leido</button>
+                <label>
+                  Cambiar tipo
+                  <select
+                    onChange={(event) => {
+                      if (event.target.value) {
+                        void patchConversation(conversation.id, { consultype: event.target.value });
+                      }
+                    }}
+                    value=""
+                  >
+                    <option value="" disabled>Elegir etiqueta</option>
+                    {CONSULTYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <button onClick={() => void hideConversation(conversation.id, "blocked")} type="button">Bloquear</button>
+                <button className="danger" onClick={() => void hideConversation(conversation.id, "deleted")} type="button">Eliminar chat</button>
               </details>
             </article>
           ))
@@ -2178,10 +2231,25 @@ function InboxList({
                 <details className="chat-actions-menu">
                   <summary aria-label="Mas acciones"><MoreVertical size={20} /></summary>
                   <button onClick={() => patchConversation(selected.id, { status: "open" })} type="button">Desescalar</button>
-                  <button type="button">Marcar como no leido</button>
-                  <button onClick={() => patchConversation(selected.id, { consultype: "otro" })} type="button">Cambiar tipo</button>
-                  <button type="button">Bloquear</button>
-                  <button className="danger" type="button"><Trash2 size={14} /> Eliminar chat</button>
+                  <button onClick={() => markConversationUnread(selected.id)} type="button">Marcar como no leido</button>
+                  <label>
+                    Cambiar tipo
+                    <select
+                      onChange={(event) => {
+                        if (event.target.value) {
+                          void patchConversation(selected.id, { consultype: event.target.value });
+                        }
+                      }}
+                      value=""
+                    >
+                      <option value="" disabled>Elegir etiqueta</option>
+                      {CONSULTYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button onClick={() => void hideConversation(selected.id, "blocked")} type="button">Bloquear</button>
+                  <button className="danger" onClick={() => void hideConversation(selected.id, "deleted")} type="button"><Trash2 size={14} /> Eliminar chat</button>
                 </details>
               </div>
             </div>

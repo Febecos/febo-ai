@@ -621,6 +621,7 @@ export async function listConversations(filters: ConversationFilters = {}) {
       and (${status}::text is null or c.status = ${status})
       and (${assignedTo}::uuid is null or c.assigned_to = ${assignedTo}::uuid)
       and (${onlyUnassigned}::boolean = false or c.assigned_to is null)
+      and (${status}::text is not null or c.status not in ('blocked', 'deleted'))
     order by c.last_message_at desc, c.created_at desc, ct.display_name asc nulls last, c.id
     limit ${limit}
   `) as ConversationSummary[];

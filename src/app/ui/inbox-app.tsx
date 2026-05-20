@@ -2090,30 +2090,29 @@ function InboxList({
               </button>
             </div>
 
-            {activeConversationTab === "chat" ? (
+            <div className={`conversation-workspace ${activeConversationTab === "notes" ? "show-notes" : ""}`}>
               <div className="thread-panel">
-              {loadingMessages ? <div className="empty-state">Cargando mensajes...</div> : null}
-              {messageError ? <div className="empty-state warn">{messageError}</div> : null}
-              {!loadingMessages && !messageError && messages.length ? (
-                <div className="message-thread" ref={messageThreadRef}>
-                  {messages.map((message) => (
-                    <article className={`chat-bubble ${message.direction} ${isAudioMessage(message) ? "audio-bubble" : ""}`} key={message.id}>
-                      {!isAudioMessage(message) && message.body ? <p>{message.body}</p> : null}
-                      {message.media_id ? <MessageMedia message={message} /> : null}
-                      <small>
-                        {message.direction === "inbound" ? "Cliente" : "Febo AI"} - {formatMessageTime(message.created_at)}
-                      </small>
-                      {message.direction === "outbound" && message.whatsapp_status ? <DeliveryStatus message={message} /> : null}
-                    </article>
-                  ))}
-                  <div ref={threadEndRef} />
-                </div>
-              ) : null}
-              {!loadingMessages && !messageError && !messages.length ? (
-                <div className="empty-state">Contacto importado sin historial de conversacion.</div>
-              ) : null}
+                {loadingMessages ? <div className="empty-state">Cargando mensajes...</div> : null}
+                {messageError ? <div className="empty-state warn">{messageError}</div> : null}
+                {!loadingMessages && !messageError && messages.length ? (
+                  <div className="message-thread" ref={messageThreadRef}>
+                    {messages.map((message) => (
+                      <article className={`chat-bubble ${message.direction} ${isAudioMessage(message) ? "audio-bubble" : ""}`} key={message.id}>
+                        {!isAudioMessage(message) && message.body ? <p>{message.body}</p> : null}
+                        {message.media_id ? <MessageMedia message={message} /> : null}
+                        <small>
+                          {message.direction === "inbound" ? "Cliente" : "Febo AI"} - {formatMessageTime(message.created_at)}
+                        </small>
+                        {message.direction === "outbound" && message.whatsapp_status ? <DeliveryStatus message={message} /> : null}
+                      </article>
+                    ))}
+                    <div ref={threadEndRef} />
+                  </div>
+                ) : null}
+                {!loadingMessages && !messageError && !messages.length ? (
+                  <div className="empty-state">Contacto importado sin historial de conversacion.</div>
+                ) : null}
               </div>
-            ) : (
               <div className="notes-panel">
                 <form className="note-composer" onSubmit={saveConversationNote}>
                   <textarea
@@ -2145,7 +2144,7 @@ function InboxList({
                 ) : null}
                 {!loadingNotes && !notes.length ? <div className="empty-state">Sin notas internas todavia.</div> : null}
               </div>
-            )}
+            </div>
 
             {activeConversationTab === "chat" ? (
               <form

@@ -1303,6 +1303,18 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.conversation-workspace {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+
+.conversation-workspace.show-notes {
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+}
+
 .thread-panel,
 .answer-box {
   background: #2b3036;
@@ -1404,9 +1416,16 @@ button:disabled {
   background: #2b3036;
   border: 1px solid var(--line);
   border-radius: 8px;
-  display: grid;
+  display: none;
   gap: 12px;
+  min-height: 0;
+  overflow: hidden;
   padding: 14px;
+}
+
+.conversation-workspace.show-notes .notes-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .note-composer {
@@ -1428,7 +1447,7 @@ button:disabled {
 .notes-list {
   display: grid;
   gap: 10px;
-  max-height: 340px;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -2675,6 +2694,18 @@ select {
 
   .conversation-tabs button svg,
   .conversation-tabs span {
+    display: none;
+  }
+
+  .conversation-workspace {
+    display: contents;
+  }
+
+  .conversation-workspace.show-notes .thread-panel {
+    display: none;
+  }
+
+  .conversation-workspace:not(.show-notes) .notes-panel {
     display: none;
   }
 

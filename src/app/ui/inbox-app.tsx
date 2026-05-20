@@ -1783,6 +1783,8 @@ function InboxList({
   }
 
   async function patchConversation(conversationId: string, body: Record<string, unknown>) {
+    const listScrollTop = document.querySelector<HTMLElement>(".conversation-list")?.scrollTop ?? 0;
+    const threadScrollTop = messageThreadRef.current?.scrollTop ?? 0;
     const response = await fetch("/api/conversations", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -1793,11 +1795,38 @@ function InboxList({
       return;
     }
 
+    if (typeof body.aiEnabled === "boolean" && Object.keys(body).length === 1) {
+      setItems((current) => {
+        const nextItems = current.map((conversation) =>
+          conversation.id === conversationId ? { ...conversation, ai_enabled: Boolean(body.aiEnabled) } : conversation
+        );
+        onConversationsChange(nextItems);
+        return nextItems;
+      });
+      restoreConversationScroll(listScrollTop, threadScrollTop);
+      return;
+    }
+
     await refreshConversations();
+    restoreConversationScroll(listScrollTop, threadScrollTop);
     if (conversationId === selected?.id) {
       await loadConversationMessages(conversationId);
       await loadConversationNotes(conversationId, { silent: true });
+      restoreConversationScroll(listScrollTop, threadScrollTop);
     }
+  }
+
+  function restoreConversationScroll(listScrollTop: number, threadScrollTop: number) {
+    window.requestAnimationFrame(() => {
+      const list = document.querySelector<HTMLElement>(".conversation-list");
+      if (list) {
+        list.scrollTop = listScrollTop;
+      }
+
+      if (messageThreadRef.current) {
+        messageThreadRef.current.scrollTop = threadScrollTop;
+      }
+    });
   }
 
   function selectConversation(conversationId: string) {

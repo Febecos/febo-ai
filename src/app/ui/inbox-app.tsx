@@ -2114,6 +2114,20 @@ function InboxList({
                 ) : null}
               </div>
               <div className="notes-panel">
+                {loadingNotes ? <div className="empty-state">Cargando notas...</div> : null}
+                {!loadingNotes && notes.length ? (
+                  <div className="notes-list">
+                    {notes.map((note) => (
+                      <article className="note-card" key={note.id}>
+                        <p>{note.body}</p>
+                        <small>
+                          {note.created_by_name ?? "Usuario"} - {formatMessageTime(note.created_at)}
+                        </small>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+                {!loadingNotes && !notes.length ? <div className="empty-state">Sin notas internas todavia.</div> : null}
                 <form className="note-composer" onSubmit={saveConversationNote}>
                   <textarea
                     disabled={savingNote}
@@ -2129,20 +2143,6 @@ function InboxList({
                   </div>
                   {noteError ? <span className="warn">{noteError}</span> : null}
                 </form>
-                {loadingNotes ? <div className="empty-state">Cargando notas...</div> : null}
-                {!loadingNotes && notes.length ? (
-                  <div className="notes-list">
-                    {notes.map((note) => (
-                      <article className="note-card" key={note.id}>
-                        <p>{note.body}</p>
-                        <small>
-                          {note.created_by_name ?? "Usuario"} - {formatMessageTime(note.created_at)}
-                        </small>
-                      </article>
-                    ))}
-                  </div>
-                ) : null}
-                {!loadingNotes && !notes.length ? <div className="empty-state">Sin notas internas todavia.</div> : null}
               </div>
             </div>
 
@@ -2186,7 +2186,7 @@ function InboxList({
                     Conversacion
                   </button>
                   <button
-                    className=""
+                    className="notes-tab"
                     onClick={() => setActiveConversationTab("notes")}
                     type="button"
                   >
@@ -2250,7 +2250,7 @@ function InboxList({
                     Conversacion
                   </button>
                   <button
-                    className="active"
+                    className="notes-tab active"
                     onClick={() => setActiveConversationTab("notes")}
                     type="button"
                   >

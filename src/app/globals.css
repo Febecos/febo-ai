@@ -1425,7 +1425,7 @@ button:disabled {
 
 .conversation-workspace.show-notes .notes-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .note-composer {
@@ -1449,6 +1449,29 @@ button:disabled {
   gap: 10px;
   min-height: 0;
   overflow-y: auto;
+}
+
+@media (min-width: 721px) {
+  .conversation-workspace.show-notes .notes-panel {
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.62);
+    box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.85);
+  }
+
+  .notes-panel .note-composer {
+    border-top: 1px solid rgba(245, 158, 11, 0.34);
+    padding-top: 12px;
+  }
+
+  .notes-panel .note-composer textarea {
+    border-color: rgba(245, 158, 11, 0.42);
+  }
+
+  .notes-panel .note-composer .primary {
+    background: #f59e0b;
+    border-color: #fbbf24;
+    color: #1f2937;
+  }
 }
 
 .note-card {
@@ -2232,6 +2255,14 @@ select {
   background: var(--blue);
   border-color: #4090ff;
   color: #ffffff;
+}
+
+@media (min-width: 721px) {
+  .composer-tabs button.notes-tab.active {
+    background: #f59e0b;
+    border-color: #fbbf24;
+    color: #1f2937;
+  }
 }
 
 .composer-icon-button {

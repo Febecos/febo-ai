@@ -1801,7 +1801,7 @@ function InboxList({
                 <strong>{conversation.display_name || conversation.phone}</strong>
                 <small>Sentimiento: {conversation.sentiment || "neutro"}</small>
                 <span className={`tag ${conversation.consultype}`}>{getConsultypeLabel(conversation.consultype)}</span>
-                <span className="assigned-pill">asignado: {conversation.assigned_name || "Sin asignar"}</span>
+                {conversation.assigned_name ? <span className="assigned-pill">asignado: {conversation.assigned_name}</span> : null}
               </button>
               <details className="row-menu">
                 <summary aria-label="Acciones"><MoreVertical size={18} /></summary>

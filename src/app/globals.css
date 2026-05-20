@@ -199,7 +199,7 @@ button:disabled {
   color: #ffffff;
   display: grid;
   gap: 14px;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
   height: 100%;
   min-width: 0;
   overflow: hidden;
@@ -256,13 +256,15 @@ button:disabled {
 }
 
 .crm-quick-tabs {
+  align-items: center;
   background: #383c42;
   border: 1px solid #555d68;
   border-radius: 6px;
   display: flex;
   gap: 7px;
+  min-height: 0;
   overflow-x: auto;
-  padding: 8px;
+  padding: 6px 8px;
 }
 
 .crm-quick-tabs button {
@@ -275,7 +277,8 @@ button:disabled {
   font-size: 12px;
   font-weight: 650;
   gap: 5px;
-  min-height: 30px;
+  height: 28px;
+  line-height: 1;
   min-width: 108px;
   padding: 0 9px;
 }

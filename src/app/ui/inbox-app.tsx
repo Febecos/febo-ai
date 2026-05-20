@@ -2154,26 +2154,29 @@ function InboxList({
               </button>
               <details className="row-menu">
                 <summary aria-label="Acciones"><MoreVertical size={18} /></summary>
-                <button onClick={() => patchConversation(conversation.id, { status: "open" })} type="button">Desescalar</button>
-                <button onClick={() => markConversationUnread(conversation.id)} type="button">Marcar como no leido</button>
-                <label>
-                  Cambiar tipo
-                  <select
-                    onChange={(event) => {
-                      if (event.target.value) {
-                        void patchConversation(conversation.id, { consultype: event.target.value });
-                      }
-                    }}
-                    value=""
-                  >
-                    <option value="" disabled>Elegir etiqueta</option>
-                    {CONSULTYPE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <button onClick={() => void hideConversation(conversation.id, "blocked")} type="button">Bloquear</button>
-                <button className="danger" onClick={() => void hideConversation(conversation.id, "deleted")} type="button">Eliminar chat</button>
+                <div className="action-popover">
+                  <button onClick={() => patchConversation(conversation.id, { status: "open" })} type="button"><CheckCheck size={15} /> Desescalar</button>
+                  <button onClick={() => markConversationUnread(conversation.id)} type="button"><CircleUserRound size={15} /> Marcar como no leido</button>
+                  <details className="type-submenu">
+                    <summary><Tag size={15} /> Cambiar tipo</summary>
+                    <div>
+                      <strong>CAMBIAR TIPO</strong>
+                      {CONSULTYPE_OPTIONS.map((option) => (
+                        <button
+                          className={`type-choice ${option.value} ${conversation.consultype === option.value ? "active" : ""}`}
+                          key={option.value}
+                          onClick={() => patchConversation(conversation.id, { consultype: option.value })}
+                          type="button"
+                        >
+                          <span />
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </details>
+                  <button onClick={() => void hideConversation(conversation.id, "blocked")} type="button"><X size={15} /> Bloquear</button>
+                  <button className="danger" onClick={() => void hideConversation(conversation.id, "deleted")} type="button"><Trash2 size={15} /> Eliminar chat</button>
+                </div>
               </details>
             </article>
           ))
@@ -2230,26 +2233,29 @@ function InboxList({
                 <button className="transfer-button" onClick={() => setTransferOpen(true)} type="button">Transferir</button>
                 <details className="chat-actions-menu">
                   <summary aria-label="Mas acciones"><MoreVertical size={20} /></summary>
-                  <button onClick={() => patchConversation(selected.id, { status: "open" })} type="button">Desescalar</button>
-                  <button onClick={() => markConversationUnread(selected.id)} type="button">Marcar como no leido</button>
-                  <label>
-                    Cambiar tipo
-                    <select
-                      onChange={(event) => {
-                        if (event.target.value) {
-                          void patchConversation(selected.id, { consultype: event.target.value });
-                        }
-                      }}
-                      value=""
-                    >
-                      <option value="" disabled>Elegir etiqueta</option>
-                      {CONSULTYPE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <button onClick={() => void hideConversation(selected.id, "blocked")} type="button">Bloquear</button>
-                  <button className="danger" onClick={() => void hideConversation(selected.id, "deleted")} type="button"><Trash2 size={14} /> Eliminar chat</button>
+                  <div className="action-popover">
+                    <button onClick={() => patchConversation(selected.id, { status: "open" })} type="button"><CheckCheck size={15} /> Desescalar</button>
+                    <button onClick={() => markConversationUnread(selected.id)} type="button"><CircleUserRound size={15} /> Marcar como no leido</button>
+                    <details className="type-submenu">
+                      <summary><Tag size={15} /> Cambiar tipo</summary>
+                      <div>
+                        <strong>CAMBIAR TIPO</strong>
+                        {CONSULTYPE_OPTIONS.map((option) => (
+                          <button
+                            className={`type-choice ${option.value} ${selected.consultype === option.value ? "active" : ""}`}
+                            key={option.value}
+                            onClick={() => patchConversation(selected.id, { consultype: option.value })}
+                            type="button"
+                          >
+                            <span />
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </details>
+                    <button onClick={() => void hideConversation(selected.id, "blocked")} type="button"><X size={15} /> Bloquear</button>
+                    <button className="danger" onClick={() => void hideConversation(selected.id, "deleted")} type="button"><Trash2 size={15} /> Eliminar chat</button>
+                  </div>
                 </details>
               </div>
             </div>

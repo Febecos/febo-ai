@@ -2282,6 +2282,23 @@ select {
     z-index: 10;
   }
 
+  .tool-brand {
+    border-bottom: 0;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0;
+  }
+
+  .brand-mark {
+    height: 34px;
+    width: 34px;
+  }
+
+  .tool-brand strong,
+  .sidebar-cycle-card {
+    display: none;
+  }
+
   .tool-sidebar button {
     aspect-ratio: 1;
     font-size: 0;

@@ -1149,6 +1149,14 @@ button:disabled {
   transform: translateX(16px);
 }
 
+.ia-toggle.on {
+  color: #ffffff;
+}
+
+.ia-toggle.on span {
+  background: #22c55e;
+}
+
 .icon-action {
   align-items: center;
   background: #2e3339;

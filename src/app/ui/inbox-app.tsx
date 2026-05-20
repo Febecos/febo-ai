@@ -214,6 +214,8 @@ function ToolWorkspace({
   users: AppUser[];
 }) {
   const [activeTool, setActiveTool] = useState<"conversations" | "metrics" | "contacts" | "crm" | "templates" | "users" | "ai">("conversations");
+  const [workspaceConversations, setWorkspaceConversations] = useState(conversations);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
 
   return (
     <section className="admin-workspace">
@@ -294,12 +296,23 @@ function ToolWorkspace({
 
       <div className="tool-content">
         {activeTool === "conversations" ? (
-          <InboxList conversations={conversations} currentUser={currentUser} users={users} />
+          <InboxList
+            conversations={workspaceConversations}
+            currentUser={currentUser}
+            favoriteIds={favoriteIds}
+            onConversationsChange={setWorkspaceConversations}
+            onToggleFavorite={(conversationId) =>
+              setFavoriteIds((current) =>
+                current.includes(conversationId) ? current.filter((id) => id !== conversationId) : [...current, conversationId]
+              )
+            }
+            users={users}
+          />
         ) : null}
         {activeTool === "metrics" ? <MetricsPanel stats={stats} /> : null}
         {activeTool === "templates" ? <TemplatesPanel /> : null}
         {activeTool === "contacts" ? <ContactsPanel users={users} /> : null}
-        {activeTool === "crm" ? <CrmBoardPanel conversations={conversations} /> : null}
+        {activeTool === "crm" ? <CrmBoardPanel conversations={workspaceConversations} favoriteIds={favoriteIds} /> : null}
         {activeTool === "users" && currentUser.role === "admin" ? (
           <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} />
         ) : null}
@@ -326,13 +339,14 @@ function MetricsPanel({ stats }: { stats: Stats }) {
   );
 }
 
-function CrmBoardPanel({ conversations }: { conversations: ConversationSummary[] }) {
+function CrmBoardPanel({ conversations, favoriteIds }: { conversations: ConversationSummary[]; favoriteIds: string[] }) {
   const visibleCards = conversations.slice(0, 12);
-  const highlighted = visibleCards.filter((conversation) => conversation.consultype === "caliente" || conversation.status === "hot");
+  const highlighted = visibleCards.filter((conversation) => favoriteIds.includes(conversation.id));
+  const assignedCards = visibleCards.filter((conversation) => conversation.assigned_to || conversation.status === "handoff");
   const boardColumns = [
-    { id: "destacados", title: "Destacados", cards: highlighted.length ? highlighted : visibleCards.slice(0, 1), featured: true },
-    { id: "nuevo", title: "NUEVO", cards: visibleCards.filter((conversation) => conversation.status === "open").slice(0, 4) },
-    { id: "contacto", title: "EN CONTACTO", cards: visibleCards.filter((conversation) => conversation.status === "waiting").slice(0, 4) },
+    { id: "destacados", title: "Destacados", cards: highlighted, featured: true },
+    { id: "nuevo", title: "NUEVO", cards: visibleCards.filter((conversation) => conversation.status === "open" && !conversation.assigned_to).slice(0, 4) },
+    { id: "contacto", title: "EN CONTACTO", cards: assignedCards.slice(0, 4) },
     { id: "cotizado", title: "COTIZADO", cards: visibleCards.filter((conversation) => conversation.status === "quoted").slice(0, 4) },
     { id: "cerrado", title: "CERRADO", cards: visibleCards.filter((conversation) => conversation.status === "closed").slice(0, 4) },
     { id: "no-avanza", title: "NO AVANZA", cards: visibleCards.filter((conversation) => conversation.status === "lost").slice(0, 4) }
@@ -348,7 +362,7 @@ function CrmBoardPanel({ conversations }: { conversations: ConversationSummary[]
         <Metric label="Cards en seguimiento" value={visibleCards.length} />
         <Metric label="Valor potencial" value={0} />
         <Metric label="Ticket promedio" value={0} />
-        <Metric label="Destacadas" value={highlighted.length || 1} />
+        <Metric label="Destacadas" value={highlighted.length} />
       </div>
       <div className="crm-filters">
         <label>
@@ -391,7 +405,7 @@ function CrmBoardPanel({ conversations }: { conversations: ConversationSummary[]
                     <button type="button">Editar</button>
                     <button type="button">Mover a</button>
                   </div>
-                  {column.featured ? <Star size={15} /> : null}
+                  {column.featured || favoriteIds.includes(conversation.id) ? <Star size={15} /> : null}
                 </article>
               ))
             ) : (
@@ -1041,10 +1055,16 @@ function UserEditor({
 function InboxList({
   conversations,
   currentUser,
+  favoriteIds,
+  onConversationsChange,
+  onToggleFavorite,
   users
 }: {
   conversations: ConversationSummary[];
   currentUser: AppUser;
+  favoriteIds: string[];
+  onConversationsChange: (conversations: ConversationSummary[]) => void;
+  onToggleFavorite: (conversationId: string) => void;
   users: AppUser[];
 }) {
   const [items, setItems] = useState(conversations);
@@ -1078,7 +1098,6 @@ function InboxList({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedClassifications, setSelectedClassifications] = useState<string[]>([]);
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [transferUserId, setTransferUserId] = useState("");
   const [chatName, setChatName] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -1319,6 +1338,7 @@ function InboxList({
       return tagMatches && sentimentMatches;
     });
     setItems(nextItems);
+    onConversationsChange(nextItems);
 
     if (!nextItems.some((item: ConversationSummary) => item.id === selectedIdRef.current)) {
       setSelectedId(nextItems[0]?.id ?? "");
@@ -1371,6 +1391,7 @@ function InboxList({
     }
 
     setItems(payload?.conversations ?? []);
+    onConversationsChange(payload?.conversations ?? []);
     setSelectedId(payload?.conversationId ?? selected.id);
     setMessages(payload?.messages ?? []);
     setTemplateParameters("");
@@ -1478,12 +1499,6 @@ function InboxList({
       status: "handoff"
     });
     setTransferOpen(false);
-  }
-
-  function toggleFavorite(conversationId: string) {
-    setFavoriteIds((current) =>
-      current.includes(conversationId) ? current.filter((id) => id !== conversationId) : [...current, conversationId]
-    );
   }
 
   async function sendManualReply(event: FormEvent<HTMLFormElement>) {
@@ -1816,15 +1831,22 @@ function InboxList({
                 </button>
                 <button
                   className={`icon-action favorite-action ${favoriteIds.includes(selected.id) ? "active" : ""}`}
-                  onClick={() => toggleFavorite(selected.id)}
+                  onClick={() => onToggleFavorite(selected.id)}
                   title="Marcar/desmarcar favorito"
                   type="button"
                 >
                   <Star size={18} />
                 </button>
-                <button className="warning-action" onClick={() => patchConversation(selected.id, { assignedTo: null, status: "open" })} type="button">
-                  Desasignar
-                </button>
+                {selected.assigned_to ? (
+                  <button
+                    className="warning-action"
+                    onClick={() => patchConversation(selected.id, { assignedTo: null, status: "open" })}
+                    title="Desasignar conversacion"
+                    type="button"
+                  >
+                    Desasignar
+                  </button>
+                ) : null}
                 <button className="transfer-button" onClick={() => setTransferOpen(true)} type="button">Transferir</button>
                 <details className="chat-actions-menu">
                   <summary aria-label="Mas acciones"><MoreVertical size={20} /></summary>

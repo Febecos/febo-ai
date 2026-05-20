@@ -223,7 +223,20 @@ async function prepareAttachmentForWhatsApp(file: File) {
     return convertWavToMp3File(file);
   }
 
+  if (supportedImageMimeTypes.includes(normalized)) {
+    return normalizeImageOrientation(file);
+  }
+
   return file;
+}
+
+async function normalizeImageOrientation(file: File) {
+  const sharp = (await import("sharp")).default;
+  const inputBuffer = Buffer.from(await file.arrayBuffer());
+  const outputBuffer = await sharp(inputBuffer).rotate().toBuffer();
+  const outputBytes = new Uint8Array(outputBuffer);
+
+  return new File([outputBytes], file.name || "imagen", { type: file.type });
 }
 
 async function convertWavToMp3File(file: File) {

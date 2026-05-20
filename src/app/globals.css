@@ -2577,18 +2577,21 @@ select {
   .conversation-tabs button {
     font-size: 13px;
     gap: 4px;
+    justify-content: center;
     min-height: 32px;
     min-width: 0;
-    padding: 0 6px;
+    overflow: visible;
+    padding: 0 4px;
+    white-space: nowrap;
   }
 
-  .conversation-tabs button svg,
   .conversation-tabs span {
     flex: 0 0 auto;
   }
 
+  .conversation-tabs button svg,
   .conversation-tabs span {
-    padding: 1px 5px;
+    display: none;
   }
 
   .message-thread {

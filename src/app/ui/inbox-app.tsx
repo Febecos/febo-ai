@@ -16,6 +16,7 @@ import {
   ImageIcon,
   Inbox,
   KeyRound,
+  LayoutDashboard,
   LogOut,
   MessageSquareText,
   Mic,
@@ -212,7 +213,7 @@ function ToolWorkspace({
   stats: Stats;
   users: AppUser[];
 }) {
-  const [activeTool, setActiveTool] = useState<"conversations" | "metrics" | "contacts" | "templates" | "users" | "ai">("conversations");
+  const [activeTool, setActiveTool] = useState<"conversations" | "metrics" | "contacts" | "crm" | "templates" | "users" | "ai">("conversations");
 
   return (
     <section className="admin-workspace">
@@ -244,6 +245,14 @@ function ToolWorkspace({
         >
           <UsersRound size={18} />
           Contactos
+        </button>
+        <button
+          className={activeTool === "crm" ? "active" : ""}
+          onClick={() => setActiveTool("crm")}
+          type="button"
+        >
+          <LayoutDashboard size={18} />
+          Tablero CRM
         </button>
         <button
           className={activeTool === "templates" ? "active" : ""}
@@ -290,6 +299,7 @@ function ToolWorkspace({
         {activeTool === "metrics" ? <MetricsPanel stats={stats} /> : null}
         {activeTool === "templates" ? <TemplatesPanel /> : null}
         {activeTool === "contacts" ? <ContactsPanel users={users} /> : null}
+        {activeTool === "crm" ? <CrmBoardPanel conversations={conversations} /> : null}
         {activeTool === "users" && currentUser.role === "admin" ? (
           <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} />
         ) : null}
@@ -311,6 +321,84 @@ function MetricsPanel({ stats }: { stats: Stats }) {
         <Metric label="Conversaciones" value={stats.conversations} />
         <Metric label="Escaladas" value={stats.handoffs} />
         <Metric label="Calientes" value={stats.hot} />
+      </div>
+    </section>
+  );
+}
+
+function CrmBoardPanel({ conversations }: { conversations: ConversationSummary[] }) {
+  const visibleCards = conversations.slice(0, 12);
+  const highlighted = visibleCards.filter((conversation) => conversation.consultype === "caliente" || conversation.status === "hot");
+  const boardColumns = [
+    { id: "destacados", title: "Destacados", cards: highlighted.length ? highlighted : visibleCards.slice(0, 1), featured: true },
+    { id: "nuevo", title: "NUEVO", cards: visibleCards.filter((conversation) => conversation.status === "open").slice(0, 4) },
+    { id: "contacto", title: "EN CONTACTO", cards: visibleCards.filter((conversation) => conversation.status === "waiting").slice(0, 4) },
+    { id: "cotizado", title: "COTIZADO", cards: visibleCards.filter((conversation) => conversation.status === "quoted").slice(0, 4) },
+    { id: "cerrado", title: "CERRADO", cards: visibleCards.filter((conversation) => conversation.status === "closed").slice(0, 4) },
+    { id: "no-avanza", title: "NO AVANZA", cards: visibleCards.filter((conversation) => conversation.status === "lost").slice(0, 4) }
+  ];
+
+  return (
+    <section className="crm-panel">
+      <div className="crm-head">
+        <h2>Tablero CRM</h2>
+        <p>Organiza conversaciones favoritas por columna y manten una lectura operativa clara.</p>
+      </div>
+      <div className="crm-stats">
+        <Metric label="Cards en seguimiento" value={visibleCards.length} />
+        <Metric label="Valor potencial" value={0} />
+        <Metric label="Ticket promedio" value={0} />
+        <Metric label="Destacadas" value={highlighted.length || 1} />
+      </div>
+      <div className="crm-filters">
+        <label>
+          Buscar cards
+          <input placeholder="Nombre del contacto, descripcion o plataforma" />
+        </label>
+        <label>
+          Orden
+          <select defaultValue="board">
+            <option value="board">Orden del board</option>
+          </select>
+        </label>
+        <button type="button">Limpiar filtros</button>
+      </div>
+      <div className="crm-quick-tabs">
+        {boardColumns.map((column) => (
+          <button className={column.featured ? "active" : ""} key={column.id} type="button">
+            {column.title}
+            {column.featured ? <Star size={14} /> : null}
+            <span>{column.cards.length}</span>
+          </button>
+        ))}
+      </div>
+      <div className="crm-board">
+        {boardColumns.map((column) => (
+          <section className="crm-column" key={column.id}>
+            <header>
+              <small>{column.featured ? "VISTA DESTACADA" : `TABLERO ${boardColumns.indexOf(column) + 1}`}</small>
+              <strong>{column.title}</strong>
+              <span>{column.cards.length} cards - $ 0</span>
+            </header>
+            {column.cards.length ? (
+              column.cards.map((conversation) => (
+                <article className="crm-card" key={`${column.id}-${conversation.id}`}>
+                  <strong>{conversation.display_name || conversation.phone}</strong>
+                  <span>WhatsApp</span>
+                  <p>{conversation.last_message || "Sin descripcion comercial"}</p>
+                  <div>
+                    <button type="button">Chat</button>
+                    <button type="button">Editar</button>
+                    <button type="button">Mover a</button>
+                  </div>
+                  {column.featured ? <Star size={15} /> : null}
+                </article>
+              ))
+            ) : (
+              <div className="crm-empty">Arrastra cards aqui o usa Mover a si el tablero de origen y destino no entran juntos en pantalla.</div>
+            )}
+          </section>
+        ))}
       </div>
     </section>
   );
@@ -986,9 +1074,12 @@ function InboxList({
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [quickRepliesOpen, setQuickRepliesOpen] = useState(false);
   const [eventMenuOpen, setEventMenuOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedClassifications, setSelectedClassifications] = useState<string[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [transferUserId, setTransferUserId] = useState("");
   const [chatName, setChatName] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateParameters, setTemplateParameters] = useState("");
@@ -1063,6 +1154,8 @@ function InboxList({
     setSummaryOpen(false);
     setQuickRepliesOpen(false);
     setEventMenuOpen(false);
+    setTransferOpen(false);
+    setTransferUserId(selected?.assigned_to ?? users[0]?.id ?? "");
     setTemplateComposerOpen(false);
     void loadConversationMessages(selected?.id);
     void loadConversationNotes(selected?.id);
@@ -1372,6 +1465,25 @@ function InboxList({
     return `Resumen operativo de ${selected?.display_name || selected?.phone}: ${visibleMessages.join(" ")}`
       .replace(/\s+/g, " ")
       .slice(0, 900);
+  }
+
+  async function transferSelectedConversation() {
+    if (!selected?.id || !transferUserId) {
+      return;
+    }
+
+    await patchConversation(selected.id, {
+      assignedTo: transferUserId,
+      aiEnabled: false,
+      status: "handoff"
+    });
+    setTransferOpen(false);
+  }
+
+  function toggleFavorite(conversationId: string) {
+    setFavoriteIds((current) =>
+      current.includes(conversationId) ? current.filter((id) => id !== conversationId) : [...current, conversationId]
+    );
   }
 
   async function sendManualReply(event: FormEvent<HTMLFormElement>) {
@@ -1702,28 +1814,18 @@ function InboxList({
                   <span />
                   IA Activa
                 </button>
-                <button className="icon-action" title="Tablero CRM" type="button"><Star size={18} /></button>
+                <button
+                  className={`icon-action favorite-action ${favoriteIds.includes(selected.id) ? "active" : ""}`}
+                  onClick={() => toggleFavorite(selected.id)}
+                  title="Marcar/desmarcar favorito"
+                  type="button"
+                >
+                  <Star size={18} />
+                </button>
                 <button className="warning-action" onClick={() => patchConversation(selected.id, { assignedTo: null, status: "open" })} type="button">
                   Desasignar
                 </button>
-                <details className="transfer-menu">
-                  <summary>Transferir</summary>
-                  <select
-                    onChange={(event) =>
-                      patchConversation(selected.id, {
-                        assignedTo: event.target.value || null,
-                        aiEnabled: false,
-                        status: event.target.value ? "handoff" : selected.status
-                      })
-                    }
-                    value={selected.assigned_to ?? ""}
-                  >
-                    <option value="">Sin asignar</option>
-                    {users.map((user) => (
-                      <option key={user.id} value={user.id}>{user.full_name}</option>
-                    ))}
-                  </select>
-                </details>
+                <button className="transfer-button" onClick={() => setTransferOpen(true)} type="button">Transferir</button>
                 <details className="chat-actions-menu">
                   <summary aria-label="Mas acciones"><MoreVertical size={20} /></summary>
                   <button onClick={() => patchConversation(selected.id, { status: "open" })} type="button">Desescalar</button>
@@ -1784,6 +1886,29 @@ function InboxList({
                   </header>
                   <p>{buildConversationSummary()}</p>
                   <footer><button className="secondary" onClick={() => setSummaryOpen(false)} type="button">Cerrar</button></footer>
+                </section>
+              </div>
+            ) : null}
+
+            {transferOpen ? (
+              <div className="modal-backdrop">
+                <section className="dialog transfer-dialog">
+                  <header>
+                    <h3>Transferir conversacion</h3>
+                    <button onClick={() => setTransferOpen(false)} type="button"><X size={22} /></button>
+                  </header>
+                  <label className="field">
+                    Operador destino
+                    <select value={transferUserId} onChange={(event) => setTransferUserId(event.target.value)}>
+                      {users.map((user) => (
+                        <option key={user.id} value={user.id}>{user.full_name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <footer>
+                    <button className="secondary" onClick={() => setTransferOpen(false)} type="button">Cancelar</button>
+                    <button className="primary" disabled={!transferUserId} onClick={transferSelectedConversation} type="button">Transferir</button>
+                  </footer>
                 </section>
               </div>
             ) : null}

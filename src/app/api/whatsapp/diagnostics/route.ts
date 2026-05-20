@@ -51,12 +51,62 @@ export async function GET(request: NextRequest) {
   });
 }
 
+export async function POST(request: NextRequest) {
+  const code = request.nextUrl.searchParams.get("code") ?? request.headers.get("x-internal-code");
+
+  if (!config.INTERNAL_LOGIN_CODE || code !== config.INTERNAL_LOGIN_CODE) {
+    return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  if (!config.WHATSAPP_BUSINESS_ACCOUNT_ID || !config.WHATSAPP_ACCESS_TOKEN) {
+    return NextResponse.json({ error: "Falta WABA ID o access token." }, { status: 400 });
+  }
+
+  const result = await metaPost(`${config.WHATSAPP_BUSINESS_ACCOUNT_ID}/subscribed_apps`);
+
+  return NextResponse.json({
+    ok: result.ok,
+    checkedAt: new Date().toISOString(),
+    action: "subscribe_waba_app",
+    result
+  }, { status: result.ok ? 200 : 400 });
+}
+
 async function metaGet(path: string): Promise<MetaResult> {
   try {
     const url = new URL(`https://graph.facebook.com/v20.0/${path}`);
     url.searchParams.set("access_token", config.WHATSAPP_ACCESS_TOKEN ?? "");
 
     const response = await fetch(url, { cache: "no-store" });
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: getMetaError(data),
+        data
+      };
+    }
+
+    return { ok: true, data };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Error desconocido."
+    };
+  }
+}
+
+async function metaPost(path: string): Promise<MetaResult> {
+  try {
+    const url = new URL(`https://graph.facebook.com/v20.0/${path}`);
+    url.searchParams.set("access_token", config.WHATSAPP_ACCESS_TOKEN ?? "");
+
+    const response = await fetch(url, {
+      cache: "no-store",
+      method: "POST"
+    });
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {

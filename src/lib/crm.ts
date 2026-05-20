@@ -583,7 +583,8 @@ export async function listConversations(filters: ConversationFilters = {}) {
   const search = query ? `%${query.toLowerCase()}%` : null;
   const phoneSearch = phoneQuery ? `%${phoneQuery}%` : null;
   const consultype = filters.consultype && filters.consultype !== "all" ? filters.consultype : null;
-  const status = filters.status && filters.status !== "all" ? filters.status : null;
+  const onlyAssigned = filters.status === "handoff";
+  const status = filters.status && filters.status !== "all" && !onlyAssigned ? filters.status : null;
   const assignedTo =
     filters.assignedTo &&
     filters.assignedTo !== "all" &&
@@ -624,6 +625,7 @@ export async function listConversations(filters: ConversationFilters = {}) {
     where (${search}::text is null or lower(coalesce(ct.display_name, '')) like ${search} or ct.phone like ${phoneSearch})
       and (${consultype}::text is null or ct.consultype = ${consultype})
       and (${status}::text is null or c.status = ${status})
+      and (${onlyAssigned}::boolean = false or c.assigned_to is not null)
       and (${assignedTo}::uuid is null or c.assigned_to = ${assignedTo}::uuid)
       and (${onlyUnassigned}::boolean = false or c.assigned_to is null)
       and (${status}::text is not null or c.status not in ('blocked', 'deleted'))
@@ -1021,7 +1023,7 @@ export async function getDashboardStats() {
     select
       (select count(*)::int from conversations) as conversations,
       (select count(*)::int from contacts) as contacts,
-      (select count(*)::int from conversations where status = 'handoff') as handoffs,
+      (select count(*)::int from conversations where assigned_to is not null) as handoffs,
       (select count(*)::int from contacts where consultype = 'caliente') as hot
   `) as Array<{
       conversations: number;

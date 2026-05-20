@@ -2049,14 +2049,15 @@ button:disabled {
   box-shadow: 0 16px 35px rgba(0, 0, 0, 0.32);
   display: grid;
   gap: 9px;
-  max-height: 275px;
+  left: 50%;
+  max-height: min(560px, calc(100vh - 48px));
   overflow-y: auto;
   padding: 7px;
-  position: absolute;
-  right: 100px;
-  top: 116px;
-  width: 350px;
-  z-index: 35;
+  position: fixed;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(350px, calc(100vw - 32px));
+  z-index: 85;
 }
 
 .tag-editor-panel input {
@@ -2146,11 +2147,11 @@ button:disabled {
 }
 
 .modal-backdrop {
-  align-items: flex-start;
+  align-items: center;
   background: rgba(0, 0, 0, 0.55);
   display: flex;
   inset: 0;
-  justify-content: flex-start;
+  justify-content: center;
   padding: 30px;
   position: fixed;
   z-index: 80;
@@ -2177,8 +2178,7 @@ button:disabled {
 }
 
 .transfer-dialog {
-  margin-left: 138px;
-  margin-top: 0;
+  margin: 0;
   width: min(500px, calc(100vw - 60px));
 }
 
@@ -2899,7 +2899,7 @@ select {
   }
 
   .modal-backdrop {
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
     padding: 14px 10px;
   }
@@ -2994,9 +2994,8 @@ select {
   }
 
   .tag-editor-panel {
-    grid-column: 1 / -1;
-    position: static;
-    width: 100%;
+    max-height: min(520px, calc(100vh - 28px));
+    width: min(360px, calc(100vw - 20px));
   }
 
   .toolbar-menu summary {

@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       const caption = parsed.data.caption;
       const whatsappFile = await prepareAttachmentForWhatsApp(file);
       const uploaded = await uploadWhatsAppMedia(whatsappFile);
-      const mediaKind = getMediaKind(whatsappFile.type);
+      const mediaKind = getMediaKind(whatsappFile);
       let waMessageId: string | null = null;
 
       if (mediaKind === "audio") {
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
         const sent = await sendWhatsAppVideo(target.phone, uploaded.id, caption);
         waMessageId = getSentMessageId(sent);
       } else {
-        const sent = await sendWhatsAppDocument(target.phone, uploaded.id, file.name || "archivo", caption);
+        const sent = await sendWhatsAppDocument(target.phone, uploaded.id, whatsappFile.name || file.name || "archivo", caption);
         waMessageId = getSentMessageId(sent);
       }
 
@@ -168,7 +168,7 @@ async function parseAttachmentRequest(request: NextRequest) {
       file: z
         .instanceof(File)
         .refine((inputFile) => inputFile.size > 0 && inputFile.size <= 16 * 1024 * 1024)
-        .refine((inputFile) => isSupportedWhatsAppAttachment(inputFile.type))
+        .refine((inputFile) => isSupportedWhatsAppAttachment(inputFile))
     })
     .safeParse({
       conversationId: formData.get("conversationId"),
@@ -188,18 +188,45 @@ function isSupportedWhatsAppAudio(mimeType: string) {
   return supportedAudioMimeTypes.includes(normalized) || convertibleAudioMimeTypes.includes(normalized);
 }
 
-function isSupportedWhatsAppAttachment(mimeType: string) {
-  const normalized = mimeType.split(";")[0].trim().toLowerCase();
+function getAttachmentMimeType(file: File) {
+  const normalized = file.type.split(";")[0].trim().toLowerCase();
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
+  if (extension === "mp4" && (!normalized || normalized === "application/octet-stream" || normalized === "video/quicktime")) {
+    return "video/mp4";
+  }
+
+  if (extension === "3gp" && (!normalized || normalized === "application/octet-stream")) {
+    return "video/3gpp";
+  }
+
+  if (normalized && normalized !== "application/octet-stream") {
+    return normalized;
+  }
+
+  if (extension === "mp4") {
+    return "video/mp4";
+  }
+
+  if (extension === "3gp") {
+    return "video/3gpp";
+  }
+
+  return normalized;
+}
+
+function isSupportedWhatsAppAttachment(file: File) {
+  const normalized = getAttachmentMimeType(file);
   return (
     supportedImageMimeTypes.includes(normalized) ||
     supportedVideoMimeTypes.includes(normalized) ||
-    isSupportedWhatsAppAudio(mimeType) ||
+    isSupportedWhatsAppAudio(normalized) ||
     supportedDocumentMimeTypes.includes(normalized)
   );
 }
 
-function getMediaKind(mimeType: string) {
-  const normalized = mimeType.split(";")[0].trim().toLowerCase();
+function getMediaKind(file: File) {
+  const normalized = getAttachmentMimeType(file);
 
   if (supportedAudioMimeTypes.includes(normalized) || convertibleAudioMimeTypes.includes(normalized)) {
     return "audio";
@@ -217,17 +244,20 @@ function getMediaKind(mimeType: string) {
 }
 
 async function prepareAttachmentForWhatsApp(file: File) {
-  const normalized = file.type.split(";")[0].trim().toLowerCase();
+  const normalized = getAttachmentMimeType(file);
+  const typedFile = file.type.split(";")[0].trim().toLowerCase() === normalized
+    ? file
+    : new File([new Uint8Array(await file.arrayBuffer())], file.name || "archivo", { type: normalized });
 
   if (convertibleAudioMimeTypes.includes(normalized)) {
-    return convertWavToMp3File(file);
+    return convertWavToMp3File(typedFile);
   }
 
   if (supportedImageMimeTypes.includes(normalized)) {
-    return normalizeImageOrientation(file);
+    return normalizeImageOrientation(typedFile);
   }
 
-  return file;
+  return typedFile;
 }
 
 async function normalizeImageOrientation(file: File) {
@@ -361,7 +391,7 @@ function readAscii(view: DataView, offset: number, length: number) {
 }
 
 function buildAttachmentBody(file: File, caption?: string) {
-  const mediaKind = getMediaKind(file.type);
+  const mediaKind = getMediaKind(file);
 
   if (caption) {
     return caption;

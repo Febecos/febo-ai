@@ -2383,7 +2383,7 @@ function getAudioTranscript(body: string) {
 }
 
 function isSupportedClientAttachment(file: File) {
-  const mimeType = file.type.split(";")[0].trim().toLowerCase();
+  const mimeType = getClientAttachmentMimeType(file);
   const supportedImages = ["image/jpeg", "image/png", "image/webp"];
   const supportedVideos = ["video/mp4", "video/3gpp", "video/3gp"];
   const supportedDocuments = [
@@ -2400,6 +2400,33 @@ function isSupportedClientAttachment(file: File) {
   return supportedImages.includes(mimeType) || supportedVideos.includes(mimeType) || isSupportedClientAudio(mimeType) || supportedDocuments.includes(mimeType);
 }
 
+function getClientAttachmentMimeType(file: File) {
+  const mimeType = file.type.split(";")[0].trim().toLowerCase();
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
+  if (extension === "mp4" && (!mimeType || mimeType === "application/octet-stream" || mimeType === "video/quicktime")) {
+    return "video/mp4";
+  }
+
+  if (extension === "3gp" && (!mimeType || mimeType === "application/octet-stream")) {
+    return "video/3gpp";
+  }
+
+  if (mimeType && mimeType !== "application/octet-stream") {
+    return mimeType;
+  }
+
+  if (extension === "mp4") {
+    return "video/mp4";
+  }
+
+  if (extension === "3gp") {
+    return "video/3gpp";
+  }
+
+  return mimeType;
+}
+
 function isSupportedClientAudio(mimeType: string) {
   const raw = mimeType.trim().toLowerCase();
   const normalized = raw.split(";")[0].trim();
@@ -2412,15 +2439,17 @@ function isSupportedClientAudio(mimeType: string) {
 }
 
 function getAttachmentSendLabel(file: File) {
-  if (file.type.startsWith("audio/")) {
+  const mimeType = getClientAttachmentMimeType(file);
+
+  if (mimeType.startsWith("audio/")) {
     return "Enviar audio";
   }
 
-  if (file.type.startsWith("image/")) {
+  if (mimeType.startsWith("image/")) {
     return "Enviar imagen";
   }
 
-  if (file.type.startsWith("video/")) {
+  if (mimeType.startsWith("video/")) {
     return "Enviar video";
   }
 

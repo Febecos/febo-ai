@@ -222,6 +222,28 @@ function ToolWorkspace({
   const [focusedConversation, setFocusedConversation] = useState({ id: "", signal: 0 });
   const [focusedContact, setFocusedContact] = useState({ id: "", signal: 0 });
 
+  useEffect(() => {
+    const storedFavorites = window.localStorage.getItem("febo-crm-favorites");
+    try {
+      const parsedFavorites = storedFavorites ? JSON.parse(storedFavorites) : [];
+      if (Array.isArray(parsedFavorites)) {
+        setFavoriteIds(parsedFavorites.filter((id) => typeof id === "string"));
+      }
+    } catch {
+      window.localStorage.removeItem("febo-crm-favorites");
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("febo-crm-favorites", JSON.stringify(favoriteIds));
+  }, [favoriteIds]);
+
+  function toggleFavorite(conversationId: string) {
+    setFavoriteIds((current) =>
+      current.includes(conversationId) ? current.filter((id) => id !== conversationId) : [...current, conversationId]
+    );
+  }
+
   return (
     <section className="admin-workspace">
       <nav className="tool-sidebar" aria-label="Herramientas de trabajo">
@@ -311,11 +333,7 @@ function ToolWorkspace({
             onConversationsChange={setWorkspaceConversations}
             focusedConversation={focusedConversation}
             resetMobileDetailSignal={conversationNavSignal}
-            onToggleFavorite={(conversationId) =>
-              setFavoriteIds((current) =>
-                current.includes(conversationId) ? current.filter((id) => id !== conversationId) : [...current, conversationId]
-              )
-            }
+            onToggleFavorite={toggleFavorite}
             users={users}
           />
         ) : null}
@@ -349,6 +367,7 @@ function ToolWorkspace({
             conversations={workspaceConversations}
             favoriteIds={favoriteIds}
             onConversationsChange={setWorkspaceConversations}
+            onToggleFavorite={toggleFavorite}
             onOpenChat={(conversationId) => {
               setFocusedConversation({ id: conversationId, signal: Date.now() });
               setActiveTool("conversations");
@@ -398,12 +417,14 @@ function CrmBoardPanel({
   conversations,
   favoriteIds,
   onConversationsChange,
+  onToggleFavorite,
   onOpenChat,
   onOpenContact
 }: {
   conversations: ConversationSummary[];
   favoriteIds: string[];
   onConversationsChange: (conversations: ConversationSummary[]) => void;
+  onToggleFavorite: (conversationId: string) => void;
   onOpenChat: (conversationId: string) => void;
   onOpenContact: (contactId: string) => void;
 }) {
@@ -551,7 +572,15 @@ function CrmBoardPanel({
                       ))}
                     </select>
                   </div>
-                  {favoriteIds.includes(conversation.id) ? <Star size={15} /> : null}
+                  <button
+                    aria-label="Quitar del tablero CRM"
+                    className="crm-card-star"
+                    onClick={() => onToggleFavorite(conversation.id)}
+                    title="Quitar del tablero CRM"
+                    type="button"
+                  >
+                    <Star size={15} />
+                  </button>
                 </article>
               ))
             ) : (
@@ -567,28 +596,45 @@ function CrmBoardPanel({
 }
 
 function getCrmColumnCards(columnId: string, conversations: ConversationSummary[], favoriteIds: string[]) {
-  if (columnId === "destacados") {
-    return conversations.filter((conversation) => favoriteIds.includes(conversation.id));
-  }
-
-  const boardConversations = conversations.filter((conversation) => !favoriteIds.includes(conversation.id));
+  const boardConversations = conversations.filter((conversation) => favoriteIds.includes(conversation.id));
 
   if (columnId === "nuevo") {
     return boardConversations.filter((conversation) => isHotCrmConversation(conversation));
   }
 
-  const stagedConversations = boardConversations.filter((conversation) => !isHotCrmConversation(conversation));
-
-  if (columnId === "contacto") {
-    return stagedConversations.filter(
-      (conversation) =>
-        conversation.status === "handoff" ||
-        (Boolean(conversation.assigned_to) && !["quoted", "closed", "lost"].includes(conversation.status))
-    );
+  if (columnId === "destacados") {
+    return boardConversations.filter((conversation) => getCrmBoardColumnId(conversation) === "destacados");
   }
 
-  const column = CRM_BOARD_COLUMNS.find((item) => item.id === columnId);
-  return stagedConversations.filter((conversation) => conversation.status === column?.status);
+  if (columnId === "contacto") {
+    return boardConversations.filter((conversation) => getCrmBoardColumnId(conversation) === "contacto");
+  }
+
+  return boardConversations.filter((conversation) => getCrmBoardColumnId(conversation) === columnId);
+}
+
+function getCrmBoardColumnId(conversation: ConversationSummary) {
+  if (isHotCrmConversation(conversation)) {
+    return "nuevo";
+  }
+
+  if (conversation.status === "quoted") {
+    return "cotizado";
+  }
+
+  if (conversation.status === "closed") {
+    return "cerrado";
+  }
+
+  if (conversation.status === "lost") {
+    return "no-avanza";
+  }
+
+  if (conversation.status === "handoff" || Boolean(conversation.assigned_to)) {
+    return "contacto";
+  }
+
+  return "destacados";
 }
 
 function isHotCrmConversation(conversation: ConversationSummary) {

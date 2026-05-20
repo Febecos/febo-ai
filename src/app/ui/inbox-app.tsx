@@ -319,7 +319,13 @@ function ToolWorkspace({
         {activeTool === "metrics" ? <MetricsPanel stats={stats} /> : null}
         {activeTool === "templates" ? <TemplatesPanel /> : null}
         {activeTool === "contacts" ? <ContactsPanel users={users} /> : null}
-        {activeTool === "crm" ? <CrmBoardPanel conversations={workspaceConversations} favoriteIds={favoriteIds} /> : null}
+        {activeTool === "crm" ? (
+          <CrmBoardPanel
+            conversations={workspaceConversations}
+            favoriteIds={favoriteIds}
+            onConversationsChange={setWorkspaceConversations}
+          />
+        ) : null}
         {activeTool === "users" && currentUser.role === "admin" ? (
           <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} />
         ) : null}
@@ -346,27 +352,76 @@ function MetricsPanel({ stats }: { stats: Stats }) {
   );
 }
 
-function CrmBoardPanel({ conversations, favoriteIds }: { conversations: ConversationSummary[]; favoriteIds: string[] }) {
-  const visibleCards = conversations.slice(0, 12);
+const CRM_BOARD_COLUMNS = [
+  { id: "destacados", title: "Destacados", status: null },
+  { id: "nuevo", title: "NUEVO", status: "open" },
+  { id: "contacto", title: "EN CONTACTO", status: "handoff" },
+  { id: "cotizado", title: "COTIZADO", status: "quoted" },
+  { id: "cerrado", title: "CERRADO", status: "closed" },
+  { id: "no-avanza", title: "NO AVANZA", status: "lost" }
+] as const;
+
+function CrmBoardPanel({
+  conversations,
+  favoriteIds,
+  onConversationsChange
+}: {
+  conversations: ConversationSummary[];
+  favoriteIds: string[];
+  onConversationsChange: (conversations: ConversationSummary[]) => void;
+}) {
+  const [draggingId, setDraggingId] = useState("");
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleCards = conversations.filter((conversation) => {
+    if (!normalizedQuery) {
+      return true;
+    }
+
+    return [conversation.display_name, conversation.phone, conversation.last_message, conversation.consultype]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+  });
   const highlighted = visibleCards.filter((conversation) => favoriteIds.includes(conversation.id));
-  const assignedCards = visibleCards.filter((conversation) => conversation.assigned_to || conversation.status === "handoff");
-  const boardColumns = [
-    { id: "destacados", title: "Destacados", cards: highlighted, featured: true },
-    { id: "nuevo", title: "NUEVO", cards: visibleCards.filter((conversation) => conversation.status === "open" && !conversation.assigned_to).slice(0, 4) },
-    { id: "contacto", title: "EN CONTACTO", cards: assignedCards.slice(0, 4) },
-    { id: "cotizado", title: "COTIZADO", cards: visibleCards.filter((conversation) => conversation.status === "quoted").slice(0, 4) },
-    { id: "cerrado", title: "CERRADO", cards: visibleCards.filter((conversation) => conversation.status === "closed").slice(0, 4) },
-    { id: "no-avanza", title: "NO AVANZA", cards: visibleCards.filter((conversation) => conversation.status === "lost").slice(0, 4) }
-  ];
+  const boardColumns = CRM_BOARD_COLUMNS.map((column) => ({
+    ...column,
+    cards: getCrmColumnCards(column.id, visibleCards, favoriteIds)
+  }));
+  const boardCardIds = new Set(boardColumns.flatMap((column) => column.cards.map((conversation) => conversation.id)));
+  const cardsInBoard = visibleCards.filter((conversation) => boardCardIds.has(conversation.id));
+
+  async function moveConversationToColumn(conversationId: string, columnId: string) {
+    const column = CRM_BOARD_COLUMNS.find((item) => item.id === columnId);
+
+    if (!column?.status) {
+      return;
+    }
+
+    const previous = conversations;
+    const next = conversations.map((conversation) =>
+      conversation.id === conversationId ? { ...conversation, status: column.status } : conversation
+    );
+    onConversationsChange(next);
+
+    const response = await fetch("/api/conversations", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ conversationId, status: column.status })
+    });
+
+    if (!response.ok) {
+      onConversationsChange(previous);
+    }
+  }
 
   return (
     <section className="crm-panel">
       <div className="crm-head">
         <h2>Tablero CRM</h2>
-        <p>Organiza conversaciones favoritas por columna y manten una lectura operativa clara.</p>
+        <p>Organiza oportunidades por estado, destaca conversaciones con estrella y mueve cards arrastrando.</p>
       </div>
       <div className="crm-stats">
-        <Metric label="Cards en seguimiento" value={visibleCards.length} />
+        <Metric label="Cards en seguimiento" value={cardsInBoard.length} />
         <Metric label="Valor potencial" value={0} />
         <Metric label="Ticket promedio" value={0} />
         <Metric label="Destacadas" value={highlighted.length} />
@@ -374,7 +429,11 @@ function CrmBoardPanel({ conversations, favoriteIds }: { conversations: Conversa
       <div className="crm-filters">
         <label>
           Buscar cards
-          <input placeholder="Nombre del contacto, descripcion o plataforma" />
+          <input
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Nombre del contacto, descripcion o plataforma"
+            value={query}
+          />
         </label>
         <label>
           Orden
@@ -382,47 +441,119 @@ function CrmBoardPanel({ conversations, favoriteIds }: { conversations: Conversa
             <option value="board">Orden del board</option>
           </select>
         </label>
-        <button type="button">Limpiar filtros</button>
+        <button onClick={() => setQuery("")} type="button">Limpiar filtros</button>
       </div>
       <div className="crm-quick-tabs">
         {boardColumns.map((column) => (
-          <button className={column.featured ? "active" : ""} key={column.id} type="button">
+          <button className={column.id === "destacados" ? "active" : ""} key={column.id} type="button">
             {column.title}
-            {column.featured ? <Star size={14} /> : null}
+            {column.id === "destacados" ? <Star size={14} /> : null}
             <span>{column.cards.length}</span>
           </button>
         ))}
       </div>
       <div className="crm-board">
         {boardColumns.map((column) => (
-          <section className="crm-column" key={column.id}>
+          <section
+            className={`crm-column ${draggingId ? "dragging" : ""}`}
+            key={column.id}
+            onDragOver={(event) => {
+              if (column.status) {
+                event.preventDefault();
+              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              const conversationId = event.dataTransfer.getData("text/plain") || draggingId;
+              setDraggingId("");
+              void moveConversationToColumn(conversationId, column.id);
+            }}
+          >
             <header>
-              <small>{column.featured ? "VISTA DESTACADA" : `TABLERO ${boardColumns.indexOf(column) + 1}`}</small>
+              <small>{column.id === "destacados" ? "VISTA DESTACADA" : `TABLERO ${boardColumns.indexOf(column) + 1}`}</small>
               <strong>{column.title}</strong>
               <span>{column.cards.length} cards - $ 0</span>
             </header>
             {column.cards.length ? (
               column.cards.map((conversation) => (
-                <article className="crm-card" key={`${column.id}-${conversation.id}`}>
+                <article
+                  className="crm-card"
+                  draggable={column.id !== "destacados"}
+                  key={`${column.id}-${conversation.id}`}
+                  onDragEnd={() => setDraggingId("")}
+                  onDragStart={(event) => {
+                    setDraggingId(conversation.id);
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", conversation.id);
+                  }}
+                >
                   <strong>{conversation.display_name || conversation.phone}</strong>
-                  <span>WhatsApp</span>
+                  <span>{getCrmCardStatusLabel(conversation)}</span>
                   <p>{conversation.last_message || "Sin descripcion comercial"}</p>
                   <div>
                     <button type="button">Chat</button>
                     <button type="button">Editar</button>
-                    <button type="button">Mover a</button>
+                    <select
+                      aria-label="Mover card"
+                      onChange={(event) => {
+                        void moveConversationToColumn(conversation.id, event.target.value);
+                        event.currentTarget.value = "";
+                      }}
+                      value=""
+                    >
+                      <option value="" disabled>Mover a</option>
+                      {CRM_BOARD_COLUMNS.filter((item) => item.status).map((item) => (
+                        <option key={item.id} value={item.id}>{item.title}</option>
+                      ))}
+                    </select>
                   </div>
-                  {column.featured || favoriteIds.includes(conversation.id) ? <Star size={15} /> : null}
+                  {favoriteIds.includes(conversation.id) ? <Star size={15} /> : null}
                 </article>
               ))
             ) : (
-              <div className="crm-empty">Arrastra cards aqui o usa Mover a si el tablero de origen y destino no entran juntos en pantalla.</div>
+              <div className="crm-empty">
+                {column.status ? "Arrastra cards aqui o usa Mover a si el tablero de origen y destino no entran juntos en pantalla." : "Marca una estrella en una conversacion para verla aca."}
+              </div>
             )}
           </section>
         ))}
       </div>
     </section>
   );
+}
+
+function getCrmColumnCards(columnId: string, conversations: ConversationSummary[], favoriteIds: string[]) {
+  if (columnId === "destacados") {
+    return conversations.filter((conversation) => favoriteIds.includes(conversation.id));
+  }
+
+  if (columnId === "nuevo") {
+    return conversations.filter((conversation) =>
+      !conversation.assigned_to &&
+      (conversation.status === "open" ||
+        conversation.status === "hot" ||
+        conversation.consultype === "caliente")
+    );
+  }
+
+  if (columnId === "contacto") {
+    return conversations.filter(
+      (conversation) =>
+        conversation.status === "handoff" ||
+        (Boolean(conversation.assigned_to) && !["quoted", "closed", "lost"].includes(conversation.status))
+    );
+  }
+
+  const column = CRM_BOARD_COLUMNS.find((item) => item.id === columnId);
+  return conversations.filter((conversation) => conversation.status === column?.status);
+}
+
+function getCrmCardStatusLabel(conversation: ConversationSummary) {
+  if (conversation.consultype === "caliente" || conversation.status === "hot") {
+    return "Caliente";
+  }
+
+  return "WhatsApp";
 }
 
 function ContactsPanel({ users }: { users: AppUser[] }) {

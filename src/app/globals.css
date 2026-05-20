@@ -1108,6 +1108,15 @@ button:disabled {
   font-size: 16px;
 }
 
+.detail-channel em {
+  display: none;
+  font-style: normal;
+}
+
+.mobile-detail-name {
+  display: none;
+}
+
 .detail-actions {
   align-items: center;
   display: flex;
@@ -2366,10 +2375,11 @@ select {
   }
 
   .conversation-detail {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
     position: static;
-    gap: 8px;
+    gap: 6px;
     height: 100%;
     max-height: 100%;
     min-height: 0;
@@ -2380,12 +2390,65 @@ select {
   .back-button {
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: 6px;
     display: inline-flex;
+    grid-column: 1;
+    justify-self: start;
+    min-height: 34px;
     padding: 0 10px;
-    position: sticky;
-    top: 0;
+    position: relative;
+    width: fit-content;
     z-index: 8;
+  }
+
+  .detail-head {
+    align-items: center;
+    border: 0;
+    grid-column: 2;
+    justify-content: flex-end;
+    min-height: 34px;
+    padding: 0;
+  }
+
+  .detail-channel strong,
+  .detail-channel > span {
+    display: none;
+  }
+
+  .detail-channel em {
+    display: none;
+  }
+
+  .mobile-detail-name {
+    color: #ffffff;
+    display: block;
+    font-size: 16px;
+    font-weight: 800;
+    grid-column: 1 / -1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .detail-actions {
+    gap: 6px;
+    justify-content: flex-end;
+  }
+
+  .detail-actions .favorite-action,
+  .detail-actions .warning-action,
+  .detail-actions .chat-actions-menu {
+    display: none;
+  }
+
+  .ia-toggle {
+    font-size: 13px;
+    min-height: 34px;
+  }
+
+  .transfer-button {
+    min-height: 34px;
+    padding: 0 9px;
   }
 
   .filter-row {
@@ -2408,9 +2471,24 @@ select {
   }
 
   .toolbar {
+    grid-column: 1 / -1;
     gap: 6px;
     justify-content: flex-start;
     padding: 8px;
+  }
+
+  .chat-name-field,
+  .toolbar > .secondary {
+    display: none;
+  }
+
+  .toolbar-icons {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .toolbar-icons .event-menu {
+    margin-left: auto;
   }
 
   .toolbar > button {
@@ -2434,6 +2512,7 @@ select {
   }
 
   .conversation-tabs {
+    grid-column: 1 / -1;
     gap: 4px;
   }
 
@@ -2455,11 +2534,13 @@ select {
   }
 
   .thread-panel {
+    grid-column: 1 / -1;
     flex: 1 1 auto;
     min-height: 0;
   }
 
   .reply-composer {
+    grid-column: 1 / -1;
     flex: 0 0 auto;
     margin-top: 0;
     position: relative;

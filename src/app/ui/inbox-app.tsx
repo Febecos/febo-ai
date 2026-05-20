@@ -1818,6 +1818,7 @@ function InboxList({
               <div className="detail-channel">
                 <strong>WHATSAPP</strong>
                 <span>| {selected.phone}</span>
+                <em>{selected.display_name || selected.phone}</em>
               </div>
               <div className="detail-actions">
                 <button
@@ -1857,6 +1858,7 @@ function InboxList({
                 </details>
               </div>
             </div>
+            <div className="mobile-detail-name">{selected.display_name || selected.phone}</div>
 
             <div className="toolbar">
               <label className="chat-name-field">

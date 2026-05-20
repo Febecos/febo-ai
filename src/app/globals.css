@@ -2525,7 +2525,7 @@ select {
   }
 
   .toolbar-icons .event-menu {
-    margin-left: auto;
+    display: none;
   }
 
   .toolbar > button {

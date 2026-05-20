@@ -216,6 +216,7 @@ function ToolWorkspace({
   const [activeTool, setActiveTool] = useState<"conversations" | "metrics" | "contacts" | "crm" | "templates" | "users" | "ai">("conversations");
   const [workspaceConversations, setWorkspaceConversations] = useState(conversations);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [conversationNavSignal, setConversationNavSignal] = useState(0);
 
   return (
     <section className="admin-workspace">
@@ -226,7 +227,10 @@ function ToolWorkspace({
         </div>
         <button
           className={activeTool === "conversations" ? "active" : ""}
-          onClick={() => setActiveTool("conversations")}
+          onClick={() => {
+            setActiveTool("conversations");
+            setConversationNavSignal((current) => current + 1);
+          }}
           type="button"
         >
           <Inbox size={18} />
@@ -301,6 +305,7 @@ function ToolWorkspace({
             currentUser={currentUser}
             favoriteIds={favoriteIds}
             onConversationsChange={setWorkspaceConversations}
+            resetMobileDetailSignal={conversationNavSignal}
             onToggleFavorite={(conversationId) =>
               setFavoriteIds((current) =>
                 current.includes(conversationId) ? current.filter((id) => id !== conversationId) : [...current, conversationId]
@@ -1057,6 +1062,7 @@ function InboxList({
   currentUser,
   favoriteIds,
   onConversationsChange,
+  resetMobileDetailSignal,
   onToggleFavorite,
   users
 }: {
@@ -1064,6 +1070,7 @@ function InboxList({
   currentUser: AppUser;
   favoriteIds: string[];
   onConversationsChange: (conversations: ConversationSummary[]) => void;
+  resetMobileDetailSignal: number;
   onToggleFavorite: (conversationId: string) => void;
   users: AppUser[];
 }) {
@@ -1129,6 +1136,10 @@ function InboxList({
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  useEffect(() => {
+    setMobileDetailOpen(false);
+  }, [resetMobileDetailSignal]);
 
   useEffect(() => {
     return () => {

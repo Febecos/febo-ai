@@ -987,6 +987,8 @@ function InboxList({
   const [quickRepliesOpen, setQuickRepliesOpen] = useState(false);
   const [eventMenuOpen, setEventMenuOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedClassifications, setSelectedClassifications] = useState<string[]>([]);
   const [chatName, setChatName] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateParameters, setTemplateParameters] = useState("");
@@ -1003,14 +1005,16 @@ function InboxList({
   const threadEndRef = useRef<HTMLDivElement>(null);
   const messageThreadRef = useRef<HTMLDivElement>(null);
   const selectedIdRef = useRef(selectedId);
+  const selectedTagsRef = useRef<string[]>([]);
+  const selectedClassificationsRef = useRef<string[]>([]);
   const [filters, setFilters] = useState({
     query: "",
     consultype: "all",
     status: "all",
-    assignedTo: "all",
-    sentiment: "all"
+    assignedTo: "all"
   });
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
+  const activeFiltersCount = selectedTags.length + selectedClassifications.length;
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -1195,7 +1199,7 @@ function InboxList({
       params.set("q", nextFilters.query.trim());
     }
 
-    if (nextFilters.consultype !== "all") {
+    if (nextFilters.consultype !== "all" && selectedTagsRef.current.length <= 1) {
       params.set("consultype", nextFilters.consultype);
     }
 
@@ -1215,8 +1219,12 @@ function InboxList({
     }
 
     const rawItems = payload?.conversations ?? [];
-    const nextItems =
-      nextFilters.sentiment === "all" ? rawItems : rawItems.filter((item: ConversationSummary) => item.sentiment === nextFilters.sentiment);
+    const nextItems = rawItems.filter((item: ConversationSummary) => {
+      const sentimentMatches =
+        !selectedClassificationsRef.current.length || selectedClassificationsRef.current.includes(item.sentiment);
+      const tagMatches = !selectedTagsRef.current.length || selectedTagsRef.current.includes(item.consultype);
+      return tagMatches && sentimentMatches;
+    });
     setItems(nextItems);
 
     if (!nextItems.some((item: ConversationSummary) => item.id === selectedIdRef.current)) {
@@ -1283,6 +1291,27 @@ function InboxList({
     void refreshConversations(nextFilters);
   }
 
+  function toggleSelectedTag(tagName: string) {
+    setSelectedTags((current) => {
+      const nextTags = current.includes(tagName) ? current.filter((value) => value !== tagName) : [...current, tagName];
+      selectedTagsRef.current = nextTags;
+      const nextFilters = { ...filters, consultype: nextTags.length === 1 ? nextTags[0] : "all" };
+      setFilters(nextFilters);
+      window.setTimeout(() => void refreshConversations(nextFilters), 0);
+      return nextTags;
+    });
+  }
+
+  function toggleSelectedClassification(sentiment: string) {
+    setSelectedClassifications((current) => {
+      const nextClassifications =
+        current.includes(sentiment) ? current.filter((value) => value !== sentiment) : [...current, sentiment];
+      selectedClassificationsRef.current = nextClassifications;
+      window.setTimeout(() => void refreshConversations(filters), 0);
+      return nextClassifications;
+    });
+  }
+
   async function patchConversation(conversationId: string, body: Record<string, unknown>) {
     const response = await fetch("/api/conversations", {
       method: "PATCH",
@@ -1310,7 +1339,11 @@ function InboxList({
   }
 
   function resetFilters() {
-    const nextFilters = { query: "", consultype: "all", status: "all", assignedTo: "all", sentiment: "all" };
+    const nextFilters = { query: "", consultype: "all", status: "all", assignedTo: "all" };
+    selectedTagsRef.current = [];
+    selectedClassificationsRef.current = [];
+    setSelectedTags([]);
+    setSelectedClassifications([]);
     setFilters(nextFilters);
     void refreshConversations(nextFilters);
   }
@@ -1534,6 +1567,7 @@ function InboxList({
           <button className={filtersOpen ? "open" : ""} onClick={() => setFiltersOpen(!filtersOpen)} type="button">
             <Filter size={16} />
             Filtros
+            {activeFiltersCount ? <span>{activeFiltersCount}</span> : null}
           </button>
         </div>
         <div className="list-quick-actions">
@@ -1555,10 +1589,10 @@ function InboxList({
             <div className="filter-group">
               <span>CLASIFICACION</span>
               {SENTIMENT_FILTERS.map((sentiment) => (
-                <label className={filters.sentiment === sentiment ? "selected" : ""} key={sentiment}>
+                <label className={selectedClassifications.includes(sentiment) ? "selected" : ""} key={sentiment}>
                   <input
-                    checked={filters.sentiment === sentiment}
-                    onChange={() => updateFilters({ sentiment: filters.sentiment === sentiment ? "all" : sentiment })}
+                    checked={selectedClassifications.includes(sentiment)}
+                    onChange={() => toggleSelectedClassification(sentiment)}
                     type="checkbox"
                   />
                   {sentiment}
@@ -1568,10 +1602,10 @@ function InboxList({
             <div className="filter-group">
               <span>CONSULTYPE</span>
               {CONSULTYPE_OPTIONS.map((option) => (
-                <label className={filters.consultype === option.value ? "selected" : ""} key={option.value}>
+                <label className={selectedTags.includes(option.value) ? "selected" : ""} key={option.value}>
                   <input
-                    checked={filters.consultype === option.value}
-                    onChange={() => updateFilters({ consultype: filters.consultype === option.value ? "all" : option.value })}
+                    checked={selectedTags.includes(option.value)}
+                    onChange={() => toggleSelectedTag(option.value)}
                     type="checkbox"
                   />
                   {option.label}
@@ -1581,10 +1615,10 @@ function InboxList({
             <div className="filter-group">
               <span>ETIQUETAS</span>
               {TAG_FILTERS.map((tagName) => (
-                <label className={filters.consultype === tagName ? "selected" : ""} key={tagName}>
+                <label className={selectedTags.includes(tagName) ? "selected" : ""} key={tagName}>
                   <input
-                    checked={filters.consultype === tagName}
-                    onChange={() => updateFilters({ consultype: filters.consultype === tagName ? "all" : tagName })}
+                    checked={selectedTags.includes(tagName)}
+                    onChange={() => toggleSelectedTag(tagName)}
                     type="checkbox"
                   />
                   {humanizeTemplateName(tagName)}

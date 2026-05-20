@@ -529,10 +529,14 @@ function CrmBoardPanel({
                     <span>{getCrmPlatformLabel(conversation)}</span>
                     {isHotCrmConversation(conversation) ? <span className="hot">Caliente</span> : null}
                   </div>
+                  <div className="crm-card-meta">
+                    <span>Ult: {formatMessageTime(conversation.last_message_at)}</span>
+                    {conversation.assigned_name ? <span>{conversation.assigned_name}</span> : null}
+                  </div>
                   <p>{conversation.last_message || "Sin descripcion comercial"}</p>
                   <div className="crm-card-actions">
                     <button onClick={() => onOpenChat(conversation.id)} type="button">Chat</button>
-                    <button onClick={() => onOpenContact(conversation.contact_id)} type="button">Editar</button>
+                    <button onClick={() => onOpenContact(conversation.contact_id)} type="button">Edit</button>
                     <select
                       aria-label="Mover card"
                       onChange={(event) => {
@@ -541,7 +545,7 @@ function CrmBoardPanel({
                       }}
                       value=""
                     >
-                      <option value="" disabled>Mover a</option>
+                      <option value="" disabled>Mover</option>
                       {CRM_BOARD_COLUMNS.filter((item) => item.status).map((item) => (
                         <option key={item.id} value={item.id}>{item.title}</option>
                       ))}
@@ -570,15 +574,13 @@ function getCrmColumnCards(columnId: string, conversations: ConversationSummary[
   const boardConversations = conversations.filter((conversation) => !favoriteIds.includes(conversation.id));
 
   if (columnId === "nuevo") {
-    return boardConversations.filter((conversation) =>
-      !conversation.assigned_to &&
-      isHotCrmConversation(conversation) &&
-      !["handoff", "quoted", "closed", "lost"].includes(conversation.status)
-    );
+    return boardConversations.filter((conversation) => isHotCrmConversation(conversation));
   }
 
+  const stagedConversations = boardConversations.filter((conversation) => !isHotCrmConversation(conversation));
+
   if (columnId === "contacto") {
-    return boardConversations.filter(
+    return stagedConversations.filter(
       (conversation) =>
         conversation.status === "handoff" ||
         (Boolean(conversation.assigned_to) && !["quoted", "closed", "lost"].includes(conversation.status))
@@ -586,7 +588,7 @@ function getCrmColumnCards(columnId: string, conversations: ConversationSummary[
   }
 
   const column = CRM_BOARD_COLUMNS.find((item) => item.id === columnId);
-  return boardConversations.filter((conversation) => conversation.status === column?.status);
+  return stagedConversations.filter((conversation) => conversation.status === column?.status);
 }
 
 function isHotCrmConversation(conversation: ConversationSummary) {

@@ -2518,7 +2518,7 @@ select {
 
   .list-quick-actions {
     gap: 6px;
-    grid-template-columns: 42px minmax(0, 1fr);
+    grid-template-columns: 1fr;
     padding: 8px 8px 6px;
   }
 

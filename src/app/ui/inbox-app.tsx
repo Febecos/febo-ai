@@ -1700,7 +1700,6 @@ function InboxList({
           </button>
           <button className={filters.status === "handoff" ? "active" : ""} onClick={() => updateFilters({ status: "handoff" })} type="button">
             Escalados
-            <span>358</span>
           </button>
           <button className={filtersOpen ? "open" : ""} onClick={() => setFiltersOpen(!filtersOpen)} type="button">
             <Filter size={16} />
@@ -1712,7 +1711,7 @@ function InboxList({
           <label className="search-field">
             <Search size={16} />
             <input
-              placeholder="Buscar mensajes"
+              placeholder="Buscar"
               value={filters.query}
               onChange={(event) => updateFilters({ query: event.target.value })}
             />

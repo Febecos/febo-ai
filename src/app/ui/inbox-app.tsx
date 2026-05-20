@@ -1312,6 +1312,17 @@ function InboxList({
     });
   }
 
+  function toggleAllTags() {
+    setSelectedTags((current) => {
+      const nextTags = current.length === TAG_FILTERS.length ? [] : [...TAG_FILTERS];
+      selectedTagsRef.current = nextTags;
+      const nextFilters = { ...filters, consultype: nextTags.length === 1 ? nextTags[0] : "all" };
+      setFilters(nextFilters);
+      window.setTimeout(() => void refreshConversations(nextFilters), 0);
+      return nextTags;
+    });
+  }
+
   async function patchConversation(conversationId: string, body: Record<string, unknown>) {
     const response = await fetch("/api/conversations", {
       method: "PATCH",
@@ -1614,6 +1625,14 @@ function InboxList({
             </div>
             <div className="filter-group">
               <span>ETIQUETAS</span>
+              <label className={selectedTags.length === TAG_FILTERS.length ? "selected" : ""}>
+                <input
+                  checked={selectedTags.length === TAG_FILTERS.length}
+                  onChange={toggleAllTags}
+                  type="checkbox"
+                />
+                Todas
+              </label>
               {TAG_FILTERS.map((tagName) => (
                 <label className={selectedTags.includes(tagName) ? "selected" : ""} key={tagName}>
                   <input

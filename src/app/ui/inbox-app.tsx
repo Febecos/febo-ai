@@ -1,5 +1,6 @@
 "use client";
 
+import { upload } from "@vercel/blob/client";
 import {
   AlertCircle,
   BarChart3,
@@ -97,6 +98,7 @@ const TAG_FILTERS = [
   "pocero-instalador",
   "presupuesto-enviado"
 ];
+const DIRECT_ATTACHMENT_UPLOAD_LIMIT_BYTES = 3.8 * 1024 * 1024;
 
 export function InboxApp({
   conversations,
@@ -1521,24 +1523,56 @@ function InboxList({
 
     setSendingReply(true);
     setReplyError("");
-    const body =
-      replyFile ?
-        (() => {
-          const formData = new FormData();
-          formData.append("conversationId", selected.id);
-          formData.append("file", replyFile);
-          if (replyText.trim()) {
-            formData.append("caption", replyText.trim());
-          }
-          return formData;
-        })()
-      : JSON.stringify({ conversationId: selected.id, text: replyText.trim() });
+    let response: Response;
 
-    const response = await fetch("/api/conversation-messages", {
-      method: "POST",
-      headers: replyFile ? undefined : { "content-type": "application/json" },
-      body
-    });
+    try {
+      if (replyFile && shouldUseBlobUpload(replyFile)) {
+        const uploadFile = normalizeClientAttachmentFile(replyFile);
+        const blob = await upload(uploadFile.name || "archivo", uploadFile, {
+          access: "public",
+          handleUploadUrl: "/api/blob/upload"
+        });
+
+        response = await fetch("/api/conversation-messages", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            conversationId: selected.id,
+            media: {
+              filename: replyFile.name || "archivo",
+              mimeType: uploadFile.type || getClientAttachmentMimeType(replyFile),
+              size: uploadFile.size,
+              url: blob.url
+            },
+            text: replyText.trim() || undefined
+          })
+        });
+      } else {
+        const body =
+          replyFile ?
+            (() => {
+              const formData = new FormData();
+              formData.append("conversationId", selected.id);
+              formData.append("file", replyFile);
+              if (replyText.trim()) {
+                formData.append("caption", replyText.trim());
+              }
+              return formData;
+            })()
+          : JSON.stringify({ conversationId: selected.id, text: replyText.trim() });
+
+        response = await fetch("/api/conversation-messages", {
+          method: "POST",
+          headers: replyFile ? undefined : { "content-type": "application/json" },
+          body
+        });
+      }
+    } catch (error) {
+      setSendingReply(false);
+      setReplyError(error instanceof Error ? error.message : "No pudimos subir el archivo.");
+      return;
+    }
+
     const payload = await readJsonResponse(response);
 
     setSendingReply(false);
@@ -2398,6 +2432,21 @@ function isSupportedClientAttachment(file: File) {
   ];
 
   return supportedImages.includes(mimeType) || supportedVideos.includes(mimeType) || isSupportedClientAudio(mimeType) || supportedDocuments.includes(mimeType);
+}
+
+function shouldUseBlobUpload(file: File) {
+  return file.size > DIRECT_ATTACHMENT_UPLOAD_LIMIT_BYTES;
+}
+
+function normalizeClientAttachmentFile(file: File) {
+  const mimeType = getClientAttachmentMimeType(file);
+  const rawMimeType = file.type.split(";")[0].trim().toLowerCase();
+
+  if (!mimeType || rawMimeType === mimeType) {
+    return file;
+  }
+
+  return new File([file], file.name || "archivo", { type: mimeType });
 }
 
 function getClientAttachmentMimeType(file: File) {

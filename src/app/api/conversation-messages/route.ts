@@ -5,9 +5,11 @@ import { getConversationReplyTarget, listConversationMessages, recordManualOutbo
 import {
   sendWhatsAppAudio,
   sendWhatsAppDocument,
+  sendWhatsAppDocumentLink,
   sendWhatsAppImage,
   sendWhatsAppText,
   sendWhatsAppVideo,
+  sendWhatsAppVideoLink,
   uploadWhatsAppMedia
 } from "@/lib/whatsapp";
 
@@ -17,6 +19,16 @@ const schema = z.object({
 
 const sendSchema = schema.extend({
   text: z.string().trim().min(1).max(4000)
+});
+
+const linkedMediaSchema = schema.extend({
+  text: z.string().trim().max(1024).optional(),
+  media: z.object({
+    filename: z.string().trim().min(1).max(255),
+    mimeType: z.string().trim().min(1).max(120),
+    size: z.number().int().positive().max(100 * 1024 * 1024),
+    url: z.string().url()
+  })
 });
 
 const supportedImageMimeTypes = ["image/jpeg", "image/png", "image/webp"];
@@ -76,7 +88,7 @@ export async function POST(request: NextRequest) {
   const contentType = request.headers.get("content-type") ?? "";
   const parsed = contentType.includes("multipart/form-data")
     ? await parseAttachmentRequest(request)
-    : sendSchema.safeParse(await request.json());
+    : parseJsonSendRequest(await request.json());
 
   if (!parsed.success) {
     return NextResponse.json({ error: getSendValidationError(parsed.error) }, { status: 400 });
@@ -89,7 +101,36 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    if ("file" in parsed.data) {
+    if ("media" in parsed.data) {
+      const mediaKind = getMediaKind({
+        name: parsed.data.media.filename,
+        type: parsed.data.media.mimeType
+      });
+      const caption = parsed.data.text;
+      let waMessageId: string | null = null;
+
+      if (mediaKind === "video") {
+        try {
+          const sent = await sendWhatsAppVideoLink(target.phone, parsed.data.media.url, caption);
+          waMessageId = getSentMessageId(sent);
+        } catch (videoError) {
+          const sent = await sendWhatsAppDocumentLink(target.phone, parsed.data.media.url, parsed.data.media.filename, caption);
+          waMessageId = getSentMessageId(sent);
+          console.warn("WhatsApp linked video send failed; sent as document instead.", videoError);
+        }
+      } else {
+        const sent = await sendWhatsAppDocumentLink(target.phone, parsed.data.media.url, parsed.data.media.filename, caption);
+        waMessageId = getSentMessageId(sent);
+      }
+
+      await recordManualOutboundMessage({
+        conversationId: parsed.data.conversationId,
+        contactId: target.contact_id,
+        userId: user.id,
+        body: buildAttachmentBody({ name: parsed.data.media.filename, type: parsed.data.media.mimeType }, caption),
+        waMessageId
+      });
+    } else if ("file" in parsed.data) {
       const file = parsed.data.file;
       const caption = parsed.data.caption;
       const whatsappFile = await prepareAttachmentForWhatsApp(file);
@@ -183,6 +224,10 @@ async function parseAttachmentRequest(request: NextRequest) {
     });
 }
 
+function parseJsonSendRequest(input: unknown) {
+  return z.union([sendSchema, linkedMediaSchema]).safeParse(input);
+}
+
 function isSupportedWhatsAppAudio(mimeType: string) {
   const raw = mimeType.trim().toLowerCase();
   const normalized = raw.split(";")[0].trim();
@@ -194,7 +239,7 @@ function isSupportedWhatsAppAudio(mimeType: string) {
   return supportedAudioMimeTypes.includes(normalized) || convertibleAudioMimeTypes.includes(normalized);
 }
 
-function getAttachmentMimeType(file: File) {
+function getAttachmentMimeType(file: Pick<File, "name" | "type">) {
   const normalized = file.type.split(";")[0].trim().toLowerCase();
   const extension = file.name.split(".").pop()?.toLowerCase();
 
@@ -231,7 +276,7 @@ function isSupportedWhatsAppAttachment(file: File) {
   );
 }
 
-function getMediaKind(file: File) {
+function getMediaKind(file: Pick<File, "name" | "type">) {
   const normalized = getAttachmentMimeType(file);
 
   if (supportedAudioMimeTypes.includes(normalized) || convertibleAudioMimeTypes.includes(normalized)) {
@@ -396,7 +441,7 @@ function readAscii(view: DataView, offset: number, length: number) {
   return value;
 }
 
-function buildAttachmentBody(file: File, caption?: string) {
+function buildAttachmentBody(file: Pick<File, "name" | "type">, caption?: string) {
   const mediaKind = getMediaKind(file);
 
   if (caption) {

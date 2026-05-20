@@ -1389,6 +1389,11 @@ function InboxList({
   const selectedIdRef = useRef(selectedId);
   const selectedTagsRef = useRef<string[]>([]);
   const selectedClassificationsRef = useRef<string[]>([]);
+  const notificationAudioContextRef = useRef<AudioContext | null>(null);
+  const notificationBaselineRef = useRef({
+    initialized: false,
+    latestByConversation: new Map<string, string>()
+  });
   const [filters, setFilters] = useState({
     query: "",
     consultype: "all",
@@ -1402,6 +1407,27 @@ function InboxList({
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  useEffect(() => {
+    primeNotificationBaseline(conversations);
+  }, []);
+
+  useEffect(() => {
+    function unlockNotificationAudio() {
+      const context = getNotificationAudioContext(notificationAudioContextRef);
+      if (context?.state === "suspended") {
+        void context.resume();
+      }
+    }
+
+    window.addEventListener("pointerdown", unlockNotificationAudio, { once: true });
+    window.addEventListener("keydown", unlockNotificationAudio, { once: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", unlockNotificationAudio);
+      window.removeEventListener("keydown", unlockNotificationAudio);
+    };
+  }, []);
 
   useEffect(() => {
     setMobileDetailOpen(false);
@@ -1531,7 +1557,7 @@ function InboxList({
 
   useEffect(() => {
     async function refreshVisibleInbox() {
-      if (document.hidden || sendingReply || recording) {
+      if (sendingReply || recording) {
         return;
       }
 
@@ -1620,6 +1646,40 @@ function InboxList({
     setNotes(payload?.notes ?? []);
   }
 
+  function primeNotificationBaseline(nextItems: ConversationSummary[]) {
+    notificationBaselineRef.current.latestByConversation = new Map(
+      nextItems.map((conversation) => [conversation.id, conversation.last_message_at])
+    );
+    notificationBaselineRef.current.initialized = true;
+  }
+
+  function notifyIfNewInboundConversation(nextItems: ConversationSummary[], canPlaySound: boolean) {
+    const state = notificationBaselineRef.current;
+
+    if (!state.initialized) {
+      primeNotificationBaseline(nextItems);
+      return;
+    }
+
+    const shouldSound =
+      document.hidden || isMobileViewport();
+    const hasNewInbound = nextItems.some((conversation) => {
+      const previousLastMessageAt = state.latestByConversation.get(conversation.id);
+
+      return (
+        conversation.last_direction === "inbound" &&
+        (previousLastMessageAt === undefined || conversation.last_message_at !== previousLastMessageAt) &&
+        conversation.last_message_at !== previousLastMessageAt
+      );
+    });
+
+    state.latestByConversation = new Map(nextItems.map((conversation) => [conversation.id, conversation.last_message_at]));
+
+    if (canPlaySound && shouldSound && hasNewInbound) {
+      void playInboxNotificationSound(notificationAudioContextRef);
+    }
+  }
+
   async function saveConversationNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1682,6 +1742,7 @@ function InboxList({
       const tagMatches = !selectedTagsRef.current.length || selectedTagsRef.current.includes(item.consultype);
       return tagMatches && sentimentMatches;
     });
+    notifyIfNewInboundConversation(nextItems, options.silent === true);
     setItems(nextItems);
     onConversationsChange(nextItems);
 
@@ -3135,6 +3196,59 @@ function getStatusLabel(value: string) {
 
 function getConsultypeLabel(value: string) {
   return CONSULTYPE_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
+function isMobileViewport() {
+  return window.matchMedia("(max-width: 720px), (pointer: coarse)").matches;
+}
+
+function getNotificationAudioContext(audioContextRef: { current: AudioContext | null }) {
+  if (audioContextRef.current) {
+    return audioContextRef.current;
+  }
+
+  const AudioContextConstructor =
+    window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+  if (!AudioContextConstructor) {
+    return null;
+  }
+
+  audioContextRef.current = new AudioContextConstructor();
+  return audioContextRef.current;
+}
+
+async function playInboxNotificationSound(audioContextRef: { current: AudioContext | null }) {
+  const context = getNotificationAudioContext(audioContextRef);
+
+  if (!context) {
+    return;
+  }
+
+  if (context.state === "suspended") {
+    await context.resume().catch(() => undefined);
+  }
+
+  if (context.state !== "running") {
+    return;
+  }
+
+  const now = context.currentTime;
+  const gain = context.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.22, now + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.36);
+  gain.connect(context.destination);
+
+  for (const [index, frequency] of [880, 1175].entries()) {
+    const oscillator = context.createOscillator();
+    const startAt = now + index * 0.14;
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency, startAt);
+    oscillator.connect(gain);
+    oscillator.start(startAt);
+    oscillator.stop(startAt + 0.12);
+  }
 }
 
 async function readJsonResponse(response: Response) {

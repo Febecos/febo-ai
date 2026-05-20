@@ -1544,7 +1544,7 @@ function InboxList({
     setSendingReply(false);
 
     if (!response.ok) {
-      setReplyError(payload?.error ?? "No pudimos enviar el mensaje.");
+      setReplyError(getReplySendError(response, payload));
       return;
     }
 
@@ -2620,6 +2620,18 @@ async function readJsonResponse(response: Response) {
   try {
     return JSON.parse(text);
   } catch {
-    return null;
+    return { error: text.trim() };
   }
+}
+
+function getReplySendError(response: Response, payload: { error?: string } | null) {
+  if (response.status === 413) {
+    return "El archivo es demasiado grande para subirlo directo desde FEBO. Para videos grandes vamos a usar link/YouTube o almacenamiento externo.";
+  }
+
+  if (payload?.error) {
+    return payload.error.length > 240 ? `${payload.error.slice(0, 240)}...` : payload.error;
+  }
+
+  return `No pudimos enviar el mensaje (${response.status}).`;
 }

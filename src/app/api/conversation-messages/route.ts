@@ -104,8 +104,14 @@ export async function POST(request: NextRequest) {
         const sent = await sendWhatsAppImage(target.phone, uploaded.id, caption);
         waMessageId = getSentMessageId(sent);
       } else if (mediaKind === "video") {
-        const sent = await sendWhatsAppVideo(target.phone, uploaded.id, caption);
-        waMessageId = getSentMessageId(sent);
+        try {
+          const sent = await sendWhatsAppVideo(target.phone, uploaded.id, caption);
+          waMessageId = getSentMessageId(sent);
+        } catch (videoError) {
+          const sent = await sendWhatsAppDocument(target.phone, uploaded.id, whatsappFile.name || file.name || "video.mp4", caption);
+          waMessageId = getSentMessageId(sent);
+          console.warn("WhatsApp video send failed; sent as document instead.", videoError);
+        }
       } else {
         const sent = await sendWhatsAppDocument(target.phone, uploaded.id, whatsappFile.name || file.name || "archivo", caption);
         waMessageId = getSentMessageId(sent);

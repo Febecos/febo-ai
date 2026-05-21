@@ -63,6 +63,18 @@ export type MessageTemplate = {
   active: boolean;
 };
 
+export type QuickReply = {
+  id: string;
+  name: string;
+  shortcut: string;
+  availability: string;
+  body: string;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ConversationMessage = {
   id: string;
   direction: "inbound" | "outbound" | "internal";
@@ -208,7 +220,16 @@ export function normalizeConsultype(value: string | null | undefined) {
     "problema",
     "seguimiento",
     "caliente",
+    "cliente",
     "comparador",
+    "contacto-de-bobbio",
+    "cotizado",
+    "esperando-respuesta",
+    "fuera-de-horario",
+    "no-leido",
+    "pasar-presupuesto",
+    "pocero-instalador",
+    "presupuesto-enviado",
     "reserva-7-dias",
     "tecnico-revendedor",
     "otro"
@@ -386,6 +407,72 @@ export async function upsertMessageTemplates(
   }
 
   return saved;
+}
+
+export async function listQuickReplies() {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  return (await sql`
+    select
+      q.id::text,
+      q.name,
+      q.shortcut,
+      q.availability,
+      q.body,
+      q.created_by::text,
+      u.full_name as created_by_name,
+      q.created_at::text,
+      q.updated_at::text
+    from quick_replies q
+    left join app_users u on u.id = q.created_by
+    order by q.name
+  `) as QuickReply[];
+}
+
+export async function upsertQuickReply(input: {
+  id?: string;
+  name: string;
+  shortcut: string;
+  availability: string;
+  body: string;
+  userId: string;
+}) {
+  const sql = getSql();
+  const id = input.id || null;
+  const shortcut = input.shortcut.trim().replace(/^\/+/, "").toLowerCase();
+
+  const rows = (await sql`
+    insert into quick_replies (id, name, shortcut, availability, body, created_by)
+    values (
+      coalesce(${id}::uuid, gen_random_uuid()),
+      ${input.name.trim()},
+      ${shortcut},
+      ${input.availability.trim().toLowerCase() || "global"},
+      ${input.body.trim()},
+      ${input.userId}
+    )
+    on conflict (shortcut) do update
+    set name = excluded.name,
+        availability = excluded.availability,
+        body = excluded.body,
+        created_by = excluded.created_by,
+        updated_at = now()
+    returning id::text
+  `) as Array<{ id: string }>;
+
+  return rows[0]?.id ?? null;
+}
+
+export async function deleteQuickReply(id: string) {
+  if (!isDbConfigured()) {
+    return;
+  }
+
+  const sql = getSql();
+  await sql`delete from quick_replies where id = ${id}`;
 }
 
 export async function upsertAppUser(input: {

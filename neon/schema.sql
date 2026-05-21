@@ -115,6 +115,19 @@ create table if not exists conversation_notes (
 
 create index if not exists conversation_notes_conversation_created_idx on conversation_notes(conversation_id, created_at);
 
+create table if not exists quick_replies (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  shortcut text not null unique,
+  availability text not null default 'global',
+  body text not null,
+  created_by uuid references app_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists quick_replies_shortcut_idx on quick_replies(shortcut);
+
 create table if not exists push_subscriptions (
   endpoint text primary key,
   user_id uuid references app_users(id) on delete set null,
@@ -196,4 +209,9 @@ for each row execute function set_updated_at();
 drop trigger if exists set_message_templates_updated_at on message_templates;
 create trigger set_message_templates_updated_at
 before update on message_templates
+for each row execute function set_updated_at();
+
+drop trigger if exists set_quick_replies_updated_at on quick_replies;
+create trigger set_quick_replies_updated_at
+before update on quick_replies
 for each row execute function set_updated_at();

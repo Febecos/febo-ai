@@ -2158,6 +2158,23 @@ button:disabled {
   background: #fbbf24;
 }
 
+.tag-dot.cotizado {
+  background: #16a34a;
+}
+
+.tag-dot.esperando-respuesta,
+.tag-dot.fuera-de-horario,
+.tag-dot.no-leido {
+  background: #f97316;
+}
+
+.tag-dot.presupuesto-enviado,
+.tag-dot.pasar-presupuesto,
+.tag-dot.pocero-instalador,
+.tag-dot.contacto-de-bobbio {
+  background: #38bdf8;
+}
+
 .toolbar-menu {
   position: relative;
 }

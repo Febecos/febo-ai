@@ -48,6 +48,7 @@ import type {
   ConversationNote,
   ConversationSummary,
   MessageTemplate,
+  QuickReply,
   UserAdminSummary
 } from "@/lib/crm";
 
@@ -1366,6 +1367,16 @@ function InboxList({
   const [preparingRecording, setPreparingRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
+  const [quickReplyForm, setQuickReplyForm] = useState({
+    id: "",
+    name: "",
+    shortcut: "",
+    availability: "global",
+    body: ""
+  });
+  const [quickReplyMessage, setQuickReplyMessage] = useState("");
+  const [savingQuickReply, setSavingQuickReply] = useState(false);
   const [templateComposerOpen, setTemplateComposerOpen] = useState(false);
   const [tagPanelOpen, setTagPanelOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -1501,6 +1512,12 @@ function InboxList({
   useEffect(() => {
     void loadTemplatesForContactForm();
   }, []);
+
+  useEffect(() => {
+    if (quickRepliesOpen) {
+      void loadQuickReplies();
+    }
+  }, [quickRepliesOpen]);
 
   useEffect(() => {
     const storedUnreadIds = window.localStorage.getItem("febo-unread-conversations");
@@ -1767,6 +1784,83 @@ function InboxList({
       setTemplates(activeTemplates);
       setSelectedTemplateId((current) => current || activeTemplates[0]?.id || "");
     }
+  }
+
+  async function loadQuickReplies() {
+    const response = await fetch("/api/quick-replies");
+    const payload = await readJsonResponse(response);
+
+    if (response.ok) {
+      setQuickReplies(payload?.quickReplies ?? []);
+    } else {
+      setQuickReplyMessage(payload?.error ?? "No pudimos cargar respuestas rapidas.");
+    }
+  }
+
+  async function saveQuickReply() {
+    if (!quickReplyForm.name.trim() || !quickReplyForm.shortcut.trim() || !quickReplyForm.body.trim()) {
+      setQuickReplyMessage("Completa nombre, atajo y contenido.");
+      return;
+    }
+
+    setSavingQuickReply(true);
+    setQuickReplyMessage("");
+
+    const response = await fetch("/api/quick-replies", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id: quickReplyForm.id || undefined,
+        name: quickReplyForm.name,
+        shortcut: quickReplyForm.shortcut,
+        availability: quickReplyForm.availability,
+        body: quickReplyForm.body
+      })
+    });
+    const payload = await readJsonResponse(response);
+
+    setSavingQuickReply(false);
+
+    if (!response.ok) {
+      setQuickReplyMessage(payload?.error ?? "No pudimos guardar la respuesta rapida.");
+      return;
+    }
+
+    setQuickReplies(payload?.quickReplies ?? []);
+    resetQuickReplyForm();
+    setQuickReplyMessage("Respuesta rapida guardada.");
+  }
+
+  async function deleteQuickReplyById(id: string) {
+    const response = await fetch("/api/quick-replies", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id })
+    });
+    const payload = await readJsonResponse(response);
+
+    if (response.ok) {
+      setQuickReplies(payload?.quickReplies ?? []);
+      setQuickReplyMessage("Respuesta rapida borrada.");
+      return;
+    }
+
+    setQuickReplyMessage(payload?.error ?? "No pudimos borrar la respuesta rapida.");
+  }
+
+  function editQuickReply(reply: QuickReply) {
+    setQuickReplyForm({
+      id: reply.id,
+      name: reply.name,
+      shortcut: reply.shortcut,
+      availability: reply.availability,
+      body: reply.body
+    });
+    setQuickReplyMessage("");
+  }
+
+  function resetQuickReplyForm() {
+    setQuickReplyForm({ id: "", name: "", shortcut: "", availability: "global", body: "" });
   }
 
   async function sendTemplateToSelected(event: FormEvent<HTMLFormElement>) {
@@ -2524,11 +2618,11 @@ function InboxList({
             {tagPanelOpen ? (
               <div className="tag-editor-panel">
                 <input placeholder="Buscar o crear etiqueta..." />
-                {TAG_FILTERS.slice(0, 8).map((tagName) => (
+                {TAG_FILTERS.map((tagName) => (
                   <div className="tag-editor-row" key={tagName}>
                     <span className={`tag-dot ${tagName}`} />
                     <strong>{humanizeTemplateName(tagName)}</strong>
-                    <button onClick={() => patchConversation(selected.id, { consultype: tagName })} type="button">Agregar</button>
+                    <button onClick={() => void changeConversationType(selected.id, tagName)} type="button">Agregar</button>
                     <button className="icon-action danger" type="button"><Trash2 size={14} /></button>
                   </div>
                 ))}
@@ -2579,16 +2673,59 @@ function InboxList({
                     <button onClick={() => setQuickRepliesOpen(false)} type="button"><X size={22} /></button>
                   </header>
                   <div className="quick-form-grid">
-                    <label className="field">Nombre<input placeholder="Saludo Inicial" /></label>
-                    <label className="field">Atajo (sin "/")<input placeholder="saludo_inicial" /></label>
-                    <label className="field">Disponibilidad<select defaultValue="global"><option value="global">Global</option></select></label>
+                    <label className="field">
+                      Nombre
+                      <input
+                        placeholder="Saludo Inicial"
+                        value={quickReplyForm.name}
+                        onChange={(event) => setQuickReplyForm({ ...quickReplyForm, name: event.target.value })}
+                      />
+                    </label>
+                    <label className="field">
+                      Atajo (sin "/")
+                      <input
+                        placeholder="saludo_inicial"
+                        value={quickReplyForm.shortcut}
+                        onChange={(event) => setQuickReplyForm({ ...quickReplyForm, shortcut: event.target.value })}
+                      />
+                    </label>
+                    <label className="field">
+                      Disponibilidad
+                      <select
+                        value={quickReplyForm.availability}
+                        onChange={(event) => setQuickReplyForm({ ...quickReplyForm, availability: event.target.value })}
+                      >
+                        <option value="global">Global</option>
+                        <option value="admin">Admin</option>
+                        <option value="vendedor">Vendedor</option>
+                      </select>
+                    </label>
                   </div>
-                  <label className="field">Contenido<textarea placeholder="Hola, como estas?" /></label>
-                  <div className="template-actions"><button className="primary" type="button">Guardar</button><button className="secondary" type="button">Nuevo</button></div>
+                  <label className="field">
+                    Contenido
+                    <textarea
+                      placeholder="Hola, como estas?"
+                      value={quickReplyForm.body}
+                      onChange={(event) => setQuickReplyForm({ ...quickReplyForm, body: event.target.value })}
+                    />
+                  </label>
+                  <div className="template-actions">
+                    <button className="primary" disabled={savingQuickReply} onClick={saveQuickReply} type="button">
+                      {savingQuickReply ? "Guardando" : "Guardar"}
+                    </button>
+                    <button className="secondary" onClick={resetQuickReplyForm} type="button">Nuevo</button>
+                    {quickReplyMessage ? <span className={quickReplyMessage.includes("No ") ? "warn" : "ok"}>{quickReplyMessage}</span> : null}
+                  </div>
                   <div className="quick-table">
-                    {["dale", "Guille firma", "invito"].map((name) => (
-                      <div key={name}><strong>{name}</strong><span>/{name.toLowerCase().replace(/\s+/g, "_")}</span><p>por favor leer detenidamente el presupuesto...</p><button type="button">Editar</button></div>
-                    ))}
+                    {quickReplies.length ? quickReplies.map((reply) => (
+                      <div key={reply.id}>
+                        <strong>{reply.name}</strong>
+                        <span>/{reply.shortcut}</span>
+                        <p>{reply.body}</p>
+                        <button onClick={() => editQuickReply(reply)} type="button">Editar</button>
+                        <button className="danger" onClick={() => void deleteQuickReplyById(reply.id)} type="button">Borrar</button>
+                      </div>
+                    )) : <p>No hay respuestas rapidas guardadas.</p>}
                   </div>
                   <footer><button className="secondary" onClick={() => setQuickRepliesOpen(false)} type="button">Cerrar</button></footer>
                 </section>

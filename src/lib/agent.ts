@@ -308,14 +308,16 @@ function buildSelectorCheckoutResult(message: string): AgentResult | null {
   const normalized = normalizeSpanish(message);
   const isSelectorCheckout =
     normalized.includes("consulta desde el selector de febecos") ||
-    normalized.includes("quiero comprar el kit");
+    normalized.includes("quiero comprar el kit") ||
+    normalized.includes("complete la evaluacion de bombeo solar en febecos") ||
+    normalized.includes("equipo sugerido");
 
   if (!isSelectorCheckout) {
     return null;
   }
 
-  const equipment = findSelectorField(message, /equipo:\s*([^\n]+)/i);
-  const price = findSelectorField(message, /precio total:\s*([^\n]+)/i);
+  const equipment = findSelectorField(message, /(?:equipo|equipo sugerido):\*?\s*([^\n]+)/i);
+  const price = findSelectorField(message, /(?:precio total|precio equipo full|precio):\*?\s*([^\n]+)/i);
   const installments = findSelectorField(message, /(?:o\s+)?en\s+6\s+cuotas?\s+de:\s*([^\n]+)/i);
 
   const summaryParts = [
@@ -323,15 +325,18 @@ function buildSelectorCheckoutResult(message: string): AgentResult | null {
     price ? `con precio total ${price}` : null,
     installments ? `y referencia de 6 cuotas de ${installments}` : null
   ].filter(Boolean);
+  const isEvaluatingOnly = normalized.includes("solo evaluando");
 
   return {
     respuesta: [
       `Perfecto, recibimos tu seleccion del selector de Febecos. ${summaryParts.join(", ")}.`,
-      "Te paso con un asesor de Febecos para confirmar disponibilidad, forma de pago, envio y factura. Te escribe en breve."
+      isEvaluatingOnly
+        ? "Si queres avanzar o revisar disponibilidad, forma de pago, envio y factura, te ayudo a coordinarlo."
+        : "Te paso con un asesor de Febecos para confirmar disponibilidad, forma de pago, envio y factura. Te escribe en breve."
     ].join("\n\n"),
     sentimiento: "positivo",
     consultype: "caliente",
-    escalar: true,
+    escalar: !isEvaluatingOnly,
     nombre: null,
     imagenes: [],
     archivos: [],

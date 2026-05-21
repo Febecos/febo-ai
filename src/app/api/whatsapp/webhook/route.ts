@@ -60,10 +60,9 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    await sendPushNotificationToAll({
+    await notifyNewInboundMessage({
       title: message.contactName ? `Nueva consulta de ${message.contactName}` : "Nueva consulta en Febo AI",
-      body: agentMessage || "Mensaje nuevo recibido por WhatsApp.",
-      url: "/"
+      body: agentMessage || "Mensaje nuevo recibido por WhatsApp."
     });
 
     if (isWhatsAppAudioMessage(message) && stored.messageId) {
@@ -132,51 +131,88 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    const result = await runFebecosAgent({
-      phone: message.from,
-      message: agentMessage,
-      contactName: message.contactName,
-      conversationId: stored.threadId
-    });
+    let result;
+    try {
+      result = await runFebecosAgent({
+        phone: message.from,
+        message: agentMessage,
+        contactName: message.contactName,
+        conversationId: stored.threadId
+      });
+    } catch (error) {
+      console.error("No pudimos generar respuesta automatica.", error);
+      result = buildAgentFallbackResult();
+    }
+
     const needsHuman = shouldPauseForHumanHandoff(result.respuesta, result.escalar);
 
     const paymentButtons = getPaymentDecisionButtons(result.respuesta, needsHuman);
-    const sent = paymentButtons ?
-      await sendWhatsAppReplyButtons({
-        to: message.from,
-        body: result.respuesta,
-        buttons: paymentButtons
-      })
-    : shouldOfferAdvisorButton(result.respuesta, needsHuman) ?
-      await sendWhatsAppReplyButtons({
-        to: message.from,
-        body: result.respuesta,
-        buttons: [
-          { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Hablar asesor" }
-        ]
-      })
-    : shouldOfferDecisionButtons(result.respuesta, needsHuman) ?
-      await sendWhatsAppReplyButtons({
-        to: message.from,
-        body: result.respuesta,
-        buttons: [
-          { id: WHATSAPP_BUTTON_VIEW_INSTALLMENTS, title: "Ver cuotas" },
-          { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Hablar asesor" }
-        ]
-      })
-    : await sendWhatsAppText(message.from, result.respuesta);
+    try {
+      const sent = paymentButtons ?
+        await sendWhatsAppReplyButtons({
+          to: message.from,
+          body: result.respuesta,
+          buttons: paymentButtons
+        })
+      : shouldOfferAdvisorButton(result.respuesta, needsHuman) ?
+        await sendWhatsAppReplyButtons({
+          to: message.from,
+          body: result.respuesta,
+          buttons: [
+            { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Hablar asesor" }
+          ]
+        })
+      : shouldOfferDecisionButtons(result.respuesta, needsHuman) ?
+        await sendWhatsAppReplyButtons({
+          to: message.from,
+          body: result.respuesta,
+          buttons: [
+            { id: WHATSAPP_BUTTON_VIEW_INSTALLMENTS, title: "Ver cuotas" },
+            { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Hablar asesor" }
+          ]
+        })
+      : await sendWhatsAppText(message.from, result.respuesta);
 
-    await recordAgentReply({
-      contactId: stored.contactId,
-      threadId: stored.threadId,
-      answer: result.respuesta,
-      intent: result.consultype,
-      needsHuman,
-      waMessageId: getSentMessageId(sent)
-    });
+      await recordAgentReply({
+        contactId: stored.contactId,
+        threadId: stored.threadId,
+        answer: result.respuesta,
+        intent: result.consultype,
+        needsHuman,
+        waMessageId: getSentMessageId(sent)
+      });
+    } catch (error) {
+      console.error("No pudimos enviar o registrar la respuesta automatica.", error);
+    }
   }
 
   return NextResponse.json({ ok: true });
+}
+
+async function notifyNewInboundMessage(input: { title: string; body: string }) {
+  try {
+    await sendPushNotificationToAll({
+      title: input.title,
+      body: input.body,
+      url: "/"
+    });
+  } catch (error) {
+    console.error("No pudimos enviar la notificacion del mensaje entrante.", error);
+  }
+}
+
+function buildAgentFallbackResult() {
+  return {
+    respuesta: "Recibimos tu consulta. Te paso con un asesor de Febecos para que lo revise y te responda bien.",
+    sentimiento: "neutral" as const,
+    consultype: "caliente",
+    escalar: true,
+    nombre: null,
+    imagenes: [],
+    archivos: [],
+    action: "create_ticket" as const,
+    actionSubject: "fallback por error de respuesta automatica"
+  };
 }
 
 function getPaymentDecisionButtons(answer: string, needsHuman: boolean) {

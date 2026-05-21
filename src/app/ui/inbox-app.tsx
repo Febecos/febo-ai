@@ -2660,7 +2660,7 @@ function InboxList({
                   <div className="message-thread" ref={messageThreadRef}>
                     {messages.map((message) => {
                       const authorLabel = getMessageAuthorLabel(message);
-                      const isHumanOutbound = message.direction === "outbound" && Boolean(message.created_by);
+                      const isHumanOutbound = isHumanOutboundMessage(message);
 
                       return (
                         <article
@@ -2997,7 +2997,7 @@ function getMessageAuthorLabel(message: ConversationMessage) {
     return "Cliente";
   }
 
-  if (message.direction === "outbound" && message.created_by) {
+  if (isHumanOutboundMessage(message)) {
     return message.created_by_name ?? "Agente";
   }
 
@@ -3006,6 +3006,10 @@ function getMessageAuthorLabel(message: ConversationMessage) {
   }
 
   return "Febo AI";
+}
+
+function isHumanOutboundMessage(message: ConversationMessage) {
+  return message.direction === "outbound" && (Boolean(message.created_by) || message.source === "manual");
 }
 
 function getAudioTranscript(body: string) {

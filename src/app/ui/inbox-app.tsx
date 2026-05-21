@@ -2396,7 +2396,7 @@ function InboxList({
               <details className="row-menu">
                 <summary aria-label="Acciones"><MoreVertical size={18} /></summary>
                 <div className="action-popover">
-                  <button onClick={() => patchConversation(conversation.id, { status: "open" })} type="button"><CheckCheck size={15} /> Desescalar</button>
+                  <button onClick={() => patchConversation(conversation.id, { assignedTo: null, status: "open" })} type="button"><CheckCheck size={15} /> Desescalar</button>
                   <button onClick={() => markConversationUnread(conversation.id)} type="button"><CircleUserRound size={15} /> Marcar como no leido</button>
                   <details className="type-submenu">
                     <summary><Tag size={15} /> Cambiar tipo</summary>
@@ -2484,7 +2484,7 @@ function InboxList({
                 <details className="chat-actions-menu">
                   <summary aria-label="Mas acciones"><MoreVertical size={20} /></summary>
                   <div className="action-popover">
-                    <button onClick={() => patchConversation(selected.id, { status: "open" })} type="button"><CheckCheck size={15} /> Desescalar</button>
+                    <button onClick={() => patchConversation(selected.id, { assignedTo: null, status: "open" })} type="button"><CheckCheck size={15} /> Desescalar</button>
                     <button onClick={() => markConversationUnread(selected.id)} type="button"><CircleUserRound size={15} /> Marcar como no leido</button>
                     <details className="type-submenu">
                       <summary><Tag size={15} /> Cambiar tipo</summary>

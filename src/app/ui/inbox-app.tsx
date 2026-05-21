@@ -1420,6 +1420,16 @@ function InboxList({
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
   const activeFiltersCount =
     selectedTags.length + selectedClassifications.length + (filters.assignedTo !== "all" ? 1 : 0);
+  const quickReplyQuery = getQuickReplyQuery(replyText);
+  const matchingQuickReplies = useMemo(
+    () => quickReplyQuery === null ? [] : quickReplies
+      .filter((reply) => {
+        const query = quickReplyQuery.toLowerCase();
+        return !query || reply.shortcut.toLowerCase().includes(query) || reply.name.toLowerCase().includes(query);
+      })
+      .slice(0, 6),
+    [quickReplies, quickReplyQuery]
+  );
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -1511,6 +1521,7 @@ function InboxList({
 
   useEffect(() => {
     void loadTemplatesForContactForm();
+    void loadQuickReplies();
   }, []);
 
   useEffect(() => {
@@ -1861,6 +1872,13 @@ function InboxList({
 
   function resetQuickReplyForm() {
     setQuickReplyForm({ id: "", name: "", shortcut: "", availability: "global", body: "" });
+  }
+
+  function insertQuickReply(reply: QuickReply) {
+    setReplyText((current) => current.replace(/(^|\s)\/([^\s/]*)$/, (_match, prefix: string) => {
+      const spacing = prefix || "";
+      return `${spacing}${reply.body}`;
+    }));
   }
 
   async function sendTemplateToSelected(event: FormEvent<HTMLFormElement>) {
@@ -2941,12 +2959,26 @@ function InboxList({
                 >
                   <Paperclip size={18} />
                 </button>
-                <textarea
-                  disabled={sendingReply}
-                  onChange={(event) => setReplyText(event.target.value)}
-                  placeholder={replyFile ? "Mensaje opcional para acompanar el archivo" : "Escribir respuesta"}
-                  value={replyText}
-                />
+                <div className="reply-input-wrap">
+                  <textarea
+                    disabled={sendingReply}
+                    onChange={(event) => setReplyText(event.target.value)}
+                    placeholder={replyFile ? "Mensaje opcional para acompanar el archivo" : "Escribir respuesta"}
+                    value={replyText}
+                  />
+                  {quickReplyQuery !== null ? (
+                    <div className="quick-reply-picker">
+                      {matchingQuickReplies.length ? matchingQuickReplies.map((reply) => (
+                        <button key={reply.id} onClick={() => insertQuickReply(reply)} type="button">
+                          <strong>{reply.name}</strong>
+                          <span>/{reply.shortcut}</span>
+                        </button>
+                      )) : (
+                        <span>No hay respuestas para /{quickReplyQuery}</span>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
                 <button className="primary" disabled={sendingReply || preparingRecording || (!replyText.trim() && !replyFile)} type="submit">
                   <SendHorizonal size={18} />
                   {sendingReply ? "Enviando" : replyFile ? getAttachmentSendLabel(replyFile) : "Enviar"}
@@ -3143,6 +3175,10 @@ function getMessageAuthorLabel(message: ConversationMessage) {
   }
 
   return "Febo AI";
+}
+
+function getQuickReplyQuery(text: string) {
+  return text.match(/(^|\s)\/([^\s/]*)$/)?.[2] ?? null;
 }
 
 function isHumanOutboundMessage(message: ConversationMessage) {

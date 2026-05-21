@@ -4,7 +4,8 @@ import { authenticateInternalUser, createSession } from "@/lib/auth";
 
 const schema = z.object({
   email: z.string().email(),
-  code: z.string().min(1)
+  code: z.string().min(1),
+  ownerCode: z.string().optional()
 });
 
 export async function POST(request: NextRequest) {
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Email o codigo invalido." }, { status: 400 });
   }
 
-  const user = await authenticateInternalUser(parsed.data.email, parsed.data.code);
+  const user = await authenticateInternalUser(parsed.data.email, parsed.data.code, parsed.data.ownerCode);
 
   if (!user) {
     return NextResponse.json({ error: "No pudimos validar el acceso." }, { status: 401 });

@@ -36,6 +36,18 @@ function verifyLoginCode(code: string, hash: string | null | undefined) {
   return timingSafeEqualText(hashLoginCode(code), hash);
 }
 
+function verifyOwnerConfirmationCode(code: string | undefined) {
+  if (!config.FEBO_OWNER_CONFIRMATION_CODE) {
+    return true;
+  }
+
+  if (!code) {
+    return false;
+  }
+
+  return timingSafeEqualText(hashLoginCode(code), hashLoginCode(config.FEBO_OWNER_CONFIRMATION_CODE));
+}
+
 function encodeSession(user: AppUser) {
   const payload = Buffer.from(
     JSON.stringify({
@@ -75,7 +87,7 @@ export async function createSession(user: AppUser) {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 30
+    maxAge: 60 * 60 * 12
   });
 }
 
@@ -89,10 +101,14 @@ export async function getCurrentUser() {
   return decodeSession(store.get(cookieName)?.value);
 }
 
-export async function authenticateInternalUser(email: string, code: string) {
+export async function authenticateInternalUser(email: string, code: string, ownerCode?: string) {
   const user = await findUserByEmail(email);
 
   if (!user || !verifyLoginCode(code, user.login_code_hash)) {
+    return null;
+  }
+
+  if (user.role === "admin" && !verifyOwnerConfirmationCode(ownerCode)) {
     return null;
   }
 

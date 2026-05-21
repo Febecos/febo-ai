@@ -6,6 +6,7 @@ const schema = z.object({
   DATABASE_URL: z.string().url().optional(),
   AUTH_SECRET: z.string().optional(),
   INTERNAL_LOGIN_CODE: z.string().optional(),
+  FEBO_OWNER_CONFIRMATION_CODE: z.string().optional(),
   WHATSAPP_VERIFY_TOKEN: z.string().optional(),
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),

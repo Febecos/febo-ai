@@ -38,7 +38,11 @@ function verifyLoginCode(code: string, hash: string | null | undefined) {
     return matchesGlobalCode;
   }
 
-  return timingSafeEqualText(hashLoginCode(normalizedCode), hash) || matchesGlobalCode;
+  if (matchesGlobalCode) {
+    return true;
+  }
+
+  return timingSafeEqualText(hashLoginCode(normalizedCode), hash);
 }
 
 function verifyOwnerConfirmationCode(code: string | undefined) {

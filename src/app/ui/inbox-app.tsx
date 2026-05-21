@@ -1667,8 +1667,6 @@ function InboxList({
       return;
     }
 
-    const shouldSound =
-      document.hidden || isMobileViewport();
     const hasNewInbound = nextItems.some((conversation) => {
       const previousLastMessageAt = state.latestByConversation.get(conversation.id);
 
@@ -1681,7 +1679,7 @@ function InboxList({
 
     state.latestByConversation = new Map(nextItems.map((conversation) => [conversation.id, conversation.last_message_at]));
 
-    if (canPlaySound && shouldSound && hasNewInbound) {
+    if (canPlaySound && hasNewInbound) {
       void playInboxNotificationSound(notificationAudioContextRef);
     }
   }
@@ -3293,10 +3291,6 @@ function urlBase64ToUint8Array(value: string) {
   }
 
   return output;
-}
-
-function isMobileViewport() {
-  return window.matchMedia("(max-width: 720px), (pointer: coarse)").matches;
 }
 
 function getNotificationAudioContext(audioContextRef: { current: AudioContext | null }) {

@@ -29,23 +29,29 @@ function timingSafeEqualText(left: string, right: string) {
 }
 
 function verifyLoginCode(code: string, hash: string | null | undefined) {
+  const normalizedCode = code.trim();
+
   if (!hash) {
-    return config.INTERNAL_LOGIN_CODE ? code === config.INTERNAL_LOGIN_CODE : false;
+    return config.INTERNAL_LOGIN_CODE ? normalizedCode === config.INTERNAL_LOGIN_CODE.trim() : false;
   }
 
-  return timingSafeEqualText(hashLoginCode(code), hash);
+  return timingSafeEqualText(hashLoginCode(normalizedCode), hash);
 }
 
 function verifyOwnerConfirmationCode(code: string | undefined) {
-  if (!config.FEBO_OWNER_CONFIRMATION_CODE) {
+  const configuredCode = config.FEBO_OWNER_CONFIRMATION_CODE?.trim();
+
+  if (!configuredCode) {
     return true;
   }
 
-  if (!code) {
+  const normalizedCode = code?.trim();
+
+  if (!normalizedCode) {
     return false;
   }
 
-  return timingSafeEqualText(hashLoginCode(code), hashLoginCode(config.FEBO_OWNER_CONFIRMATION_CODE));
+  return timingSafeEqualText(hashLoginCode(normalizedCode), hashLoginCode(configuredCode));
 }
 
 function encodeSession(user: AppUser) {
@@ -114,4 +120,23 @@ export async function authenticateInternalUser(email: string, code: string, owne
 
   const { login_code_hash: _loginCodeHash, ...safeUser } = user;
   return safeUser;
+}
+
+export async function validateInternalLogin(email: string, code: string, ownerCode?: string) {
+  const user = await findUserByEmail(email.trim().toLowerCase());
+
+  if (!user) {
+    return { user: null, error: "No encontramos ese usuario." };
+  }
+
+  if (!verifyLoginCode(code, user.login_code_hash)) {
+    return { user: null, error: "Codigo interno incorrecto." };
+  }
+
+  if (user.role === "admin" && !verifyOwnerConfirmationCode(ownerCode)) {
+    return { user: null, error: "Clave manual incorrecta." };
+  }
+
+  const { login_code_hash: _loginCodeHash, ...safeUser } = user;
+  return { user: safeUser, error: null };
 }

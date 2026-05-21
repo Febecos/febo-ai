@@ -2549,7 +2549,7 @@ select {
   display: grid;
   gap: 4px;
   left: 0;
-  max-height: 230px;
+  max-height: 260px;
   min-width: min(360px, 100%);
   overflow-y: auto;
   padding: 6px;
@@ -2565,13 +2565,18 @@ select {
   color: var(--ink);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 38px;
-  padding: 8px 9px;
+  min-height: 30px;
+  padding: 5px 8px;
   text-align: left;
 }
 
-.quick-reply-picker button:hover {
+.quick-reply-picker button:hover,
+.quick-reply-picker button.active {
   background: rgba(245, 158, 11, 0.16);
+}
+
+.quick-reply-picker button.active {
+  outline: 1px solid rgba(245, 158, 11, 0.46);
 }
 
 .quick-reply-picker strong,
@@ -2583,7 +2588,13 @@ select {
 
 .quick-reply-picker span {
   color: #fbbf24;
+  font-size: 11px;
+}
+
+.quick-reply-picker strong {
   font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .quick-reply-picker > span {

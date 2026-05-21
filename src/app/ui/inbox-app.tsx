@@ -40,7 +40,7 @@ import {
   UsersRound,
   X
 } from "lucide-react";
-import { DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AppUser,
   ContactSummary,
@@ -1377,6 +1377,7 @@ function InboxList({
   });
   const [quickReplyMessage, setQuickReplyMessage] = useState("");
   const [savingQuickReply, setSavingQuickReply] = useState(false);
+  const [activeQuickReplyIndex, setActiveQuickReplyIndex] = useState(0);
   const [templateComposerOpen, setTemplateComposerOpen] = useState(false);
   const [tagPanelOpen, setTagPanelOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -1430,6 +1431,10 @@ function InboxList({
       .slice(0, 6),
     [quickReplies, quickReplyQuery]
   );
+
+  useEffect(() => {
+    setActiveQuickReplyIndex(0);
+  }, [quickReplyQuery]);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -1879,6 +1884,29 @@ function InboxList({
       const spacing = prefix || "";
       return `${spacing}${reply.body}`;
     }));
+  }
+
+  function handleReplyKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (quickReplyQuery === null || !matchingQuickReplies.length) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveQuickReplyIndex((current) => (current + 1) % matchingQuickReplies.length);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveQuickReplyIndex((current) => (current - 1 + matchingQuickReplies.length) % matchingQuickReplies.length);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      insertQuickReply(matchingQuickReplies[activeQuickReplyIndex] ?? matchingQuickReplies[0]);
+    }
   }
 
   async function sendTemplateToSelected(event: FormEvent<HTMLFormElement>) {
@@ -2963,13 +2991,20 @@ function InboxList({
                   <textarea
                     disabled={sendingReply}
                     onChange={(event) => setReplyText(event.target.value)}
+                    onKeyDown={handleReplyKeyDown}
                     placeholder={replyFile ? "Mensaje opcional para acompanar el archivo" : "Escribir respuesta"}
                     value={replyText}
                   />
                   {quickReplyQuery !== null ? (
                     <div className="quick-reply-picker">
-                      {matchingQuickReplies.length ? matchingQuickReplies.map((reply) => (
-                        <button key={reply.id} onClick={() => insertQuickReply(reply)} type="button">
+                      {matchingQuickReplies.length ? matchingQuickReplies.map((reply, index) => (
+                        <button
+                          className={index === activeQuickReplyIndex ? "active" : ""}
+                          key={reply.id}
+                          onClick={() => insertQuickReply(reply)}
+                          onMouseEnter={() => setActiveQuickReplyIndex(index)}
+                          type="button"
+                        >
                           <strong>{reply.name}</strong>
                           <span>/{reply.shortcut}</span>
                         </button>

@@ -39,19 +39,7 @@ function verifyLoginCode(code: string, hash: string | null | undefined) {
 }
 
 function verifyOwnerConfirmationCode(code: string | undefined) {
-  const configuredCode = config.FEBO_OWNER_CONFIRMATION_CODE?.trim();
-
-  if (!configuredCode) {
-    return true;
-  }
-
-  const normalizedCode = code?.trim();
-
-  if (!normalizedCode) {
-    return false;
-  }
-
-  return timingSafeEqualText(hashLoginCode(normalizedCode), hashLoginCode(configuredCode));
+  return true;
 }
 
 function encodeSession(user: AppUser) {
@@ -129,19 +117,8 @@ export async function validateInternalLogin(email: string, code: string, ownerCo
     return { user: null, error: "No encontramos ese usuario." };
   }
 
-  const ownerCodeValid = user.role === "admin" && verifyOwnerConfirmationCode(ownerCode);
-
   if (!verifyLoginCode(code, user.login_code_hash)) {
-    if (ownerCodeValid) {
-      const { login_code_hash: _loginCodeHash, ...safeUser } = user;
-      return { user: safeUser, error: null };
-    }
-
     return { user: null, error: "Codigo interno incorrecto." };
-  }
-
-  if (user.role === "admin" && !ownerCodeValid) {
-    return { user: null, error: "Clave manual incorrecta." };
   }
 
   const { login_code_hash: _loginCodeHash, ...safeUser } = user;

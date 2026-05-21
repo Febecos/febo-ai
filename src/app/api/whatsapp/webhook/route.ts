@@ -165,36 +165,50 @@ export async function POST(request: NextRequest) {
     const needsHuman = advisorDecisionButtons ? false : shouldPauseForHumanHandoff(result.respuesta, result.escalar);
 
     const paymentButtons = getPaymentDecisionButtons(result.respuesta, needsHuman);
+    let sentReplyOptions: Array<{ id: string; title: string }> | undefined;
+
     try {
       const sent = paymentButtons ?
-        await sendWhatsAppReplyButtons({
-          to: message.from,
-          body: result.respuesta,
-          buttons: paymentButtons
-        })
+        (
+          sentReplyOptions = paymentButtons,
+          await sendWhatsAppReplyButtons({
+            to: message.from,
+            body: result.respuesta,
+            buttons: paymentButtons
+          })
+        )
       : advisorDecisionButtons ?
-        await sendWhatsAppReplyButtons({
-          to: message.from,
-          body: result.respuesta,
-          buttons: advisorDecisionButtons
-        })
+        (
+          sentReplyOptions = advisorDecisionButtons,
+          await sendWhatsAppReplyButtons({
+            to: message.from,
+            body: result.respuesta,
+            buttons: advisorDecisionButtons
+          })
+        )
       : shouldOfferAdvisorButton(result.respuesta, needsHuman) ?
-        await sendWhatsAppReplyButtons({
-          to: message.from,
-          body: result.respuesta,
-          buttons: [
+        (
+          sentReplyOptions = [
             { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Hablar asesor" }
-          ]
-        })
+          ],
+          await sendWhatsAppReplyButtons({
+            to: message.from,
+            body: result.respuesta,
+            buttons: sentReplyOptions
+          })
+        )
       : shouldOfferDecisionButtons(result.respuesta, needsHuman) ?
-        await sendWhatsAppReplyButtons({
-          to: message.from,
-          body: result.respuesta,
-          buttons: [
+        (
+          sentReplyOptions = [
             { id: WHATSAPP_BUTTON_VIEW_INSTALLMENTS, title: "Ver cuotas" },
             { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Hablar asesor" }
-          ]
-        })
+          ],
+          await sendWhatsAppReplyButtons({
+            to: message.from,
+            body: result.respuesta,
+            buttons: sentReplyOptions
+          })
+        )
       : await sendWhatsAppText(message.from, result.respuesta);
 
       await recordAgentReply({
@@ -203,7 +217,8 @@ export async function POST(request: NextRequest) {
         answer: result.respuesta,
         intent: result.consultype,
         needsHuman,
-        waMessageId: getSentMessageId(sent)
+        waMessageId: getSentMessageId(sent),
+        replyOptions: sentReplyOptions
       });
     } catch (error) {
       console.error("No pudimos enviar o registrar la respuesta automatica.", error);

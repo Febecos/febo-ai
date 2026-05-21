@@ -73,6 +73,7 @@ export type ConversationMessage = {
   wa_message_id: string | null;
   whatsapp_status: string | null;
   whatsapp_error: string | null;
+  reply_options: Array<{ id: string; title: string }> | null;
   media_id: string | null;
   media_mime_type: string | null;
   media_filename: string | null;
@@ -677,6 +678,7 @@ export async function recordAgentReply(input: {
   needsHuman: boolean;
   waMessageId?: string | null;
   createHandoff?: boolean;
+  replyOptions?: Array<{ id: string; title: string }>;
 }) {
   if (!isDbConfigured() || !input.contactId || !input.threadId) {
     return;
@@ -686,8 +688,12 @@ export async function recordAgentReply(input: {
   const consultype = normalizeConsultype(input.intent);
   const humanAssigneeId = input.needsHuman || consultype === "caliente" ? await getHotLeadAssigneeId() : null;
 
+  const metadata = input.replyOptions?.length
+    ? JSON.stringify({ reply_options: input.replyOptions })
+    : JSON.stringify({});
+
   await sql`
-    insert into messages (conversation_id, contact_id, direction, wa_message_id, body, consultype, needs_human)
+    insert into messages (conversation_id, contact_id, direction, wa_message_id, body, consultype, needs_human, metadata)
     values (
       ${input.threadId},
       ${input.contactId},
@@ -695,7 +701,8 @@ export async function recordAgentReply(input: {
       ${input.waMessageId ?? null},
       ${input.answer},
       ${consultype},
-      ${input.needsHuman}
+      ${input.needsHuman},
+      ${metadata}::jsonb
     )
   `;
 
@@ -899,6 +906,7 @@ export async function listConversationMessages(conversationId: string, limit = 1
       m.wa_message_id,
       m.metadata->>'whatsapp_status' as whatsapp_status,
       m.metadata->>'whatsapp_error' as whatsapp_error,
+      coalesce(m.metadata->'reply_options', 'null'::jsonb) as reply_options,
       mm.id::text as media_id,
       mm.mime_type as media_mime_type,
       mm.filename as media_filename

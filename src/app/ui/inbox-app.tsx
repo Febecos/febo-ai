@@ -2677,6 +2677,14 @@ function InboxList({
                     {messages.map((message) => (
                       <article className={`chat-bubble ${message.direction} ${isAudioMessage(message) ? "audio-bubble" : ""}`} key={message.id}>
                         {!isAudioMessage(message) && message.body ? <p>{message.body}</p> : null}
+                        {message.reply_options?.length ? (
+                          <div className="reply-options-log">
+                            <span>Opciones enviadas:</span>
+                            {message.reply_options.map((option) => (
+                              <b key={`${message.id}-${option.id}`}>{option.title}</b>
+                            ))}
+                          </div>
+                        ) : null}
                         {message.media_id ? <MessageMedia message={message} /> : null}
                         <small>
                           {message.direction === "inbound" ? "Cliente" : "Febo AI"} - {formatMessageTime(message.created_at)}

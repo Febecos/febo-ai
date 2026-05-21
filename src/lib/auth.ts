@@ -30,12 +30,15 @@ function timingSafeEqualText(left: string, right: string) {
 
 function verifyLoginCode(code: string, hash: string | null | undefined) {
   const normalizedCode = code.trim();
+  const matchesGlobalCode = config.INTERNAL_LOGIN_CODE
+    ? normalizedCode === config.INTERNAL_LOGIN_CODE.trim()
+    : false;
 
   if (!hash) {
-    return config.INTERNAL_LOGIN_CODE ? normalizedCode === config.INTERNAL_LOGIN_CODE.trim() : false;
+    return matchesGlobalCode;
   }
 
-  return timingSafeEqualText(hashLoginCode(normalizedCode), hash);
+  return timingSafeEqualText(hashLoginCode(normalizedCode), hash) || matchesGlobalCode;
 }
 
 function verifyOwnerConfirmationCode(code: string | undefined) {

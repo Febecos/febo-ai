@@ -105,7 +105,7 @@ export async function getCurrentUser() {
 export async function authenticateInternalUser(email: string, code: string, ownerCode?: string) {
   const user = await findUserByEmail(email);
 
-  if (!user) {
+  if (!user || !verifyLoginCode(code, user.login_code_hash)) {
     return null;
   }
 
@@ -122,6 +122,10 @@ export async function validateInternalLogin(email: string, code: string, ownerCo
 
   if (!user) {
     return { user: null, error: "No encontramos ese usuario." };
+  }
+
+  if (!verifyLoginCode(code, user.login_code_hash)) {
+    return { user: null, error: "Codigo interno incorrecto." };
   }
 
   const { login_code_hash: _loginCodeHash, ...safeUser } = user;

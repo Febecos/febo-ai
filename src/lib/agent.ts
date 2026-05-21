@@ -308,7 +308,7 @@ function buildSelectorCheckoutResult(message: string): AgentResult | null {
   const normalized = normalizeSpanish(message);
   const isSelectorCheckout =
     normalized.includes("consulta desde el selector de febecos") ||
-    normalized.includes("quiero comprar el kit completo");
+    normalized.includes("quiero comprar el kit");
 
   if (!isSelectorCheckout) {
     return null;
@@ -326,8 +326,8 @@ function buildSelectorCheckoutResult(message: string): AgentResult | null {
 
   return {
     respuesta: [
-      `Perfecto, recibimos tu seleccion del selector de Febecos: ${summaryParts.join(", ")}.`,
-      "Te paso con un asesor de Febecos para confirmar disponibilidad, forma de pago, envio y factura. Te va a escribir ahora."
+      `Perfecto, recibimos tu seleccion del selector de Febecos. ${summaryParts.join(", ")}.`,
+      "Te paso con un asesor de Febecos para confirmar disponibilidad, forma de pago, envio y factura. Te escribe en breve."
     ].join("\n\n"),
     sentimiento: "positivo",
     consultype: "caliente",

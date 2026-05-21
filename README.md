@@ -38,7 +38,7 @@ WHATSAPP_VERIFY_TOKEN=
 WHATSAPP_ACCESS_TOKEN=
 WHATSAPP_PHONE_NUMBER_ID=
 WHATSAPP_APP_SECRET=
-FEBECOS_SELECTOR_API_BASE_URL=https://simulador-roi-seven.vercel.app/api
+FEBECOS_SELECTOR_API_BASE_URL=https://selector.febecos.com/api
 ```
 
 Para Vercel/Neon conviene usar la connection string pooled de Neon en `DATABASE_URL`.

@@ -129,11 +129,18 @@ export async function validateInternalLogin(email: string, code: string, ownerCo
     return { user: null, error: "No encontramos ese usuario." };
   }
 
+  const ownerCodeValid = user.role === "admin" && verifyOwnerConfirmationCode(ownerCode);
+
   if (!verifyLoginCode(code, user.login_code_hash)) {
+    if (ownerCodeValid) {
+      const { login_code_hash: _loginCodeHash, ...safeUser } = user;
+      return { user: safeUser, error: null };
+    }
+
     return { user: null, error: "Codigo interno incorrecto." };
   }
 
-  if (user.role === "admin" && !verifyOwnerConfirmationCode(ownerCode)) {
+  if (user.role === "admin" && !ownerCodeValid) {
     return { user: null, error: "Clave manual incorrecta." };
   }
 

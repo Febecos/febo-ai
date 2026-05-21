@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
       result = buildAgentFallbackResult();
     }
 
-    const advisorDecisionButtons = getAdvisorDecisionButtons(result.respuesta);
+    const advisorDecisionButtons = getAdvisorDecisionButtons(result.respuesta, result.escalar);
     const needsHuman = advisorDecisionButtons ? false : shouldPauseForHumanHandoff(result.respuesta, result.escalar);
 
     const paymentButtons = getPaymentDecisionButtons(result.respuesta, needsHuman);
@@ -265,21 +265,14 @@ function getPaymentDecisionButtons(answer: string, needsHuman: boolean) {
   return null;
 }
 
-function getAdvisorDecisionButtons(answer: string) {
+function getAdvisorDecisionButtons(answer: string, escalates = false) {
   const normalized = normalizeAnswer(answer);
 
   if (!normalized.includes("asesor")) {
     return null;
   }
 
-  const isOffer =
-    normalized.includes("si queres") ||
-    normalized.includes("queres que") ||
-    normalized.includes("podes hablar") ||
-    normalized.includes("te ayudo a coordinar") ||
-    normalized.includes("te puedo pasar");
-
-  if (!isOffer) {
+  if (!isConditionalAdvisorOffer(normalized) && !escalates) {
     return null;
   }
 
@@ -330,14 +323,15 @@ function getSentMessageId(response: unknown) {
 }
 
 function shouldPauseForHumanHandoff(answer: string, escalates: boolean) {
+  const normalized = normalizeAnswer(answer);
+
+  if (normalized.includes("asesor") && isConditionalAdvisorOffer(normalized)) {
+    return false;
+  }
+
   if (escalates) {
     return true;
   }
-
-  const normalized = answer
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
 
   return [
     "te paso a un asesor",
@@ -348,6 +342,20 @@ function shouldPauseForHumanHandoff(answer: string, escalates: boolean) {
     "ya lo estamos derivando",
     "te van a estar escribiendo"
   ].some((phrase) => normalized.includes(phrase));
+}
+
+function isConditionalAdvisorOffer(normalizedAnswer: string) {
+  return [
+    "si queres",
+    "si quieres",
+    "queres que",
+    "quieres que",
+    "podes hablar",
+    "puedes hablar",
+    "te ayudo a coordinar",
+    "te puedo pasar",
+    "podemos pasarte"
+  ].some((phrase) => normalizedAnswer.includes(phrase));
 }
 
 function audioExtensionForMime(mimeType: string) {

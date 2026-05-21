@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { runFebecosAgent, transcribeAudio } from "@/lib/agent";
 import { config } from "@/lib/config";
 import { recordAgentReply, recordIncomingMessage, recordWhatsAppMessageStatuses, saveMessageMedia, updateMessageBody } from "@/lib/crm";
@@ -19,6 +19,9 @@ const WHATSAPP_BUTTON_TALK_TO_ADVISOR = "febo_talk_to_advisor";
 const WHATSAPP_BUTTON_KEEP_ASSISTING = "febo_keep_assisting";
 const WHATSAPP_BUTTON_SIX_INSTALLMENTS = "febo_six_installments";
 const WHATSAPP_BUTTON_CASH = "febo_cash";
+const DEFAULT_AUTO_REPLY_DELAY_SECONDS = 90;
+
+export const maxDuration = 150;
 
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams;
@@ -99,133 +102,178 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    if (isText && message.interactiveId === WHATSAPP_BUTTON_TALK_TO_ADVISOR) {
-      const handoffAnswer = "Perfecto. Te paso con un asesor de Febecos para que lo vean directo y coordinen como seguir.";
-      const sent = await sendWhatsAppText(message.from, handoffAnswer);
-
-      await recordAgentReply({
-        contactId: stored.contactId,
-        threadId: stored.threadId,
-        answer: handoffAnswer,
-        intent: "caliente",
-        needsHuman: true,
-        waMessageId: getSentMessageId(sent)
-      });
-
-      continue;
-    }
-
-    if (isText && message.interactiveId === WHATSAPP_BUTTON_KEEP_ASSISTING) {
-      const keepAssistingAnswer = "Perfecto, seguimos por aca. Decime que queres revisar: equipo, precio, cuotas, instalacion, envio o cualquier duda tecnica.";
-      const sent = await sendWhatsAppText(message.from, keepAssistingAnswer);
-
-      await recordAgentReply({
-        contactId: stored.contactId,
-        threadId: stored.threadId,
-        answer: keepAssistingAnswer,
-        intent: "otro",
-        needsHuman: false,
-        waMessageId: getSentMessageId(sent)
-      });
-
-      continue;
-    }
-
-    if (!agentMessage) {
-      const fallbackAnswer = "Recibi tu audio, pero no pude leerlo bien. Me lo podes mandar por escrito?";
-
-      const sent = await sendWhatsAppText(message.from, fallbackAnswer);
-
-      await recordAgentReply({
-        contactId: stored.contactId,
-        threadId: stored.threadId,
-        answer: fallbackAnswer,
-        intent: "otro",
-        needsHuman: false,
-        waMessageId: getSentMessageId(sent)
-      });
-
-      continue;
-    }
-
-    let result;
-    try {
-      result = await runFebecosAgent({
-        phone: message.from,
-        message: agentMessage,
-        contactName: message.contactName,
-        conversationId: stored.threadId
-      });
-    } catch (error) {
-      console.error("No pudimos generar respuesta automatica.", error);
-      result = buildAgentFallbackResult();
-    }
-
-    const advisorDecisionButtons = getAdvisorDecisionButtons(result.respuesta, result.escalar);
-    const needsHuman = advisorDecisionButtons ? false : shouldPauseForHumanHandoff(result.respuesta, result.escalar);
-
-    const paymentButtons = getPaymentDecisionButtons(result.respuesta, needsHuman);
-    let sentReplyOptions: Array<{ id: string; title: string }> | undefined;
-
-    try {
-      const sent = paymentButtons ?
-        (
-          sentReplyOptions = paymentButtons,
-          await sendWhatsAppReplyButtons({
-            to: message.from,
-            body: result.respuesta,
-            buttons: paymentButtons
-          })
-        )
-      : advisorDecisionButtons ?
-        (
-          sentReplyOptions = advisorDecisionButtons,
-          await sendWhatsAppReplyButtons({
-            to: message.from,
-            body: result.respuesta,
-            buttons: advisorDecisionButtons
-          })
-        )
-      : shouldOfferAdvisorButton(result.respuesta, needsHuman) ?
-        (
-          sentReplyOptions = [
-            { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Hablar asesor" }
-          ],
-          await sendWhatsAppReplyButtons({
-            to: message.from,
-            body: result.respuesta,
-            buttons: sentReplyOptions
-          })
-        )
-      : shouldOfferDecisionButtons(result.respuesta, needsHuman) ?
-        (
-          sentReplyOptions = [
-            { id: WHATSAPP_BUTTON_VIEW_INSTALLMENTS, title: "Ver cuotas" },
-            { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Hablar asesor" }
-          ],
-          await sendWhatsAppReplyButtons({
-            to: message.from,
-            body: result.respuesta,
-            buttons: sentReplyOptions
-          })
-        )
-      : await sendWhatsAppText(message.from, result.respuesta);
-
-      await recordAgentReply({
-        contactId: stored.contactId,
-        threadId: stored.threadId,
-        answer: result.respuesta,
-        intent: result.consultype,
-        needsHuman,
-        waMessageId: getSentMessageId(sent),
-        replyOptions: sentReplyOptions
-      });
-    } catch (error) {
-      console.error("No pudimos enviar o registrar la respuesta automatica.", error);
-    }
+    scheduleAutomaticReply({
+      message,
+      interactiveId: isText ? message.interactiveId : undefined,
+      agentMessage,
+      stored
+    });
   }
 
   return NextResponse.json({ ok: true });
+}
+
+type InboundWhatsAppMessage = ReturnType<typeof extractInboundMessages>[number];
+type StoredIncomingMessage = Awaited<ReturnType<typeof recordIncomingMessage>>;
+
+function scheduleAutomaticReply(input: {
+  message: InboundWhatsAppMessage;
+  interactiveId?: string;
+  agentMessage: string;
+  stored: StoredIncomingMessage;
+}) {
+  after(async () => {
+    try {
+      await waitBeforeAutomaticReply();
+      await sendAutomaticReply(input);
+    } catch (error) {
+      console.error("No pudimos completar la respuesta automatica diferida.", error);
+    }
+  });
+}
+
+async function sendAutomaticReply(input: {
+  message: InboundWhatsAppMessage;
+  interactiveId?: string;
+  agentMessage: string;
+  stored: StoredIncomingMessage;
+}) {
+  const { message, interactiveId, agentMessage, stored } = input;
+
+  if (interactiveId === WHATSAPP_BUTTON_TALK_TO_ADVISOR) {
+    const handoffAnswer = "Perfecto. Te paso con un asesor de Febecos para que lo vean directo y coordinen como seguir.";
+    const sent = await sendWhatsAppText(message.from, handoffAnswer);
+
+    await recordAgentReply({
+      contactId: stored.contactId,
+      threadId: stored.threadId,
+      answer: handoffAnswer,
+      intent: "caliente",
+      needsHuman: true,
+      waMessageId: getSentMessageId(sent)
+    });
+
+    return;
+  }
+
+  if (interactiveId === WHATSAPP_BUTTON_KEEP_ASSISTING) {
+    const keepAssistingAnswer = "Perfecto, seguimos por aca. Decime que queres revisar: equipo, precio, cuotas, instalacion, envio o cualquier duda tecnica.";
+    const sent = await sendWhatsAppText(message.from, keepAssistingAnswer);
+
+    await recordAgentReply({
+      contactId: stored.contactId,
+      threadId: stored.threadId,
+      answer: keepAssistingAnswer,
+      intent: "otro",
+      needsHuman: false,
+      waMessageId: getSentMessageId(sent)
+    });
+
+    return;
+  }
+
+  if (!agentMessage) {
+    const fallbackAnswer = "Recibi tu audio, pero no pude leerlo bien. Me lo podes mandar por escrito?";
+
+    const sent = await sendWhatsAppText(message.from, fallbackAnswer);
+
+    await recordAgentReply({
+      contactId: stored.contactId,
+      threadId: stored.threadId,
+      answer: fallbackAnswer,
+      intent: "otro",
+      needsHuman: false,
+      waMessageId: getSentMessageId(sent)
+    });
+
+    return;
+  }
+
+  let result;
+  try {
+    result = await runFebecosAgent({
+      phone: message.from,
+      message: agentMessage,
+      contactName: message.contactName,
+      conversationId: stored.threadId
+    });
+  } catch (error) {
+    console.error("No pudimos generar respuesta automatica.", error);
+    result = buildAgentFallbackResult();
+  }
+
+  const advisorDecisionButtons = getAdvisorDecisionButtons(result.respuesta, result.escalar);
+  const needsHuman = advisorDecisionButtons ? false : shouldPauseForHumanHandoff(result.respuesta, result.escalar);
+
+  const paymentButtons = getPaymentDecisionButtons(result.respuesta, needsHuman);
+  let sentReplyOptions: Array<{ id: string; title: string }> | undefined;
+
+  try {
+    const sent = paymentButtons ?
+      (
+        sentReplyOptions = paymentButtons,
+        await sendWhatsAppReplyButtons({
+          to: message.from,
+          body: result.respuesta,
+          buttons: paymentButtons
+        })
+      )
+    : advisorDecisionButtons ?
+      (
+        sentReplyOptions = advisorDecisionButtons,
+        await sendWhatsAppReplyButtons({
+          to: message.from,
+          body: result.respuesta,
+          buttons: advisorDecisionButtons
+        })
+      )
+    : shouldOfferAdvisorButton(result.respuesta, needsHuman) ?
+      (
+        sentReplyOptions = [
+          { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Hablar asesor" }
+        ],
+        await sendWhatsAppReplyButtons({
+          to: message.from,
+          body: result.respuesta,
+          buttons: sentReplyOptions
+        })
+      )
+    : shouldOfferDecisionButtons(result.respuesta, needsHuman) ?
+      (
+        sentReplyOptions = [
+          { id: WHATSAPP_BUTTON_VIEW_INSTALLMENTS, title: "Ver cuotas" },
+          { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Hablar asesor" }
+        ],
+        await sendWhatsAppReplyButtons({
+          to: message.from,
+          body: result.respuesta,
+          buttons: sentReplyOptions
+        })
+      )
+    : await sendWhatsAppText(message.from, result.respuesta);
+
+    await recordAgentReply({
+      contactId: stored.contactId,
+      threadId: stored.threadId,
+      answer: result.respuesta,
+      intent: result.consultype,
+      needsHuman,
+      waMessageId: getSentMessageId(sent),
+      replyOptions: sentReplyOptions
+    });
+  } catch (error) {
+    console.error("No pudimos enviar o registrar la respuesta automatica.", error);
+  }
+}
+
+async function waitBeforeAutomaticReply() {
+  const delaySeconds = Number(process.env.FEBO_AUTO_REPLY_DELAY_SECONDS ?? DEFAULT_AUTO_REPLY_DELAY_SECONDS);
+  const safeDelaySeconds = Number.isFinite(delaySeconds) && delaySeconds >= 0 ? delaySeconds : DEFAULT_AUTO_REPLY_DELAY_SECONDS;
+  await sleep(safeDelaySeconds * 1000);
+}
+
+function sleep(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 async function notifyNewInboundMessage(input: { title: string; body: string }) {

@@ -34,6 +34,7 @@ export type ConversationSummary = {
   last_message: string | null;
   last_direction: string | null;
   unread_count: number;
+  unread: boolean;
 };
 
 export type ContactSummary = {
@@ -608,7 +609,9 @@ export async function recordIncomingMessage(input: {
 
   await sql`
     update conversations
-    set last_message_at = now()
+    set last_message_at = now(),
+        unread = true,
+        updated_at = now()
     where id = ${threadId}
   `;
 
@@ -696,6 +699,7 @@ export async function recordSelectorCheckoutLead(input: SelectorCheckoutLead) {
     set status = 'handoff',
         ai_enabled = false,
         assigned_to = coalesce(assigned_to, ${assigneeId}::uuid),
+        unread = true,
         last_message_at = now(),
         updated_at = now()
     where id = ${conversation.id}
@@ -854,6 +858,7 @@ export async function listConversations(filters: ConversationFilters = {}) {
       c.id,
       c.status,
       c.ai_enabled,
+      c.unread,
       c.last_message_at::text,
       ct.id as contact_id,
       ct.phone,
@@ -865,7 +870,7 @@ export async function listConversations(filters: ConversationFilters = {}) {
       u.full_name as assigned_name,
       lm.body as last_message,
       lm.direction as last_direction,
-      0::int as unread_count
+      case when c.unread then 1 else 0 end::int as unread_count
     from conversations c
     join contacts ct on ct.id = c.contact_id
     left join app_users u on u.id = c.assigned_to
@@ -1304,10 +1309,12 @@ export async function updateConversation(input: {
   assignedTo?: string | null;
   consultype?: string;
   displayName?: string | null;
+  unread?: boolean;
 }) {
   const sql = getSql();
   const status = input.status ?? null;
   const aiEnabled = input.aiEnabled ?? null;
+  const unread = input.unread ?? null;
   const assignedTo = input.assignedTo === undefined ? null : input.assignedTo;
   const changeAssigned = input.assignedTo !== undefined;
   const consultype = input.consultype ? normalizeConsultype(input.consultype) : null;
@@ -1325,6 +1332,7 @@ export async function updateConversation(input: {
     update conversations
     set status = coalesce(${status}, status),
         ai_enabled = coalesce(${aiEnabled}, ai_enabled),
+        unread = coalesce(${unread}, unread),
         assigned_to = case when ${changeAssigned} then ${assignedTo}::uuid else assigned_to end,
         updated_at = now()
     where id = ${input.conversationId}

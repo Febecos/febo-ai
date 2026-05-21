@@ -672,6 +672,10 @@ function isHotCrmConversation(conversation: ConversationSummary) {
   return conversation.consultype === "caliente" || conversation.status === "hot";
 }
 
+function isConversationUnread(conversation: ConversationSummary) {
+  return Boolean(conversation.unread || conversation.unread_count > 0);
+}
+
 function canUserSeeCrmConversation(conversation: ConversationSummary, currentUser: AppUser) {
   if (currentUser.role === "admin") {
     return true;
@@ -1404,7 +1408,6 @@ function InboxList({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedClassifications, setSelectedClassifications] = useState<string[]>([]);
-  const [unreadIds, setUnreadIds] = useState<string[]>([]);
   const [transferUserId, setTransferUserId] = useState("");
   const [chatName, setChatName] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -1498,6 +1501,7 @@ function InboxList({
 
     setSelectedId(focusedConversation.id);
     setMobileDetailOpen(true);
+    markConversationRead(focusedConversation.id);
   }, [focusedConversation.id, focusedConversation.signal]);
 
   useEffect(() => {
@@ -1560,22 +1564,6 @@ function InboxList({
       void loadQuickReplies();
     }
   }, [quickRepliesOpen]);
-
-  useEffect(() => {
-    const storedUnreadIds = window.localStorage.getItem("febo-unread-conversations");
-    try {
-      const parsedUnreadIds = storedUnreadIds ? JSON.parse(storedUnreadIds) : [];
-      if (Array.isArray(parsedUnreadIds)) {
-        setUnreadIds(parsedUnreadIds.filter((id) => typeof id === "string"));
-      }
-    } catch {
-      window.localStorage.removeItem("febo-unread-conversations");
-    }
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem("febo-unread-conversations", JSON.stringify(unreadIds));
-  }, [unreadIds]);
 
   useEffect(() => {
     function closeMenusOnOutsideClick(event: PointerEvent) {
@@ -2038,6 +2026,11 @@ function InboxList({
       return;
     }
 
+    if (typeof body.unread === "boolean" && Object.keys(body).length === 1) {
+      restoreConversationScroll(listScrollTop, threadScrollTop);
+      return;
+    }
+
     await refreshConversations();
     restoreConversationScroll(listScrollTop, threadScrollTop);
     if (conversationId === selected?.id) {
@@ -2063,18 +2056,40 @@ function InboxList({
   function selectConversation(conversationId: string) {
     setSelectedId(conversationId);
     setMobileDetailOpen(true);
-    setUnreadIds((current) => current.filter((id) => id !== conversationId));
+    markConversationRead(conversationId);
   }
 
   function markConversationUnread(conversationId: string) {
-    setUnreadIds((current) => (current.includes(conversationId) ? current : [...current, conversationId]));
+    setItems((current) => {
+      const nextItems = current.map((conversation) =>
+        conversation.id === conversationId ? { ...conversation, unread: true, unread_count: 1 } : conversation
+      );
+      onConversationsChange(nextItems);
+      return nextItems;
+    });
+    void patchConversation(conversationId, { unread: true });
+  }
+
+  function markConversationRead(conversationId: string) {
+    const target = items.find((conversation) => conversation.id === conversationId);
+    if (!target?.unread && !target?.unread_count) {
+      return;
+    }
+
+    setItems((current) => {
+      const nextItems = current.map((conversation) =>
+        conversation.id === conversationId ? { ...conversation, unread: false, unread_count: 0 } : conversation
+      );
+      onConversationsChange(nextItems);
+      return nextItems;
+    });
+    void patchConversation(conversationId, { unread: false });
   }
 
   async function hideConversation(conversationId: string, status: "blocked" | "deleted") {
     const nextItems = items.filter((conversation) => conversation.id !== conversationId);
     setItems(nextItems);
     onConversationsChange(nextItems);
-    setUnreadIds((current) => current.filter((id) => id !== conversationId));
     const response = await fetch("/api/conversations", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -2535,7 +2550,7 @@ function InboxList({
         {items.length ? (
           items.map((conversation) => (
             <article
-              className={`conversation-row ${conversation.id === selected?.id ? "active" : ""} ${unreadIds.includes(conversation.id) ? "unread" : ""}`}
+              className={`conversation-row ${conversation.id === selected?.id ? "active" : ""} ${isConversationUnread(conversation) ? "unread" : ""}`}
               key={conversation.id}
             >
               <button

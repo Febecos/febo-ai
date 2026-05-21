@@ -54,11 +54,15 @@ create table if not exists conversations (
   contact_id uuid not null references contacts(id) on delete cascade,
   status text not null default 'open' check (status in ('open', 'waiting', 'quoted', 'hot', 'handoff', 'closed', 'lost', 'blocked', 'deleted')),
   ai_enabled boolean not null default true,
+  unread boolean not null default false,
   assigned_to uuid references app_users(id) on delete set null,
   last_message_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table conversations
+  add column if not exists unread boolean not null default false;
 
 alter table conversations
   drop constraint if exists conversations_status_check;

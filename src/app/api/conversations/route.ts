@@ -7,6 +7,7 @@ const updateSchema = z.object({
   conversationId: z.string().uuid(),
   status: z.string().optional(),
   aiEnabled: z.boolean().optional(),
+  unread: z.boolean().optional(),
   assignedTo: z.string().uuid().nullable().optional(),
   consultype: z.string().optional(),
   displayName: z.string().nullable().optional()

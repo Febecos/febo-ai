@@ -383,6 +383,7 @@ function ToolWorkspace({
         {activeTool === "crm" ? (
           <CrmBoardPanel
             conversations={workspaceConversations}
+            currentUser={currentUser}
             favoriteIds={favoriteIds}
             onConversationsChange={setWorkspaceConversations}
             onToggleFavorite={toggleFavorite}
@@ -433,6 +434,7 @@ const CRM_BOARD_COLUMNS = [
 
 function CrmBoardPanel({
   conversations,
+  currentUser,
   favoriteIds,
   onConversationsChange,
   onToggleFavorite,
@@ -440,6 +442,7 @@ function CrmBoardPanel({
   onOpenContact
 }: {
   conversations: ConversationSummary[];
+  currentUser: AppUser;
   favoriteIds: string[];
   onConversationsChange: (conversations: ConversationSummary[]) => void;
   onToggleFavorite: (conversationId: string) => void;
@@ -450,6 +453,10 @@ function CrmBoardPanel({
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const visibleCards = conversations.filter((conversation) => {
+    if (!canUserSeeCrmConversation(conversation, currentUser)) {
+      return false;
+    }
+
     if (!normalizedQuery) {
       return true;
     }
@@ -618,7 +625,9 @@ function CrmBoardPanel({
 }
 
 function getCrmColumnCards(columnId: string, conversations: ConversationSummary[], favoriteIds: string[]) {
-  const boardConversations = conversations.filter((conversation) => favoriteIds.includes(conversation.id));
+  const boardConversations = conversations.filter(
+    (conversation) => favoriteIds.includes(conversation.id) || isHotCrmConversation(conversation)
+  );
 
   if (columnId === "nuevo") {
     return boardConversations.filter((conversation) => isHotCrmConversation(conversation));
@@ -661,6 +670,14 @@ function getCrmBoardColumnId(conversation: ConversationSummary) {
 
 function isHotCrmConversation(conversation: ConversationSummary) {
   return conversation.consultype === "caliente" || conversation.status === "hot";
+}
+
+function canUserSeeCrmConversation(conversation: ConversationSummary, currentUser: AppUser) {
+  if (currentUser.role === "admin") {
+    return true;
+  }
+
+  return !conversation.assigned_to || conversation.assigned_to === currentUser.id;
 }
 
 function getCrmPlatformLabel(conversation: ConversationSummary) {

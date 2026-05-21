@@ -692,8 +692,8 @@ export async function recordAgentReply(input: {
   const humanAssigneeId = input.needsHuman || consultype === "caliente" ? await getHotLeadAssigneeId() : null;
 
   const metadata = input.replyOptions?.length
-    ? JSON.stringify({ reply_options: input.replyOptions })
-    : JSON.stringify({});
+    ? JSON.stringify({ source: "febo_ai", reply_options: input.replyOptions })
+    : JSON.stringify({ source: "febo_ai" });
 
   await sql`
     insert into messages (conversation_id, contact_id, direction, wa_message_id, body, consultype, needs_human, metadata)

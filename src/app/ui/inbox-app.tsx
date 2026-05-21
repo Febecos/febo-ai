@@ -2073,7 +2073,7 @@ function InboxList({
 
     setReplyText("");
     setReplyFile(null);
-    setMessages(payload?.messages ?? []);
+    setMessages(markLatestManualReply(payload?.messages ?? [], currentUser));
     await refreshConversations();
   }
 
@@ -3009,7 +3009,28 @@ function getMessageAuthorLabel(message: ConversationMessage) {
 }
 
 function isHumanOutboundMessage(message: ConversationMessage) {
-  return message.direction === "outbound" && (Boolean(message.created_by) || message.source === "manual");
+  return message.direction === "outbound" && message.source !== "febo_ai" && (Boolean(message.created_by) || message.source === "manual");
+}
+
+function markLatestManualReply(messages: ConversationMessage[], currentUser: AppUser | null) {
+  if (!currentUser?.id) {
+    return messages;
+  }
+
+  const latestManualIndex = [...messages].reverse().findIndex((message) => message.direction === "outbound");
+
+  if (latestManualIndex < 0) {
+    return messages;
+  }
+
+  const index = messages.length - 1 - latestManualIndex;
+
+  return messages.map((message, messageIndex) => messageIndex === index ? {
+    ...message,
+    source: "manual",
+    created_by: message.created_by ?? currentUser.id,
+    created_by_name: message.created_by_name ?? currentUser.full_name
+  } : message);
 }
 
 function getAudioTranscript(body: string) {

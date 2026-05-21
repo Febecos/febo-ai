@@ -1907,10 +1907,28 @@ function InboxList({
   }
 
   async function hideConversation(conversationId: string, status: "blocked" | "deleted") {
-    setItems((current) => current.filter((conversation) => conversation.id !== conversationId));
-    onConversationsChange(conversations.filter((conversation) => conversation.id !== conversationId));
+    const nextItems = items.filter((conversation) => conversation.id !== conversationId);
+    setItems(nextItems);
+    onConversationsChange(nextItems);
     setUnreadIds((current) => current.filter((id) => id !== conversationId));
-    await patchConversation(conversationId, { status });
+    const response = await fetch("/api/conversations", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ conversationId, status })
+    });
+
+    if (!response.ok) {
+      await refreshConversations(filters, { silent: true });
+      return;
+    }
+
+    if (selectedIdRef.current === conversationId) {
+      const nextSelectedId = nextItems[0]?.id ?? "";
+      selectedIdRef.current = nextSelectedId;
+      setSelectedId(nextSelectedId);
+      setMobileDetailOpen(false);
+    }
+
     closeConversationMenus();
   }
 

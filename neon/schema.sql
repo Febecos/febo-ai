@@ -52,13 +52,20 @@ create table if not exists contacts (
 create table if not exists conversations (
   id uuid primary key default gen_random_uuid(),
   contact_id uuid not null references contacts(id) on delete cascade,
-  status text not null default 'open' check (status in ('open', 'waiting', 'quoted', 'hot', 'handoff', 'closed', 'lost')),
+  status text not null default 'open' check (status in ('open', 'waiting', 'quoted', 'hot', 'handoff', 'closed', 'lost', 'blocked', 'deleted')),
   ai_enabled boolean not null default true,
   assigned_to uuid references app_users(id) on delete set null,
   last_message_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table conversations
+  drop constraint if exists conversations_status_check;
+
+alter table conversations
+  add constraint conversations_status_check
+  check (status in ('open', 'waiting', 'quoted', 'hot', 'handoff', 'closed', 'lost', 'blocked', 'deleted'));
 
 create unique index if not exists conversations_one_active_per_contact
   on conversations(contact_id)

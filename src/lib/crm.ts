@@ -77,6 +77,8 @@ export type ConversationMessage = {
   media_id: string | null;
   media_mime_type: string | null;
   media_filename: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
 };
 
 export type ConversationNote = {
@@ -912,8 +914,11 @@ export async function listConversationMessages(conversationId: string, limit = 1
       end as reply_options,
       mm.id::text as media_id,
       mm.mime_type as media_mime_type,
-      mm.filename as media_filename
+      mm.filename as media_filename,
+      m.created_by::text,
+      u.full_name as created_by_name
     from messages m
+    left join app_users u on u.id = m.created_by
     left join lateral (
       select id, mime_type, filename
       from message_media

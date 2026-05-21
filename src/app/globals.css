@@ -1990,6 +1990,31 @@ button:disabled {
   justify-self: end;
 }
 
+.chat-bubble.outbound.human-outbound {
+  background: rgba(245, 158, 11, 0.94);
+  border-color: rgba(251, 191, 36, 0.92);
+  color: #1f2937;
+}
+
+.chat-bubble.outbound.human-outbound small,
+.chat-bubble.outbound.human-outbound .delivery-status {
+  color: rgba(31, 41, 55, 0.78);
+}
+
+.chat-bubble.outbound.human-outbound .delivery-status.read {
+  color: #166534;
+}
+
+.chat-bubble.outbound.human-outbound .reply-options-log span {
+  color: rgba(31, 41, 55, 0.72);
+}
+
+.chat-bubble.outbound.human-outbound .reply-options-log b {
+  background: rgba(31, 41, 55, 0.1);
+  border-color: rgba(31, 41, 55, 0.22);
+  color: #1f2937;
+}
+
 .toolbar {
   align-items: center;
   background: var(--panel);

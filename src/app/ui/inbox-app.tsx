@@ -2658,24 +2658,32 @@ function InboxList({
                 {messageError ? <div className="empty-state warn">{messageError}</div> : null}
                 {!loadingMessages && !messageError && messages.length ? (
                   <div className="message-thread" ref={messageThreadRef}>
-                    {messages.map((message) => (
-                      <article className={`chat-bubble ${message.direction} ${isAudioMessage(message) ? "audio-bubble" : ""}`} key={message.id}>
-                        {!isAudioMessage(message) && message.body ? <p>{message.body}</p> : null}
-                        {getReplyOptions(message).length ? (
-                          <div className="reply-options-log">
-                            <span>Opciones enviadas:</span>
-                            {getReplyOptions(message).map((option) => (
-                              <b key={`${message.id}-${option.id}`}>{option.title}</b>
-                            ))}
-                          </div>
-                        ) : null}
-                        {message.media_id ? <MessageMedia message={message} /> : null}
-                        <small>
-                          {message.direction === "inbound" ? "Cliente" : "Febo AI"} - {formatMessageTime(message.created_at)}
-                        </small>
-                        {message.direction === "outbound" && message.whatsapp_status ? <DeliveryStatus message={message} /> : null}
-                      </article>
-                    ))}
+                    {messages.map((message) => {
+                      const authorLabel = getMessageAuthorLabel(message);
+                      const isHumanOutbound = message.direction === "outbound" && Boolean(message.created_by);
+
+                      return (
+                        <article
+                          className={`chat-bubble ${message.direction} ${isHumanOutbound ? "human-outbound" : ""} ${isAudioMessage(message) ? "audio-bubble" : ""}`}
+                          key={message.id}
+                        >
+                          {!isAudioMessage(message) && message.body ? <p>{message.body}</p> : null}
+                          {getReplyOptions(message).length ? (
+                            <div className="reply-options-log">
+                              <span>Opciones enviadas:</span>
+                              {getReplyOptions(message).map((option) => (
+                                <b key={`${message.id}-${option.id}`}>{option.title}</b>
+                              ))}
+                            </div>
+                          ) : null}
+                          {message.media_id ? <MessageMedia message={message} /> : null}
+                          <small>
+                            {authorLabel} - {formatMessageTime(message.created_at)}
+                          </small>
+                          {message.direction === "outbound" && message.whatsapp_status ? <DeliveryStatus message={message} /> : null}
+                        </article>
+                      );
+                    })}
                     <div ref={threadEndRef} />
                   </div>
                 ) : null}
@@ -2982,6 +2990,22 @@ function AudioMessageCard({
 
 function isAudioMessage(message: ConversationMessage) {
   return Boolean(message.media_mime_type?.startsWith("audio/"));
+}
+
+function getMessageAuthorLabel(message: ConversationMessage) {
+  if (message.direction === "inbound") {
+    return "Cliente";
+  }
+
+  if (message.direction === "outbound" && message.created_by) {
+    return message.created_by_name ?? "Agente";
+  }
+
+  if (message.direction === "internal") {
+    return message.created_by_name ?? "Nota interna";
+  }
+
+  return "Febo AI";
 }
 
 function getAudioTranscript(body: string) {

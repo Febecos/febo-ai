@@ -38,7 +38,7 @@ export type SelectorPumpResult = {
     stock?: number;
     precio_full?: number;
     precio_base?: number;
-    precio_6cuotas?: number;
+    precio_6cuotas?: number | null;
     cuota_mensual?: number;
   };
   caudal_a_altura?: {
@@ -79,7 +79,8 @@ export async function suggestPump(input: {
   const search = new URLSearchParams({
     height: String(Math.max(input.heightMeters, 10)),
     liters: String(Math.max(Math.round(input.litersPerDay), 0)),
-    diameter: String(input.maxPumpDiameterInches)
+    diameter: String(input.maxPumpDiameterInches),
+    season: "verano"
   });
 
   if (input.mode) {
@@ -95,4 +96,3 @@ export async function suggestPump(input: {
 
   return selectorPumpSchema.parse(await response.json());
 }
-

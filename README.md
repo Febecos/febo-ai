@@ -39,10 +39,22 @@ WHATSAPP_ACCESS_TOKEN=
 WHATSAPP_PHONE_NUMBER_ID=
 WHATSAPP_APP_SECRET=
 FEBECOS_SELECTOR_API_BASE_URL=https://selector.febecos.com/api
+FEBECOS_WEBHOOK_TOKEN=
 ```
 
 Para Vercel/Neon conviene usar la connection string pooled de Neon en `DATABASE_URL`.
 Febo AI usa `FEBECOS_SELECTOR_API_BASE_URL` para cotizar contra el mismo motor de seleccion que usan el selector web y revendedores.
+
+## Webhook del selector
+
+El selector puede enviar checkouts estructurados a:
+
+```http
+POST /api/febo-webhook
+Authorization: Bearer <FEBECOS_WEBHOOK_TOKEN>
+```
+
+Payload esperado: `origen=selector`, `evento=checkout_abierto`, `tipo_kit`, `codigo`, precios, configuracion de cable/soga/sensor, datos tecnicos y `whatsapp_cliente`.
 
 ## Neon
 

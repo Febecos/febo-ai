@@ -96,6 +96,29 @@ export type AgentConversationMessage = {
   source: string | null;
 };
 
+export type SelectorCheckoutLead = {
+  origen: "selector";
+  evento: "checkout_abierto";
+  tipo_kit: "base" | "completo";
+  codigo: string;
+  marca?: string | null;
+  watts?: number | null;
+  precio_total: number;
+  precio_base_kit?: number | null;
+  extra_cable?: number | null;
+  cuota_mensual?: number | null;
+  cuotas_cant?: number | null;
+  metros_cable?: number | null;
+  metros_soga?: number | null;
+  metros_sensor?: number | null;
+  zona?: string | null;
+  altura?: number | null;
+  litros?: number | null;
+  diametro?: number | null;
+  whatsapp_cliente: string;
+  timestamp?: string | null;
+};
+
 export type ConversationFilters = {
   query?: string;
   consultype?: string;
@@ -497,6 +520,137 @@ export async function recordIncomingMessage(input: {
   `;
 
   return { contactId, threadId, messageId: inserted[0].id, aiEnabled, duplicate: false };
+}
+
+export async function recordSelectorCheckoutLead(input: SelectorCheckoutLead) {
+  if (!isDbConfigured()) {
+    return { contactId: null, threadId: null, messageId: null, duplicate: false };
+  }
+
+  const sql = getSql();
+  const phone = normalizeWhatsAppRecipient(input.whatsapp_cliente);
+  const eventId = `selector:${phone}:${input.codigo}:${input.timestamp ?? ""}`;
+  const existingMessage = (await sql`
+    select
+      m.id::text as message_id,
+      c.id::text as thread_id,
+      ct.id::text as contact_id
+    from messages m
+    join conversations c on c.id = m.conversation_id
+    join contacts ct on ct.id = m.contact_id
+    where m.wa_message_id = ${eventId}
+    limit 1
+  `) as Array<{ message_id: string; thread_id: string; contact_id: string }>;
+
+  if (existingMessage[0]) {
+    return {
+      contactId: existingMessage[0].contact_id,
+      threadId: existingMessage[0].thread_id,
+      messageId: existingMessage[0].message_id,
+      duplicate: true
+    };
+  }
+
+  const assigneeId = await getHotLeadAssigneeId();
+  const body = formatSelectorCheckoutMessage(input);
+  const payload = JSON.stringify({
+    source: "selector",
+    event: input.evento,
+    selector_checkout: input
+  });
+
+  const contacts = (await sql`
+    insert into contacts (phone, display_name, platform, consultype, sentiment, source, assigned_to, last_seen_at)
+    values (${phone}, null, 'whatsapp', 'caliente', 'positivo', 'selector', ${assigneeId}::uuid, now())
+    on conflict (phone) do update
+    set consultype = 'caliente',
+        sentiment = 'positivo',
+        source = coalesce(contacts.source, 'selector'),
+        assigned_to = coalesce(contacts.assigned_to, ${assigneeId}::uuid),
+        last_seen_at = now(),
+        updated_at = now()
+    returning id::text
+  `) as Array<{ id: string }>;
+
+  const contactId = contacts[0].id;
+  const existingConversation = (await sql`
+    select id::text
+    from conversations
+    where contact_id = ${contactId}
+      and status in ('open', 'waiting', 'quoted', 'hot', 'handoff')
+    order by last_message_at desc
+    limit 1
+  `) as Array<{ id: string }>;
+
+  const conversation =
+    existingConversation[0] ??
+    (
+      (await sql`
+        insert into conversations (contact_id, status, last_message_at, ai_enabled, assigned_to)
+        values (${contactId}, 'handoff', now(), false, ${assigneeId}::uuid)
+        returning id::text
+      `) as Array<{ id: string }>
+    )[0];
+
+  const inserted = (await sql`
+    insert into messages (conversation_id, contact_id, direction, wa_message_id, body, consultype, needs_human, metadata)
+    values (${conversation.id}, ${contactId}, 'inbound', ${eventId}, ${body}, 'caliente', true, ${payload}::jsonb)
+    returning id::text
+  `) as Array<{ id: string }>;
+
+  await sql`
+    update conversations
+    set status = 'handoff',
+        ai_enabled = false,
+        assigned_to = coalesce(assigned_to, ${assigneeId}::uuid),
+        last_message_at = now(),
+        updated_at = now()
+    where id = ${conversation.id}
+  `;
+
+  await sql`
+    insert into platform_events (contact_id, phone, event, payload)
+    values (${contactId}, ${phone}, 'selector_checkout_abierto', ${payload}::jsonb)
+  `;
+
+  await sql`
+    insert into handoffs (conversation_id, contact_id, reason, status, assigned_to)
+    values (${conversation.id}, ${contactId}, 'selector_checkout_abierto', 'assigned', ${assigneeId}::uuid)
+  `;
+
+  return {
+    contactId,
+    threadId: conversation.id,
+    messageId: inserted[0]?.id ?? null,
+    duplicate: false
+  };
+}
+
+function formatSelectorCheckoutMessage(input: SelectorCheckoutLead) {
+  const lines = [
+    "Checkout desde selector Febecos",
+    `Kit: ${input.tipo_kit}`,
+    `Equipo: ${input.codigo}${input.marca ? ` - ${input.marca}` : ""}`,
+    input.watts ? `Watts: ${input.watts}` : null,
+    `Precio total: ${formatARS(input.precio_total)}`,
+    input.precio_base_kit ? `Precio base kit: ${formatARS(input.precio_base_kit)}` : null,
+    input.extra_cable ? `Extra cable: ${formatARS(input.extra_cable)}` : null,
+    input.cuota_mensual ? `${input.cuotas_cant ?? 6} cuotas de: ${formatARS(input.cuota_mensual)}` : null,
+    input.metros_cable ? `Cable sumergible: ${input.metros_cable}m` : null,
+    input.metros_soga ? `Soga: ${input.metros_soga}m` : null,
+    input.metros_sensor ? `Cable sensor: ${input.metros_sensor}m` : null,
+    input.zona ? `Zona: ${input.zona}` : null,
+    input.altura ? `Altura: ${input.altura}m` : null,
+    input.litros ? `Consumo: ${input.litros} L/dia` : null,
+    input.diametro ? `Diametro: ${input.diametro}"` : null,
+    `WhatsApp cliente: ${input.whatsapp_cliente}`
+  ].filter(Boolean);
+
+  return lines.join("\n");
+}
+
+function formatARS(value: number) {
+  return `$${Math.round(value).toLocaleString("es-AR")}`;
 }
 
 export async function updateMessageBody(messageId: string | null | undefined, body: string) {

@@ -73,7 +73,7 @@ export type ConversationMessage = {
   wa_message_id: string | null;
   whatsapp_status: string | null;
   whatsapp_error: string | null;
-  reply_options: Array<{ id: string; title: string }> | null;
+  reply_options: Array<{ id: string; title: string }>;
   media_id: string | null;
   media_mime_type: string | null;
   media_filename: string | null;
@@ -906,7 +906,10 @@ export async function listConversationMessages(conversationId: string, limit = 1
       m.wa_message_id,
       m.metadata->>'whatsapp_status' as whatsapp_status,
       m.metadata->>'whatsapp_error' as whatsapp_error,
-      coalesce(m.metadata->'reply_options', 'null'::jsonb) as reply_options,
+      case
+        when jsonb_typeof(m.metadata->'reply_options') = 'array' then m.metadata->'reply_options'
+        else '[]'::jsonb
+      end as reply_options,
       mm.id::text as media_id,
       mm.mime_type as media_mime_type,
       mm.filename as media_filename

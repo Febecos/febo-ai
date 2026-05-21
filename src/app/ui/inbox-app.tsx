@@ -2677,10 +2677,10 @@ function InboxList({
                     {messages.map((message) => (
                       <article className={`chat-bubble ${message.direction} ${isAudioMessage(message) ? "audio-bubble" : ""}`} key={message.id}>
                         {!isAudioMessage(message) && message.body ? <p>{message.body}</p> : null}
-                        {message.reply_options?.length ? (
+                        {getReplyOptions(message).length ? (
                           <div className="reply-options-log">
                             <span>Opciones enviadas:</span>
-                            {message.reply_options.map((option) => (
+                            {getReplyOptions(message).map((option) => (
                               <b key={`${message.id}-${option.id}`}>{option.title}</b>
                             ))}
                           </div>
@@ -2919,6 +2919,10 @@ function DeliveryStatus({ message }: { message: ConversationMessage }) {
       {formatDeliveryStatus(message)}
     </span>
   );
+}
+
+function getReplyOptions(message: ConversationMessage) {
+  return Array.isArray(message.reply_options) ? message.reply_options : [];
 }
 
 function formatDeliveryStatus(message: ConversationMessage) {

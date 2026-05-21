@@ -135,7 +135,6 @@ export function InboxApp({
 
 function LoginScreen({ dbConfigured }: { dbConfigured: boolean }) {
   const [email, setEmail] = useState("guille.aol@gmail.com");
-  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -147,7 +146,7 @@ function LoginScreen({ dbConfigured }: { dbConfigured: boolean }) {
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, code })
+      body: JSON.stringify({ email })
     });
 
     setLoading(false);
@@ -179,10 +178,6 @@ function LoginScreen({ dbConfigured }: { dbConfigured: boolean }) {
         <label className="field">
           Email
           <input value={email} onChange={(event) => setEmail(event.target.value)} />
-        </label>
-        <label className="field">
-          Codigo interno
-          <input value={code} onChange={(event) => setCode(event.target.value)} type="password" />
         </label>
         <button className="primary" disabled={loading} type="submit">
           <UserCheck size={18} />

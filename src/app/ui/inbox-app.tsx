@@ -2464,15 +2464,6 @@ function InboxList({
                     Desasignar
                   </button>
                 ) : null}
-                {selected.assigned_to || selected.status === "handoff" ? (
-                  <button
-                    className="descale-button"
-                    onClick={() => patchConversation(selected.id, { assignedTo: null, status: "open" })}
-                    type="button"
-                  >
-                    Desescalar
-                  </button>
-                ) : null}
                 <button className="transfer-button" onClick={() => setTransferOpen(true)} type="button">Transferir</button>
                 <details className="chat-actions-menu">
                   <summary aria-label="Mas acciones"><MoreVertical size={20} /></summary>

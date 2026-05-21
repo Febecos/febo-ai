@@ -1446,18 +1446,27 @@ function InboxList({
 
   useEffect(() => {
     function unlockNotificationAudio() {
-      const context = getNotificationAudioContext(notificationAudioContextRef);
-      if (context?.state === "suspended") {
-        void context.resume();
-      }
+      void unlockInboxNotificationSound(notificationAudioContextRef).then((unlocked) => {
+        if (unlocked) {
+          removeUnlockListeners();
+        }
+      });
     }
 
-    window.addEventListener("pointerdown", unlockNotificationAudio, { once: true });
-    window.addEventListener("keydown", unlockNotificationAudio, { once: true });
+    function removeUnlockListeners() {
+      window.removeEventListener("pointerdown", unlockNotificationAudio);
+      window.removeEventListener("click", unlockNotificationAudio);
+      window.removeEventListener("keydown", unlockNotificationAudio);
+      window.removeEventListener("touchstart", unlockNotificationAudio);
+    }
+
+    window.addEventListener("pointerdown", unlockNotificationAudio);
+    window.addEventListener("click", unlockNotificationAudio);
+    window.addEventListener("keydown", unlockNotificationAudio);
+    window.addEventListener("touchstart", unlockNotificationAudio);
 
     return () => {
-      window.removeEventListener("pointerdown", unlockNotificationAudio);
-      window.removeEventListener("keydown", unlockNotificationAudio);
+      removeUnlockListeners();
     };
   }, []);
 
@@ -1746,7 +1755,7 @@ function InboxList({
     setNotes(payload?.notes ?? []);
   }
 
-  async function refreshConversations(nextFilters = filters, options: { silent?: boolean } = {}) {
+  async function refreshConversations(nextFilters = filters, options: { silent?: boolean; suppressSound?: boolean } = {}) {
     const params = new URLSearchParams();
 
     if (nextFilters.query.trim()) {
@@ -1779,7 +1788,7 @@ function InboxList({
       const tagMatches = !selectedTagsRef.current.length || selectedTagsRef.current.includes(item.consultype);
       return tagMatches && sentimentMatches;
     });
-    notifyIfNewInboundConversation(nextItems, options.silent === true);
+    notifyIfNewInboundConversation(nextItems, options.suppressSound !== true);
     setItems(nextItems);
     onConversationsChange(nextItems);
 
@@ -3557,11 +3566,11 @@ function getNotificationAudioContext(audioContextRef: { current: AudioContext | 
   return audioContextRef.current;
 }
 
-async function playInboxNotificationSound(audioContextRef: { current: AudioContext | null }) {
+async function unlockInboxNotificationSound(audioContextRef: { current: AudioContext | null }) {
   const context = getNotificationAudioContext(audioContextRef);
 
   if (!context) {
-    return;
+    return false;
   }
 
   if (context.state === "suspended") {
@@ -3569,9 +3578,33 @@ async function playInboxNotificationSound(audioContextRef: { current: AudioConte
   }
 
   if (context.state !== "running") {
+    return false;
+  }
+
+  const now = context.currentTime;
+  const gain = context.createGain();
+  const oscillator = context.createOscillator();
+  gain.gain.setValueAtTime(0.00001, now);
+  oscillator.frequency.setValueAtTime(1, now);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.02);
+
+  return true;
+}
+
+async function playInboxNotificationSound(audioContextRef: { current: AudioContext | null }) {
+  const unlocked = await unlockInboxNotificationSound(audioContextRef);
+
+  if (!unlocked) {
     return;
   }
 
+  const context = audioContextRef.current;
+  if (!context) {
+    return;
+  }
   const now = context.currentTime;
   const gain = context.createGain();
   gain.gain.setValueAtTime(0.0001, now);

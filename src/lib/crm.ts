@@ -101,6 +101,7 @@ export type SelectorCheckoutLead = {
   evento: "checkout_abierto";
   tipo_kit: "base" | "completo";
   codigo: string;
+  url_slug?: string | null;
   marca?: string | null;
   watts?: number | null;
   precio_total: number;
@@ -117,6 +118,7 @@ export type SelectorCheckoutLead = {
   diametro?: number | null;
   whatsapp_cliente: string;
   timestamp?: string | null;
+  _es_test?: boolean;
 };
 
 export type ConversationFilters = {
@@ -674,6 +676,7 @@ export async function recordAgentReply(input: {
   intent: string;
   needsHuman: boolean;
   waMessageId?: string | null;
+  createHandoff?: boolean;
 }) {
   if (!isDbConfigured() || !input.contactId || !input.threadId) {
     return;
@@ -718,7 +721,7 @@ export async function recordAgentReply(input: {
     where id = ${input.threadId}
   `;
 
-  if (input.needsHuman) {
+  if (input.needsHuman && input.createHandoff !== false) {
     await sql`
       insert into handoffs (conversation_id, contact_id, reason, status, assigned_to)
       values (${input.threadId}, ${input.contactId}, ${input.intent}, 'assigned', ${humanAssigneeId}::uuid)

@@ -187,9 +187,10 @@ export async function runFebecosAgent(input: {
       "Si selectorQuote.status='ok' y result.cobertura_insuficiente=true, no cotices precio ni modelo: explica brevemente que requiere armado a medida y escala a asesor humano.",
       "Cuando ya diste una cotizacion y el cliente todavia no confirmo compra pero puede querer cuotas o asesor, no derives de una: pregunta 'Si queres verlo en cuotas o preferis hablar con un asesor, te ayudo. Como te gustaria verlo?'.",
       "Si el cliente solo responde '6 cuotas', 'seis cuotas' o 'contado' despues de una cotizacion, no repitas la cotizacion completa: confirma la preferencia en una frase y ofrece hablar con asesor.",
+      "Cuando ofrezcas asesor sin que el cliente lo haya confirmado explicitamente, no escribas 'te paso' ni 'te derivo': pregunta si quiere hablar con un asesor y deja escalar=false para que WhatsApp muestre botones de confirmacion.",
       "Si selectorQuote no esta disponible pero falta algun dato tecnico, pedi solo ese dato. No inventes precios ni modelos.",
       "Si selectorQuote.error existe, deriva o pedi disculpas brevemente; no inventes una cotizacion alternativa.",
-      "Si tu respuesta dice que vas a pasar, derivar o conectar al cliente con un asesor, vendedor, agente humano o Equipo FEBECOS, entonces escalar debe ser true.",
+      "Solo si el cliente ya confirmo que quiere asesor, si pidio compra/cierre/factura/envio/pago, o si el caso requiere solucion a medida, entonces tu respuesta puede decir que lo vas a pasar/derivar y escalar debe ser true.",
       "Regla de integracion: devolve exclusivamente JSON valido con las claves del esquema pedido.",
       "No muestres el JSON al usuario final; el campo respuesta es el unico texto que se envia por WhatsApp.",
       "Si no hay catalogo, stock o precio disponible en el contexto, no inventes modelos ni importes: pedi el dato faltante o escala segun las reglas del prompt."
@@ -332,11 +333,11 @@ function buildSelectorCheckoutResult(message: string): AgentResult | null {
       `Perfecto, recibimos tu seleccion del selector de Febecos. ${summaryParts.join(", ")}.`,
       isEvaluatingOnly
         ? "Si queres avanzar o revisar disponibilidad, forma de pago, envio y factura, te ayudo a coordinarlo."
-        : "Te paso con un asesor de Febecos para confirmar disponibilidad, forma de pago, envio y factura. Te escribe en breve."
+        : "Queres que te pase con un asesor de Febecos para confirmar disponibilidad, forma de pago, envio y factura?"
     ].join("\n\n"),
     sentimiento: "positivo",
     consultype: "caliente",
-    escalar: !isEvaluatingOnly,
+    escalar: false,
     nombre: null,
     imagenes: [],
     archivos: [],

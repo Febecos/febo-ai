@@ -16,6 +16,7 @@ import {
 
 const WHATSAPP_BUTTON_VIEW_INSTALLMENTS = "febo_view_installments";
 const WHATSAPP_BUTTON_TALK_TO_ADVISOR = "febo_talk_to_advisor";
+const WHATSAPP_BUTTON_KEEP_ASSISTING = "febo_keep_assisting";
 const WHATSAPP_BUTTON_SIX_INSTALLMENTS = "febo_six_installments";
 const WHATSAPP_BUTTON_CASH = "febo_cash";
 
@@ -114,6 +115,22 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
+    if (isText && message.interactiveId === WHATSAPP_BUTTON_KEEP_ASSISTING) {
+      const keepAssistingAnswer = "Perfecto, seguimos por aca. Decime que queres revisar: equipo, precio, cuotas, instalacion, envio o cualquier duda tecnica.";
+      const sent = await sendWhatsAppText(message.from, keepAssistingAnswer);
+
+      await recordAgentReply({
+        contactId: stored.contactId,
+        threadId: stored.threadId,
+        answer: keepAssistingAnswer,
+        intent: "otro",
+        needsHuman: false,
+        waMessageId: getSentMessageId(sent)
+      });
+
+      continue;
+    }
+
     if (!agentMessage) {
       const fallbackAnswer = "Recibi tu audio, pero no pude leerlo bien. Me lo podes mandar por escrito?";
 
@@ -144,7 +161,8 @@ export async function POST(request: NextRequest) {
       result = buildAgentFallbackResult();
     }
 
-    const needsHuman = shouldPauseForHumanHandoff(result.respuesta, result.escalar);
+    const advisorDecisionButtons = getAdvisorDecisionButtons(result.respuesta);
+    const needsHuman = advisorDecisionButtons ? false : shouldPauseForHumanHandoff(result.respuesta, result.escalar);
 
     const paymentButtons = getPaymentDecisionButtons(result.respuesta, needsHuman);
     try {
@@ -153,6 +171,12 @@ export async function POST(request: NextRequest) {
           to: message.from,
           body: result.respuesta,
           buttons: paymentButtons
+        })
+      : advisorDecisionButtons ?
+        await sendWhatsAppReplyButtons({
+          to: message.from,
+          body: result.respuesta,
+          buttons: advisorDecisionButtons
         })
       : shouldOfferAdvisorButton(result.respuesta, needsHuman) ?
         await sendWhatsAppReplyButtons({
@@ -239,6 +263,30 @@ function getPaymentDecisionButtons(answer: string, needsHuman: boolean) {
   }
 
   return null;
+}
+
+function getAdvisorDecisionButtons(answer: string) {
+  const normalized = normalizeAnswer(answer);
+
+  if (!normalized.includes("asesor")) {
+    return null;
+  }
+
+  const isOffer =
+    normalized.includes("si queres") ||
+    normalized.includes("queres que") ||
+    normalized.includes("podes hablar") ||
+    normalized.includes("te ayudo a coordinar") ||
+    normalized.includes("te puedo pasar");
+
+  if (!isOffer) {
+    return null;
+  }
+
+  return [
+    { id: WHATSAPP_BUTTON_TALK_TO_ADVISOR, title: "Si, asesor" },
+    { id: WHATSAPP_BUTTON_KEEP_ASSISTING, title: "No, seguir" }
+  ];
 }
 
 function shouldOfferAdvisorButton(answer: string, needsHuman: boolean) {

@@ -271,7 +271,7 @@ function ToolWorkspace({
     <section className="admin-workspace">
       <nav className="tool-sidebar" aria-label="Herramientas de trabajo">
         <div className="tool-brand">
-          <span className="brand-mark">F</span>
+          <span aria-label="Febecos" className="brand-mark" role="img" />
           <strong>Febo AI</strong>
         </div>
         <button

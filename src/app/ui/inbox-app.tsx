@@ -329,12 +329,6 @@ function ToolWorkspace({
             </button>
           </>
         ) : null}
-        <div className="sidebar-cycle-card">
-          <strong>Conversaciones</strong>
-          <span>Ciclo actual</span>
-          <b>{stats.conversations.toLocaleString("es-AR")}</b>
-          <small>20 abr - 20 may</small>
-        </div>
         <div className="tool-sidebar-bottom">
           <button onClick={() => hardRefreshApp()} title="Actualizar app" type="button">
             <RefreshCcw size={18} />

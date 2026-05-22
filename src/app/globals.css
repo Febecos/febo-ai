@@ -707,40 +707,6 @@ button:disabled {
   z-index: 80;
 }
 
-.sidebar-cycle-card {
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  display: grid;
-  gap: 6px;
-  margin: auto 8px 8px;
-  padding: 12px 10px;
-  text-align: center;
-}
-
-.sidebar-cycle-card strong {
-  color: #ffffff;
-  font-size: 15px;
-}
-
-.sidebar-cycle-card span {
-  background: rgba(138, 191, 33, 0.2);
-  border-radius: 999px;
-  color: #e8ffc6;
-  font-size: 12px;
-  font-weight: 700;
-  justify-self: center;
-  padding: 3px 9px;
-}
-
-.sidebar-cycle-card b {
-  color: #ffffff;
-  font-size: 18px;
-}
-
-.sidebar-cycle-card small {
-  color: var(--muted);
-}
-
 .tool-content {
   height: 100%;
   min-width: 0;
@@ -2938,8 +2904,7 @@ select {
     width: 34px;
   }
 
-  .tool-brand strong,
-  .sidebar-cycle-card {
+  .tool-brand strong {
     display: none;
   }
 
@@ -3412,7 +3377,6 @@ body,
 .crm-column,
 .crm-filters,
 .crm-quick-tabs,
-.sidebar-cycle-card,
 .template-composer,
 .dialog {
   background: linear-gradient(180deg, rgba(36, 93, 141, 0.96) 0%, rgba(22, 70, 115, 0.98) 100%);

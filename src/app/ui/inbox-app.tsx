@@ -3468,8 +3468,7 @@ function getSupportedRecordingMimeType() {
   const candidates = [
     "audio/ogg;codecs=opus",
     "audio/ogg",
-    "audio/aac",
-    "audio/mp4"
+    "audio/aac"
   ];
 
   return candidates.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? "";

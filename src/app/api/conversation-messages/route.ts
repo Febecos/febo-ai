@@ -142,11 +142,7 @@ export async function POST(request: NextRequest) {
       let uploaded: { id: string } | null = null;
 
       if (mediaKind === "audio") {
-        try {
-          uploaded = await uploadWhatsAppMedia(whatsappFile);
-          const sent = await sendWhatsAppAudio(target.phone, uploaded.id);
-          waMessageId = getSentMessageId(sent);
-        } catch (audioError) {
+        if (shouldSendAudioAsDocumentLink(whatsappFile)) {
           const blob = await put(
             `manual-audio/${Date.now()}-${sanitizeBlobPathname(whatsappFile.name || file.name || "audio")}`,
             whatsappFile,
@@ -163,7 +159,30 @@ export async function POST(request: NextRequest) {
             caption
           );
           waMessageId = getSentMessageId(sent);
-          console.warn("WhatsApp audio send failed; sent as linked document instead.", audioError);
+        } else {
+          try {
+            uploaded = await uploadWhatsAppMedia(whatsappFile);
+            const sent = await sendWhatsAppAudio(target.phone, uploaded.id);
+            waMessageId = getSentMessageId(sent);
+          } catch (audioError) {
+            const blob = await put(
+              `manual-audio/${Date.now()}-${sanitizeBlobPathname(whatsappFile.name || file.name || "audio")}`,
+              whatsappFile,
+              {
+                access: "public",
+                addRandomSuffix: true,
+                contentType: whatsappFile.type || "application/octet-stream"
+              }
+            );
+            const sent = await sendWhatsAppDocumentLink(
+              target.phone,
+              blob.url,
+              whatsappFile.name || file.name || "audio",
+              caption
+            );
+            waMessageId = getSentMessageId(sent);
+            console.warn("WhatsApp audio send failed; sent as linked document instead.", audioError);
+          }
         }
       } else if (mediaKind === "image") {
         uploaded = await uploadWhatsAppMedia(whatsappFile);
@@ -223,6 +242,10 @@ export async function POST(request: NextRequest) {
     ok: true,
     messages: await listConversationMessages(parsed.data.conversationId)
   });
+}
+
+function shouldSendAudioAsDocumentLink(file: File) {
+  return getAttachmentMimeType(file) === "audio/mp4";
 }
 
 function sanitizeBlobPathname(filename: string) {

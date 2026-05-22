@@ -102,7 +102,9 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
+    contactId: target.contactId,
     conversationId: target.conversationId,
+    contacts: await listContacts({ limit: 300 }),
     conversations: await listConversations({ limit: 300 }),
     messages: await listConversationMessages(target.conversationId)
   });

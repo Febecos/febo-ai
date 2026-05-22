@@ -369,6 +369,11 @@ function ToolWorkspace({
         {activeTool === "contacts" ? (
           <ContactsPanel
             focusedContact={focusedContact}
+            onContactCreated={(payload) => {
+              setWorkspaceConversations(payload.conversations);
+              setFocusedConversation({ id: payload.conversationId, signal: Date.now() });
+              setActiveTool("conversations");
+            }}
             onContactSaved={(contact) => {
               setWorkspaceConversations((current) =>
                 current.map((conversation) =>
@@ -707,20 +712,30 @@ function getCrmPlatformLabel(conversation: ConversationSummary) {
 
 function ContactsPanel({
   focusedContact,
+  onContactCreated,
   onContactSaved,
   users
 }: {
   focusedContact: { id: string; signal: number };
+  onContactCreated: (payload: { conversationId: string; conversations: ConversationSummary[] }) => void;
   onContactSaved: (contact: ContactSummary) => void;
   users: AppUser[];
 }) {
   const [contacts, setContacts] = useState<ContactSummary[]>([]);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
   const selected = useMemo(() => contacts.find((contact) => contact.id === selectedId) ?? contacts[0], [contacts, selectedId]);
+  const [newContactForm, setNewContactForm] = useState({
+    displayName: "",
+    phone: "",
+    templateId: "",
+    sendTemplate: true
+  });
   const [form, setForm] = useState({
     displayName: "",
     phone: "",
@@ -732,6 +747,7 @@ function ContactsPanel({
 
   useEffect(() => {
     void loadContacts();
+    void loadContactTemplates();
   }, []);
 
   useEffect(() => {
@@ -783,6 +799,65 @@ function ContactsPanel({
     } else {
       setSelectedId(nextContacts[0]?.id ?? "");
     }
+  }
+
+  async function loadContactTemplates() {
+    const response = await fetch("/api/templates");
+    const payload = await readJsonResponse(response);
+
+    if (!response.ok) {
+      return;
+    }
+
+    const activeTemplates = (payload?.templates ?? []).filter((template: MessageTemplate) => template.active);
+    setTemplates(activeTemplates);
+    setNewContactForm((current) => ({
+      ...current,
+      templateId: current.templateId || pickInitialTemplateId(activeTemplates)
+    }));
+  }
+
+  async function createContact(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (newContactForm.sendTemplate && !newContactForm.templateId) {
+      setMessage("Selecciona una plantilla inicial.");
+      return;
+    }
+
+    setCreating(true);
+    setMessage("");
+
+    const response = await fetch("/api/contacts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        displayName: newContactForm.displayName,
+        phone: newContactForm.phone,
+        templateId: newContactForm.sendTemplate ? newContactForm.templateId : undefined
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setCreating(false);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos crear el contacto.");
+      return;
+    }
+
+    setContacts(payload?.contacts ?? contacts);
+    setSelectedId(payload?.contactId ?? "");
+    setNewContactForm({
+      displayName: "",
+      phone: "",
+      templateId: pickInitialTemplateId(templates),
+      sendTemplate: true
+    });
+    setMessage(newContactForm.sendTemplate ? "Contacto creado y plantilla enviada." : "Contacto creado.");
+    onContactCreated({
+      conversationId: payload.conversationId,
+      conversations: payload?.conversations ?? []
+    });
   }
 
   async function saveContact(event: FormEvent<HTMLFormElement>) {
@@ -870,6 +945,60 @@ function ContactsPanel({
       </div>
 
       <div className="contact-editor">
+        <form className="admin-form new-contact-card" onSubmit={createContact}>
+          <div className="panel-title compact">
+            <UserPlus size={18} />
+            Nuevo contacto
+          </div>
+          <div className="form-grid">
+            <label className="field">
+              Nombre y apellido
+              <input
+                placeholder="Ej: Carlos Gomez"
+                value={newContactForm.displayName}
+                onChange={(event) => setNewContactForm({ ...newContactForm, displayName: event.target.value })}
+              />
+            </label>
+            <label className="field">
+              WhatsApp
+              <input
+                placeholder="549..."
+                required
+                value={newContactForm.phone}
+                onChange={(event) => setNewContactForm({ ...newContactForm, phone: event.target.value })}
+              />
+            </label>
+            <label className="field wide">
+              Plantilla inicial
+              <select
+                disabled={!newContactForm.sendTemplate || !templates.length}
+                value={newContactForm.templateId}
+                onChange={(event) => setNewContactForm({ ...newContactForm, templateId: event.target.value })}
+              >
+                {!templates.length ? <option value="">No hay plantillas activas</option> : null}
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.label} / {template.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label className="check-line">
+            <input
+              checked={newContactForm.sendTemplate}
+              onChange={(event) => setNewContactForm({ ...newContactForm, sendTemplate: event.target.checked })}
+              type="checkbox"
+            />
+            Enviar plantilla inicial para activar WhatsApp
+          </label>
+          <button className="primary" disabled={creating} type="submit">
+            <SendHorizonal size={17} />
+            {creating ? "Creando" : "Crear y activar"}
+          </button>
+          {!templates.length ? <span className="warn inline">Primero sincroniza o carga una plantilla activa.</span> : null}
+        </form>
+
         {selected ? (
           <form className="admin-form" onSubmit={saveContact}>
             <div className="panel-title">
@@ -941,6 +1070,15 @@ function ContactsPanel({
       </div>
     </section>
   );
+}
+
+function pickInitialTemplateId(templates: MessageTemplate[]) {
+  const preferred = templates.find((template) => {
+    const key = `${template.label} ${template.name}`.toLowerCase();
+    return key.includes("inicial") || key.includes("inicio") || key.includes("hola");
+  });
+
+  return preferred?.id ?? templates[0]?.id ?? "";
 }
 
 function TemplatesPanel() {

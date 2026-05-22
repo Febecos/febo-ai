@@ -2436,6 +2436,17 @@ select {
   padding: 0 10px;
 }
 
+select option {
+  background: #0f3a63;
+  color: #f8fbff;
+}
+
+select option:checked,
+select option:hover {
+  background: #5daee0;
+  color: #06243d;
+}
+
 .agent-panel {
   display: grid;
 }

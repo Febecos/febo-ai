@@ -16,7 +16,6 @@ import {
   FileText,
   Filter,
   ImageIcon,
-  Inbox,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -283,7 +282,7 @@ function ToolWorkspace({
           }}
           type="button"
         >
-          <Inbox size={18} />
+          <WhatsAppMark />
           Conversaciones
         </button>
         <button
@@ -316,7 +315,7 @@ function ToolWorkspace({
           type="button"
         >
           <MessageSquareText size={18} />
-          ULIS
+          Plantillas
         </button>
         {currentUser.role === "admin" ? (
           <>
@@ -419,6 +418,14 @@ function ToolWorkspace({
         {activeTool === "ai" && currentUser.role === "admin" ? <AgentTester /> : null}
       </div>
     </section>
+  );
+}
+
+function WhatsAppMark() {
+  return (
+    <span aria-hidden="true" className="whatsapp-nav-mark">
+      <MessageSquareText size={14} strokeWidth={2.7} />
+    </span>
   );
 }
 

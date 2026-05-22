@@ -1,15 +1,18 @@
 :root {
-  --bg: #282c31;
-  --panel: #36393f;
-  --panel-strong: #202428;
-  --panel-soft: #30343a;
+  --bg: #20262d;
+  --panel: #303740;
+  --panel-strong: #16212b;
+  --panel-soft: #28323b;
   --ink: #f7f9fb;
-  --muted: #bcc4cf;
-  --line: #4d535d;
-  --green: #22c55e;
-  --green-soft: rgba(34, 197, 94, 0.16);
-  --blue: #1677ff;
-  --blue-soft: rgba(22, 119, 255, 0.18);
+  --muted: #c7d1d9;
+  --line: #46525e;
+  --green: #8abf21;
+  --green-soft: rgba(138, 191, 33, 0.18);
+  --blue: #0d4f83;
+  --blue-soft: rgba(20, 111, 170, 0.22);
+  --brand-blue: #123b63;
+  --brand-green: #8abf21;
+  --brand-cyan: #2aa4d8;
   --red-soft: rgba(239, 68, 68, 0.18);
   --red: #ff6b6b;
   --amber: #facc15;
@@ -157,7 +160,7 @@ button:disabled {
 }
 
 .metric-card {
-  background: linear-gradient(180deg, #3b3f45 0%, #34383e 100%);
+  background: linear-gradient(180deg, #35404a 0%, #2d3741 100%);
   display: grid;
   gap: 2px;
   min-height: 62px;
@@ -590,7 +593,9 @@ button:disabled {
 }
 
 .tool-sidebar {
-  background: var(--panel-strong);
+  background:
+    linear-gradient(180deg, rgba(18, 59, 99, 0.32) 0%, rgba(22, 33, 43, 0) 34%),
+    var(--panel-strong);
   border: 0;
   border-radius: 0;
   border-right: 1px solid var(--line);
@@ -606,6 +611,7 @@ button:disabled {
 .tool-brand {
   align-items: center;
   border-bottom: 1px solid var(--line);
+  background: rgba(10, 18, 24, 0.2);
   display: flex;
   gap: 12px;
   min-height: 74px;
@@ -614,9 +620,11 @@ button:disabled {
 
 .brand-mark {
   align-items: center;
-  background: #ffffff;
-  border-radius: 3px;
-  color: #202428;
+  background: linear-gradient(145deg, #ffffff 0%, #eef7ff 100%);
+  border: 1px solid rgba(138, 191, 33, 0.65);
+  border-radius: 7px;
+  box-shadow: inset 0 -3px 0 rgba(18, 59, 99, 0.12);
+  color: var(--brand-blue);
   display: inline-flex;
   font-weight: 900;
   height: 34px;
@@ -627,6 +635,20 @@ button:disabled {
 .tool-brand strong {
   color: #ffffff;
   font-size: 18px;
+}
+
+.whatsapp-nav-mark {
+  align-items: center;
+  background: #25d366;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px rgba(37, 211, 102, 0.12);
+  color: #ffffff;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 20px;
+  justify-content: center;
+  width: 20px;
 }
 
 .tool-sidebar-bottom {
@@ -642,18 +664,24 @@ button:disabled {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 0;
+  border-radius: 6px;
   color: var(--ink);
   display: flex;
   gap: 8px;
   justify-content: flex-start;
   min-height: 48px;
-  padding: 0 16px;
+  margin: 0 8px;
+  padding: 0 10px;
   text-align: left;
 }
 
+.tool-sidebar button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .tool-sidebar button.active {
-  background: var(--blue);
+  background: linear-gradient(90deg, var(--brand-blue) 0%, #176a9e 100%);
+  box-shadow: inset 3px 0 0 var(--brand-green);
   color: #ffffff;
   font-weight: 700;
 }
@@ -692,9 +720,9 @@ button:disabled {
 }
 
 .sidebar-cycle-card span {
-  background: #737b85;
+  background: rgba(138, 191, 33, 0.2);
   border-radius: 999px;
-  color: #ffffff;
+  color: #e8ffc6;
   font-size: 12px;
   font-weight: 700;
   justify-self: center;

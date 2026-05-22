@@ -523,6 +523,42 @@ function CrmBoardPanel({
     }
   }
 
+  async function removeConversationFromCrm(conversationId: string) {
+    const conversation = conversations.find((item) => item.id === conversationId);
+
+    if (!conversation) {
+      return;
+    }
+
+    if (!isHotCrmConversation(conversation)) {
+      onToggleFavorite(conversationId);
+      return;
+    }
+
+    const previous = conversations;
+    const next = conversations.map((item) =>
+      item.id === conversationId ? { ...item, consultype: "otro", status: "open" } : item
+    );
+    const wasFavorite = favoriteIds.includes(conversationId);
+    onConversationsChange(next);
+    if (wasFavorite) {
+      onToggleFavorite(conversationId);
+    }
+
+    const response = await fetch("/api/conversations", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ conversationId, consultype: "otro", status: "open" })
+    });
+
+    if (!response.ok) {
+      onConversationsChange(previous);
+      if (wasFavorite) {
+        onToggleFavorite(conversationId);
+      }
+    }
+  }
+
   return (
     <section className="crm-panel">
       <div className="crm-head">
@@ -626,7 +662,7 @@ function CrmBoardPanel({
                   <button
                     aria-label="Quitar del tablero CRM"
                     className="crm-card-star"
-                    onClick={() => onToggleFavorite(conversation.id)}
+                    onClick={() => void removeConversationFromCrm(conversation.id)}
                     title="Quitar del tablero CRM"
                     type="button"
                   >

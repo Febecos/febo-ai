@@ -1985,7 +1985,7 @@ function InboxList({
     if (response.ok) {
       const activeTemplates = (payload?.templates ?? []).filter((template: MessageTemplate) => template.active);
       setTemplates(activeTemplates);
-      setSelectedTemplateId((current) => current || activeTemplates[0]?.id || "");
+      setSelectedTemplateId((current) => current || pickInitialTemplateId(activeTemplates));
     }
   }
 

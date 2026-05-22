@@ -3,6 +3,7 @@ import { runFebecosAgent, transcribeAudio } from "@/lib/agent";
 import { config } from "@/lib/config";
 import { recordAgentReply, recordIncomingMessage, recordWhatsAppMessageStatuses, saveMessageMedia, updateMessageBody } from "@/lib/crm";
 import { sendPushNotificationToAll } from "@/lib/push";
+import { suggestPump } from "@/lib/selector";
 import {
   downloadWhatsAppMedia,
   extractInboundMessages,
@@ -64,6 +65,11 @@ export async function POST(request: NextRequest) {
 
     if (stored.duplicate) {
       continue;
+    }
+
+    if (isText && message.flowResponse && stored.messageId) {
+      agentMessage = await buildSelectorFlowAgentMessage(agentMessage, message.flowResponse);
+      await updateMessageBody(stored.messageId, agentMessage);
     }
 
     await notifyNewInboundMessage({
@@ -198,6 +204,116 @@ function extensionForMime(mimeType: string, fallbackType: "image" | "video" | "d
   }
 
   return fallbackType === "image" ? "jpg" : fallbackType === "video" ? "mp4" : "bin";
+}
+
+async function buildSelectorFlowAgentMessage(baseMessage: string, flowResponse: Record<string, unknown>) {
+  const quoteInput = getSelectorInputFromFlow(flowResponse);
+
+  if (!quoteInput) {
+    return baseMessage;
+  }
+
+  const technicalContext = [
+    "",
+    "Datos normalizados para selector oficial:",
+    `Altura total: ${quoteInput.heightMeters} m`,
+    `Litros por dia: ${quoteInput.litersPerDay} L/dia`,
+    `Diametro equivalente API: ${quoteInput.maxPumpDiameterInches} pulgadas`
+  ];
+
+  try {
+    const result = await suggestPump(quoteInput);
+    const suggestion = result.sugerencia;
+    const quoteContext = [
+      "",
+      "Resultado oficial del selector Febecos:",
+      `Equipo: ${[suggestion.codigo, suggestion.marca].filter(Boolean).join(" - ")}`,
+      suggestion.watts ? `Potencia: ${suggestion.watts} W` : null,
+      suggestion.cant_paneles ? `Paneles: ${suggestion.cant_paneles}` : null,
+      suggestion.precio_full ? `Precio full: ${formatArs(suggestion.precio_full)}` : null,
+      suggestion.cuota_mensual ? `Cuota mensual: ${formatArs(suggestion.cuota_mensual)}` : null,
+      result.caudal_a_altura?.verano ? `Caudal verano: ${result.caudal_a_altura.verano} L/dia` : null,
+      result.caudal_a_altura?.invierno ? `Caudal invierno: ${result.caudal_a_altura.invierno} L/dia` : null,
+      typeof result.cobertura_pct === "number" ? `Cobertura: ${result.cobertura_pct}%` : null,
+      result.nota ? `Nota: ${result.nota}` : null,
+      result.es_fallback ? "Fallback: si" : "Fallback: no"
+    ].filter(Boolean);
+
+    return [baseMessage, ...technicalContext, ...quoteContext].join("\n");
+  } catch (error) {
+    return [
+      baseMessage,
+      ...technicalContext,
+      "",
+      `Error al consultar selector oficial: ${error instanceof Error ? error.message : "No pudimos consultar el selector."}`
+    ].join("\n");
+  }
+}
+
+function getSelectorInputFromFlow(flowResponse: Record<string, unknown>) {
+  const litersPerDay = readNumber(flowResponse.litros_dia);
+  const depth = readNumber(flowResponse.profundidad_pozo);
+  const tankHeight = readNumber(flowResponse.altura_tanque);
+  const horizontalDistance = readNumber(flowResponse.distancia_horizontal) ?? 0;
+  const maxPumpDiameterInches = normalizeFlowDiameter(flowResponse.diametro_perforacion);
+
+  if (!litersPerDay || !depth || !maxPumpDiameterInches) {
+    return null;
+  }
+
+  return {
+    heightMeters: depth + (tankHeight ?? 0) + horizontalDistance,
+    litersPerDay,
+    maxPumpDiameterInches,
+    mode: typeof flowResponse.uso === "string" ? flowResponse.uso : null
+  };
+}
+
+function normalizeFlowDiameter(value: unknown) {
+  const numeric = readNumber(value);
+
+  if (!numeric) {
+    return null;
+  }
+
+  if (numeric <= 6) {
+    return numeric;
+  }
+
+  if (numeric <= 63) {
+    return 2;
+  }
+
+  if (numeric <= 80) {
+    return 3;
+  }
+
+  if (numeric <= 110) {
+    return 4;
+  }
+
+  return 6;
+}
+
+function readNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const parsed = Number(value.replace(",", ".").replace(/[^\d.]+/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatArs(value: number) {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 0
+  }).format(value);
 }
 
 type InboundWhatsAppMessage = ReturnType<typeof extractInboundMessages>[number];

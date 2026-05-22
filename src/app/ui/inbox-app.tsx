@@ -1073,12 +1073,28 @@ function ContactsPanel({
 }
 
 function pickInitialTemplateId(templates: MessageTemplate[]) {
+  const phoneCallTemplate = templates.find((template) => {
+    const key = normalizeTemplateSearchKey(`${template.label} ${template.name}`);
+    return key.includes("llamo") && key.includes("telefono");
+  });
+
+  if (phoneCallTemplate) {
+    return phoneCallTemplate.id;
+  }
+
   const preferred = templates.find((template) => {
-    const key = `${template.label} ${template.name}`.toLowerCase();
+    const key = normalizeTemplateSearchKey(`${template.label} ${template.name}`);
     return key.includes("inicial") || key.includes("inicio") || key.includes("hola");
   });
 
   return preferred?.id ?? templates[0]?.id ?? "";
+}
+
+function normalizeTemplateSearchKey(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function TemplatesPanel() {

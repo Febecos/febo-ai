@@ -699,11 +699,11 @@ function isConversationUnread(conversation: ConversationSummary) {
 }
 
 function canUserSeeCrmConversation(conversation: ConversationSummary, currentUser: AppUser) {
-  if (currentUser.role === "admin") {
-    return true;
+  if (conversation.assigned_to) {
+    return conversation.assigned_to === currentUser.id;
   }
 
-  return !conversation.assigned_to || conversation.assigned_to === currentUser.id;
+  return true;
 }
 
 function getCrmPlatformLabel(conversation: ConversationSummary) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { put } from "@vercel/blob";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { getConversationReplyTarget, listConversationMessages, recordManualOutboundMessage, saveMessageMedia } from "@/lib/crm";
@@ -136,17 +137,40 @@ export async function POST(request: NextRequest) {
       const file = parsed.data.file;
       const caption = parsed.data.caption;
       const whatsappFile = await prepareAttachmentForWhatsApp(file);
-      const uploaded = await uploadWhatsAppMedia(whatsappFile);
       const mediaKind = getMediaKind(whatsappFile);
       let waMessageId: string | null = null;
+      let uploaded: { id: string } | null = null;
 
       if (mediaKind === "audio") {
-        const sent = await sendWhatsAppAudio(target.phone, uploaded.id);
-        waMessageId = getSentMessageId(sent);
+        try {
+          uploaded = await uploadWhatsAppMedia(whatsappFile);
+          const sent = await sendWhatsAppAudio(target.phone, uploaded.id);
+          waMessageId = getSentMessageId(sent);
+        } catch (audioError) {
+          const blob = await put(
+            `manual-audio/${Date.now()}-${sanitizeBlobPathname(whatsappFile.name || file.name || "audio")}`,
+            whatsappFile,
+            {
+              access: "public",
+              addRandomSuffix: true,
+              contentType: whatsappFile.type || "application/octet-stream"
+            }
+          );
+          const sent = await sendWhatsAppDocumentLink(
+            target.phone,
+            blob.url,
+            whatsappFile.name || file.name || "audio",
+            caption
+          );
+          waMessageId = getSentMessageId(sent);
+          console.warn("WhatsApp audio send failed; sent as linked document instead.", audioError);
+        }
       } else if (mediaKind === "image") {
+        uploaded = await uploadWhatsAppMedia(whatsappFile);
         const sent = await sendWhatsAppImage(target.phone, uploaded.id, caption);
         waMessageId = getSentMessageId(sent);
       } else if (mediaKind === "video") {
+        uploaded = await uploadWhatsAppMedia(whatsappFile);
         try {
           const sent = await sendWhatsAppVideo(target.phone, uploaded.id, caption);
           waMessageId = getSentMessageId(sent);
@@ -156,6 +180,7 @@ export async function POST(request: NextRequest) {
           console.warn("WhatsApp video send failed; sent as document instead.", videoError);
         }
       } else {
+        uploaded = await uploadWhatsAppMedia(whatsappFile);
         const sent = await sendWhatsAppDocument(target.phone, uploaded.id, whatsappFile.name || file.name || "archivo", caption);
         waMessageId = getSentMessageId(sent);
       }
@@ -164,14 +189,14 @@ export async function POST(request: NextRequest) {
         conversationId: parsed.data.conversationId,
         contactId: target.contact_id,
         userId: user.id,
-        body: buildAttachmentBody(file, caption),
+        body: buildAttachmentBody(whatsappFile, caption),
         waMessageId
       });
       const buffer = Buffer.from(await whatsappFile.arrayBuffer());
 
       await saveMessageMedia({
         messageId,
-        waMediaId: uploaded.id,
+        waMediaId: uploaded?.id ?? null,
         mimeType: whatsappFile.type || "application/octet-stream",
         filename: whatsappFile.name || file.name || "archivo",
         fileSize: whatsappFile.size,
@@ -198,6 +223,15 @@ export async function POST(request: NextRequest) {
     ok: true,
     messages: await listConversationMessages(parsed.data.conversationId)
   });
+}
+
+function sanitizeBlobPathname(filename: string) {
+  return filename
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120) || "audio";
 }
 
 function getSentMessageId(response: unknown) {

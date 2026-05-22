@@ -3466,10 +3466,10 @@ function getSupportedRecordingMimeType() {
   }
 
   const candidates = [
-    "audio/mp4",
-    "audio/aac",
     "audio/ogg;codecs=opus",
-    "audio/ogg"
+    "audio/ogg",
+    "audio/aac",
+    "audio/mp4"
   ];
 
   return candidates.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? "";

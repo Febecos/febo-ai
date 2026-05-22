@@ -1,22 +1,25 @@
 :root {
-  --bg: #20262d;
-  --panel: #303740;
-  --panel-strong: #16212b;
-  --panel-soft: #28323b;
+  --bg: #0e3156;
+  --panel: #184a78;
+  --panel-strong: #0a2745;
+  --panel-soft: #123d67;
+  --surface: #1d5688;
+  --surface-soft: #276597;
+  --surface-deep: #0b2f52;
   --ink: #f7f9fb;
-  --muted: #c7d1d9;
-  --line: #46525e;
+  --muted: #cfe1ef;
+  --line: #3d73a2;
   --green: #8abf21;
-  --green-soft: rgba(138, 191, 33, 0.18);
-  --blue: #0d4f83;
-  --blue-soft: rgba(20, 111, 170, 0.22);
-  --brand-blue: #123b63;
+  --green-soft: rgba(138, 191, 33, 0.24);
+  --blue: #6fb9e8;
+  --blue-soft: rgba(111, 185, 232, 0.22);
+  --brand-blue: #1b3f73;
   --brand-green: #8abf21;
-  --brand-cyan: #2aa4d8;
+  --brand-cyan: #8ed5f5;
   --red-soft: rgba(239, 68, 68, 0.18);
   --red: #ff6b6b;
   --amber: #facc15;
-  --shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  --shadow: 0 14px 34px rgba(4, 20, 36, 0.32);
 }
 
 * {
@@ -3385,4 +3388,190 @@ select {
   .chat-bubble {
     max-width: 94%;
   }
+}
+
+/* Febecos blue theme layer */
+body,
+.app-shell,
+.metrics-panel,
+.crm-panel {
+  background:
+    radial-gradient(circle at top left, rgba(142, 213, 245, 0.16), transparent 34%),
+    linear-gradient(180deg, #123f6a 0%, var(--bg) 52%, #0a2745 100%);
+}
+
+.conversation-list,
+.conversation-detail,
+.agent-panel,
+.admin-panel,
+.contacts-list-panel,
+.contact-editor,
+.toolbar,
+.detail-head,
+.metric-card,
+.crm-column,
+.crm-filters,
+.crm-quick-tabs,
+.sidebar-cycle-card,
+.template-composer,
+.dialog {
+  background: linear-gradient(180deg, rgba(36, 93, 141, 0.96) 0%, rgba(22, 70, 115, 0.98) 100%);
+  border-color: rgba(139, 194, 230, 0.36);
+}
+
+.tool-sidebar {
+  background:
+    linear-gradient(180deg, rgba(27, 63, 115, 0.96) 0%, rgba(12, 45, 78, 0.98) 54%, rgba(8, 33, 58, 1) 100%);
+  border-right-color: rgba(142, 213, 245, 0.28);
+}
+
+.tool-brand,
+.panel-title,
+.thread-title,
+.toolbar {
+  background: rgba(9, 36, 64, 0.28);
+  border-color: rgba(142, 213, 245, 0.28);
+}
+
+.tool-sidebar button,
+.list-tabs button,
+.conversation-tabs button,
+.secondary,
+.icon-action,
+.transfer-button,
+.transfer-menu summary,
+.event-menu summary,
+.toolbar-menu summary,
+select {
+  background: rgba(73, 142, 190, 0.2);
+  border-color: rgba(142, 213, 245, 0.34);
+  color: #f7fbff;
+}
+
+.tool-sidebar button:hover,
+.list-tabs button:hover,
+.conversation-tabs button:hover,
+.secondary:hover,
+.icon-action:hover {
+  background: rgba(142, 213, 245, 0.24);
+}
+
+.tool-sidebar button.active,
+.list-tabs button.active,
+.conversation-tabs button.active,
+.contact-row.active,
+.conversation-row.active,
+.primary {
+  background: linear-gradient(180deg, #9dd7f2 0%, #5daee0 100%);
+  border-color: rgba(202, 239, 255, 0.86);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  color: #06243d;
+  font-weight: 800;
+}
+
+.tool-sidebar button.active {
+  box-shadow: inset 4px 0 0 var(--green), inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.conversation-row,
+.contact-row,
+.crm-card,
+.info-cell,
+.thread-panel,
+.answer-box,
+.notes-panel,
+.message-file,
+.new-contact-card,
+.field input,
+.field textarea,
+.chat-name-field input,
+.note-composer textarea,
+.reply-composer textarea,
+.template-sync textarea,
+.template-form textarea,
+.template-form input,
+.quick-reply-picker,
+.tag-editor-panel,
+.filters-popover,
+.event-menu > div {
+  background: rgba(9, 41, 72, 0.62);
+  border-color: rgba(142, 213, 245, 0.3);
+  color: #f8fbff;
+}
+
+.conversation-row:not(.active):hover,
+.contact-row:not(.active):hover,
+.crm-card:hover {
+  background: rgba(26, 83, 132, 0.74);
+  border-color: rgba(142, 213, 245, 0.48);
+}
+
+.conversation-row.active .row-meta,
+.conversation-row.active .row-main small,
+.conversation-row.active .conversation-row-main small,
+.contact-row.active .row-main small {
+  color: rgba(6, 36, 61, 0.78);
+}
+
+.assigned-pill {
+  background: rgba(111, 185, 232, 0.22);
+  border-color: rgba(142, 213, 245, 0.45);
+  color: #ecf8ff;
+}
+
+.conversation-row.active .assigned-pill {
+  background: rgba(8, 49, 83, 0.16);
+  border-color: rgba(8, 49, 83, 0.24);
+  color: #06243d;
+}
+
+.search-field,
+.crm-card select,
+.crm-filters input,
+.crm-filters select,
+.contacts-search input {
+  background: rgba(5, 31, 56, 0.36);
+  border-color: rgba(142, 213, 245, 0.34);
+  color: #f8fbff;
+}
+
+.filters-head button,
+.eyebrow,
+.toolbar-menu[open] summary,
+.icon-action.active {
+  color: #bfeeff;
+}
+
+.panel-title span,
+.thread-title span,
+.status {
+  background: rgba(138, 191, 33, 0.2);
+  color: #f1ffd7;
+}
+
+.chat-bubble.inbound {
+  background: rgba(235, 246, 255, 0.96);
+  border-color: rgba(142, 213, 245, 0.65);
+  color: #0a2745;
+}
+
+.chat-bubble.outbound,
+.chat-bubble.internal {
+  background: linear-gradient(180deg, #73bdea 0%, #458fd0 100%);
+  border-color: rgba(202, 239, 255, 0.68);
+  color: #ffffff;
+}
+
+.chat-bubble.outbound.human-outbound {
+  background: linear-gradient(180deg, #f5a623 0%, #ed9514 100%);
+  border-color: rgba(255, 215, 139, 0.9);
+  color: #172033;
+}
+
+.modal-backdrop {
+  background: rgba(5, 24, 43, 0.68);
+}
+
+.brand-mark {
+  border-color: rgba(138, 191, 33, 0.85);
 }

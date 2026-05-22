@@ -3556,3 +3556,84 @@ select {
   font-family: "Segoe UI", Roboto, Arial, Helvetica, sans-serif;
   font-weight: 600;
 }
+
+.toolbar-icons .icon-action {
+  background: rgba(143, 210, 244, 0.16);
+  border-color: rgba(191, 238, 255, 0.42);
+  border-radius: 7px;
+  color: #e9f8ff;
+}
+
+.toolbar-icons .icon-action:hover {
+  background: rgba(143, 210, 244, 0.28);
+  border-color: rgba(191, 238, 255, 0.62);
+}
+
+.toolbar-icons .icon-action.active {
+  background: rgba(138, 191, 33, 0.2);
+  border-color: rgba(188, 235, 85, 0.58);
+  color: #eaffbf;
+}
+
+.reply-composer,
+.conversation-bottom-bar {
+  background: linear-gradient(180deg, rgba(28, 87, 137, 0.98) 0%, rgba(14, 57, 99, 0.98) 100%);
+  border-color: rgba(142, 213, 245, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.reply-composer textarea {
+  background: rgba(5, 31, 56, 0.64);
+  border-color: rgba(142, 213, 245, 0.38);
+  color: #f8fbff;
+}
+
+.reply-composer textarea::placeholder {
+  color: rgba(230, 244, 255, 0.66);
+}
+
+.reply-composer textarea:focus {
+  border-color: rgba(191, 238, 255, 0.82);
+  box-shadow: 0 0 0 3px rgba(142, 213, 245, 0.15);
+  outline: 0;
+}
+
+.reply-composer .composer-icon-button {
+  background: rgba(143, 210, 244, 0.16);
+  border-color: rgba(191, 238, 255, 0.42);
+  color: #f3fbff;
+}
+
+.reply-composer .composer-icon-button:hover {
+  background: rgba(143, 210, 244, 0.26);
+}
+
+.reply-composer .primary {
+  background: linear-gradient(180deg, #9ecf39 0%, #75aa18 100%);
+  border-color: rgba(216, 255, 130, 0.76);
+  color: #08243f;
+}
+
+.composer-tabs button {
+  background: rgba(143, 210, 244, 0.14);
+  border-color: rgba(191, 238, 255, 0.34);
+  color: #e9f8ff;
+  font-weight: 650;
+}
+
+.composer-tabs button.active {
+  background: linear-gradient(180deg, #b9e6fb 0%, #72bfe9 100%);
+  border-color: rgba(226, 247, 255, 0.9);
+  color: #06243d;
+}
+
+.composer-tabs button.notes-tab {
+  border-color: rgba(245, 166, 35, 0.55);
+  color: #ffd99a;
+}
+
+.composer-tabs button.notes-tab.active {
+  background: linear-gradient(180deg, #f7b13f 0%, #ef9518 100%);
+  border-color: rgba(255, 215, 139, 0.92);
+  color: #172033;
+}

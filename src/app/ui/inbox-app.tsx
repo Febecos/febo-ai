@@ -12,7 +12,8 @@ import {
   CircleUserRound,
   Clock3,
   Calendar,
-  Edit3,
+  ClipboardList,
+  FilePenLine,
   FileText,
   Filter,
   ImageIcon,
@@ -20,10 +21,10 @@ import {
   LayoutDashboard,
   LogOut,
   MessageSquareText,
+  MessageCircleMore,
   Mic,
   MoreVertical,
   Paperclip,
-  Radio,
   RefreshCcw,
   Save,
   Search,
@@ -31,11 +32,10 @@ import {
   SendHorizonal,
   Square,
   Star,
-  Tag,
+  Tags,
   Trash2,
   UserCheck,
   UserPlus,
-  Zap,
   UsersRound,
   X
 } from "lucide-react";
@@ -2651,7 +2651,7 @@ function InboxList({
                   <button onClick={() => patchConversation(conversation.id, { assignedTo: null, status: "open" })} type="button"><CheckCheck size={15} /> Desescalar</button>
                   <button onClick={() => markConversationUnread(conversation.id)} type="button"><CircleUserRound size={15} /> Marcar como no leido</button>
                   <details className="type-submenu">
-                    <summary><Tag size={15} /> Cambiar tipo</summary>
+                    <summary><Tags size={15} /> Cambiar tipo</summary>
                     <div>
                       <strong>CAMBIAR TIPO</strong>
                       {CONSULTYPE_OPTIONS.map((option) => (
@@ -2730,7 +2730,7 @@ function InboxList({
                     <button onClick={() => patchConversation(selected.id, { assignedTo: null, status: "open" })} type="button"><CheckCheck size={15} /> Desescalar</button>
                     <button onClick={() => markConversationUnread(selected.id)} type="button"><CircleUserRound size={15} /> Marcar como no leido</button>
                     <details className="type-submenu">
-                      <summary><Tag size={15} /> Cambiar tipo</summary>
+                      <summary><Tags size={15} /> Cambiar tipo</summary>
                       <div>
                         <strong>CAMBIAR TIPO</strong>
                         {CONSULTYPE_OPTIONS.map((option) => (
@@ -2761,10 +2761,10 @@ function InboxList({
               </label>
               <button className="secondary" onClick={saveChatName} type="button">Guardar</button>
               <div className="toolbar-icons">
-                <button className="icon-action" onClick={() => setTagPanelOpen(!tagPanelOpen)} title="Editar etiqueta" type="button"><Tag size={17} /></button>
-                <button className="icon-action" onClick={() => setSummaryOpen(true)} title="Generar resumen" type="button"><Edit3 size={17} /></button>
-                <button className="icon-action active" onClick={() => setTemplateComposerOpen(true)} title="Enviar plantilla" type="button"><Radio size={17} /></button>
-                <button className="icon-action" onClick={() => setQuickRepliesOpen(true)} title="Respuestas rapidas" type="button"><Zap size={17} /></button>
+                <button className="icon-action" onClick={() => setTagPanelOpen(!tagPanelOpen)} title="Editar etiqueta" type="button"><Tags size={17} /></button>
+                <button className="icon-action" onClick={() => setSummaryOpen(true)} title="Generar resumen" type="button"><ClipboardList size={17} /></button>
+                <button className="icon-action active" onClick={() => setTemplateComposerOpen(true)} title="Enviar plantilla" type="button"><FilePenLine size={17} /></button>
+                <button className="icon-action" onClick={() => setQuickRepliesOpen(true)} title="Respuestas rapidas" type="button"><MessageCircleMore size={17} /></button>
                 <details className="event-menu" open={eventMenuOpen}>
                   <summary onClick={(event) => { event.preventDefault(); setEventMenuOpen(!eventMenuOpen); }}>
                     <Calendar size={17} />

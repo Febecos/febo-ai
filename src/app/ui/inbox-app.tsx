@@ -225,6 +225,16 @@ function ToolWorkspace({
   const [focusedConversation, setFocusedConversation] = useState({ id: "", signal: 0 });
   const [focusedContact, setFocusedContact] = useState({ id: "", signal: 0 });
   const [pushStatus, setPushStatus] = useState("Notificaciones");
+  const [actionNotice, setActionNotice] = useState("");
+
+  useEffect(() => {
+    if (!actionNotice) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setActionNotice(""), 4500);
+    return () => window.clearTimeout(timeoutId);
+  }, [actionNotice]);
 
   useEffect(() => {
     const storedFavorites = window.localStorage.getItem("febo-crm-favorites");
@@ -327,11 +337,15 @@ function ToolWorkspace({
           <small>20 abr - 20 may</small>
         </div>
         <div className="tool-sidebar-bottom">
-          <button onClick={() => window.location.reload()} title="Actualizar" type="button">
+          <button onClick={() => hardRefreshApp()} title="Actualizar app" type="button">
             <RefreshCcw size={18} />
             Actualizar
           </button>
-          <button onClick={() => void enablePushNotifications(setPushStatus)} title="Activar notificaciones" type="button">
+          <button
+            onClick={() => void enablePushNotifications(setPushStatus, setActionNotice)}
+            title={`Activar notificaciones - ${pushStatus}`}
+            type="button"
+          >
             <BellRing size={18} />
             {pushStatus}
           </button>
@@ -341,6 +355,7 @@ function ToolWorkspace({
           </button>
         </div>
       </nav>
+      {actionNotice ? <div className="app-action-notice">{actionNotice}</div> : null}
 
       <div className="tool-content">
         {activeTool === "conversations" ? (
@@ -3658,43 +3673,58 @@ function getConsultypeLabel(value: string) {
   return CONSULTYPE_OPTIONS.find((option) => option.value === value)?.label ?? value;
 }
 
-async function enablePushNotifications(setStatus: (status: string) => void) {
+function hardRefreshApp() {
+  const url = new URL(window.location.href);
+  url.searchParams.set("refresh", Date.now().toString());
+  window.location.replace(url.toString());
+}
+
+async function enablePushNotifications(setStatus: (status: string) => void, setNotice?: (message: string) => void) {
+  const notify = (message: string) => {
+    setStatus(message);
+    setNotice?.(`Notificaciones: ${message}`);
+  };
+
   if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
-    setStatus("No compatible");
+    notify("No compatible");
     return;
   }
 
-  setStatus("Activando...");
+  notify("Activando...");
 
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") {
-    setStatus("Sin permiso");
-    return;
-  }
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      notify("Sin permiso");
+      return;
+    }
 
-  const keyResponse = await fetch("/api/push/vapid-public-key");
-  const keyPayload = await readJsonResponse(keyResponse);
+    const keyResponse = await fetch("/api/push/vapid-public-key");
+    const keyPayload = await readJsonResponse(keyResponse);
 
-  if (!keyResponse.ok || !keyPayload?.configured || !keyPayload.publicKey) {
-    setStatus("Falta config");
-    return;
-  }
+    if (!keyResponse.ok || !keyPayload?.configured || !keyPayload.publicKey) {
+      notify("Falta config");
+      return;
+    }
 
-  const registration = await navigator.serviceWorker.register("/sw.js");
-  const subscription =
-    await registration.pushManager.getSubscription() ??
-    await registration.pushManager.subscribe({
-      applicationServerKey: urlBase64ToUint8Array(keyPayload.publicKey),
-      userVisibleOnly: true
+    const registration = await navigator.serviceWorker.register(`/sw.js?v=${Date.now()}`);
+    const subscription =
+      await registration.pushManager.getSubscription() ??
+      await registration.pushManager.subscribe({
+        applicationServerKey: urlBase64ToUint8Array(keyPayload.publicKey),
+        userVisibleOnly: true
+      });
+
+    const response = await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(subscription)
     });
 
-  const response = await fetch("/api/push/subscribe", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(subscription)
-  });
-
-  setStatus(response.ok ? "Activas" : "Error push");
+    notify(response.ok ? "Activas" : "Error push");
+  } catch {
+    notify("Error push");
+  }
 }
 
 function urlBase64ToUint8Array(value: string) {

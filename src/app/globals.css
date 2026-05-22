@@ -658,6 +658,24 @@ button:disabled {
   font-weight: 700;
 }
 
+.app-action-notice {
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  border-radius: 6px;
+  bottom: 16px;
+  box-shadow: 0 16px 35px rgba(0, 0, 0, 0.32);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  left: 50%;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 10px 12px;
+  position: fixed;
+  text-align: center;
+  transform: translateX(-50%);
+  z-index: 80;
+}
+
 .sidebar-cycle-card {
   border: 1px solid var(--line);
   border-radius: 4px;

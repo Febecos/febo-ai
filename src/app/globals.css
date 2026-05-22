@@ -30,7 +30,7 @@ html,
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Segoe UI", Roboto, Arial, Helvetica, sans-serif;
   margin: 0;
   min-height: 100%;
 }
@@ -1059,7 +1059,7 @@ button:disabled {
 
 .conversation-row-main .tag {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
   justify-self: start;
   min-height: 22px;
   padding: 0 9px;
@@ -1288,9 +1288,19 @@ button:disabled {
   white-space: nowrap;
 }
 
+.row-main strong,
+.conversation-row-main strong,
+.crm-card strong {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
 .row-main small,
 .conversation-row-main small {
   color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .conversation-row.active .row-main small,
@@ -1302,7 +1312,7 @@ button:disabled {
   background: rgba(148, 163, 184, 0.18);
   border: 1px solid rgba(203, 213, 225, 0.28);
   color: #ffffff;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
 }
@@ -3538,4 +3548,11 @@ select {
 
 .brand-mark {
   border-color: rgba(138, 191, 33, 0.85);
+}
+
+.row-main strong,
+.conversation-row-main strong,
+.crm-card strong {
+  font-family: "Segoe UI", Roboto, Arial, Helvetica, sans-serif;
+  font-weight: 600;
 }

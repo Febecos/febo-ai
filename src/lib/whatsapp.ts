@@ -251,7 +251,9 @@ function parseFlowResponse(responseJson?: string) {
 }
 
 function buildFlowResponseText(response: Record<string, unknown>, fallback?: string) {
+  const hiddenKeys = new Set(["flow_token"]);
   const entries = Object.entries(response)
+    .filter(([key]) => !hiddenKeys.has(key))
     .filter(([, value]) => value !== null && value !== undefined && String(value).trim())
     .map(([key, value]) => `${humanizeTemplateName(key)}: ${String(value)}`);
 

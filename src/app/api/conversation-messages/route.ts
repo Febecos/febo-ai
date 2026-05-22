@@ -241,7 +241,8 @@ export async function POST(request: NextRequest) {
           source: "manual",
           whatsapp_interactive_type: "flow",
           whatsapp_flow: "selector-febecos"
-        }
+        },
+        preserveAiEnabled: true
       });
     } else if ("text" in parsed.data) {
       const sent = await sendWhatsAppText(target.phone, parsed.data.text);

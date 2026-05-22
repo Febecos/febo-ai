@@ -30,7 +30,7 @@ const agentSchema = z.object({
   nombre: z.string().nullable(),
   imagenes: z.array(z.string()),
   archivos: z.array(z.string()),
-  action: z.enum(["none", "create_lead", "create_ticket", "record_event"]),
+  action: z.enum(["none", "create_lead", "create_ticket", "record_event", "send_selector_flow"]),
   actionSubject: z.string().nullable()
 });
 
@@ -186,6 +186,7 @@ export async function runFebecosAgent(input: {
       "Dentro de selectorQuote, los campos autoritativos son result.sugerencia.precio_full, result.sugerencia.cant_paneles, result.sugerencia.watts, result.sugerencia.codigo y result.caudal_a_altura. No recalcules precio ni cantidad de paneles.",
       "Si selectorQuote.status='ok' y result.cobertura_insuficiente=true, no cotices precio ni modelo: explica brevemente que requiere armado a medida y escala a asesor humano.",
       "Cuando ya diste una cotizacion y el cliente todavia no confirmo compra pero puede querer cuotas o asesor, no derives de una: pregunta 'Si queres verlo en cuotas o preferis hablar con un asesor, te ayudo. Como te gustaria verlo?'.",
+      "Si el cliente pide calcular, usar el selector, dimensionar una bomba o cargar sus datos desde cero dentro de WhatsApp, y todavia no dio suficientes datos tecnicos para cotizar, responde brevemente que le vas a abrir el selector y usa action='send_selector_flow'.",
       "Si el cliente solo responde '6 cuotas', 'seis cuotas' o 'contado' despues de una cotizacion, no repitas la cotizacion completa: confirma la preferencia en una frase y ofrece hablar con asesor.",
       "Cuando ofrezcas asesor sin que el cliente lo haya confirmado explicitamente, no escribas 'te paso' ni 'te derivo': pregunta si quiere hablar con un asesor y deja escalar=false para que WhatsApp muestre botones de confirmacion.",
       "Si selectorQuote no esta disponible pero falta algun dato tecnico, pedi solo ese dato. No inventes precios ni modelos.",
@@ -221,7 +222,7 @@ export async function runFebecosAgent(input: {
                 nombre: "nombre detectado o null",
                 imagenes: "array de ids/urls de imagenes a enviar, si aplica",
                 archivos: "array de ids/urls de archivos a enviar, si aplica",
-                action: "none | create_lead | create_ticket | record_event",
+                action: "none | create_lead | create_ticket | record_event | send_selector_flow",
                 actionSubject: "resumen corto opcional"
               }
             })
@@ -269,7 +270,7 @@ export async function runFebecosAgent(input: {
             },
             action: {
               type: "string",
-              enum: ["none", "create_lead", "create_ticket", "record_event"]
+              enum: ["none", "create_lead", "create_ticket", "record_event", "send_selector_flow"]
             },
             actionSubject: { type: ["string", "null"] }
           }

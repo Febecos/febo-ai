@@ -1162,6 +1162,7 @@ export async function recordManualOutboundMessage(input: {
   body: string;
   waMessageId?: string | null;
   metadata?: Record<string, unknown>;
+  preserveAiEnabled?: boolean;
 }) {
   const sql = getSql();
   const metadata = {
@@ -1184,14 +1185,23 @@ export async function recordManualOutboundMessage(input: {
     returning id::text
   `) as Array<{ id: string }>;
 
-  await sql`
-    update conversations
-    set last_message_at = now(),
-        ai_enabled = false,
-        assigned_to = coalesce(assigned_to, ${input.userId}::uuid),
-        updated_at = now()
-    where id = ${input.conversationId}
-  `;
+  if (input.preserveAiEnabled) {
+    await sql`
+      update conversations
+      set last_message_at = now(),
+          updated_at = now()
+      where id = ${input.conversationId}
+    `;
+  } else {
+    await sql`
+      update conversations
+      set last_message_at = now(),
+          ai_enabled = false,
+          assigned_to = coalesce(assigned_to, ${input.userId}::uuid),
+          updated_at = now()
+      where id = ${input.conversationId}
+    `;
+  }
 
   return rows[0].id;
 }

@@ -12,6 +12,7 @@ export type WhatsAppTextMessage = {
 export type WhatsAppAudioMessage = {
   from: string;
   id: string;
+  type: "audio";
   mediaId: string;
   mimeType: string;
   sha256?: string;
@@ -19,7 +20,19 @@ export type WhatsAppAudioMessage = {
   contactName?: string;
 };
 
-export type WhatsAppInboundMessage = WhatsAppTextMessage | WhatsAppAudioMessage;
+export type WhatsAppMediaMessage = {
+  from: string;
+  id: string;
+  type: "image" | "video" | "document";
+  mediaId: string;
+  mimeType: string;
+  sha256?: string;
+  caption?: string;
+  filename?: string;
+  contactName?: string;
+};
+
+export type WhatsAppInboundMessage = WhatsAppTextMessage | WhatsAppAudioMessage | WhatsAppMediaMessage;
 
 export type WhatsAppMessageStatus = {
   id: string;
@@ -54,6 +67,9 @@ type WhatsAppWebhookBody = {
           type?: string;
           text?: { body?: string };
           audio?: { id?: string; mime_type?: string; sha256?: string; voice?: boolean };
+          image?: { id?: string; mime_type?: string; sha256?: string; caption?: string };
+          video?: { id?: string; mime_type?: string; sha256?: string; caption?: string };
+          document?: { id?: string; mime_type?: string; sha256?: string; caption?: string; filename?: string };
           interactive?: {
             type?: string;
             button_reply?: { id?: string; title?: string };
@@ -152,10 +168,51 @@ export function extractInboundMessages(body: WhatsAppWebhookBody): WhatsAppInbou
           messages.push({
             from: message.from,
             id: message.id,
+            type: "audio",
             mediaId: message.audio.id,
             mimeType: message.audio.mime_type,
             sha256: message.audio.sha256,
             voice: message.audio.voice,
+            contactName: contact?.profile?.name
+          });
+        }
+
+        if (message.type === "image" && message.image?.id && message.image.mime_type) {
+          messages.push({
+            from: message.from,
+            id: message.id,
+            type: "image",
+            mediaId: message.image.id,
+            mimeType: message.image.mime_type,
+            sha256: message.image.sha256,
+            caption: message.image.caption,
+            contactName: contact?.profile?.name
+          });
+        }
+
+        if (message.type === "video" && message.video?.id && message.video.mime_type) {
+          messages.push({
+            from: message.from,
+            id: message.id,
+            type: "video",
+            mediaId: message.video.id,
+            mimeType: message.video.mime_type,
+            sha256: message.video.sha256,
+            caption: message.video.caption,
+            contactName: contact?.profile?.name
+          });
+        }
+
+        if (message.type === "document" && message.document?.id && message.document.mime_type) {
+          messages.push({
+            from: message.from,
+            id: message.id,
+            type: "document",
+            mediaId: message.document.id,
+            mimeType: message.document.mime_type,
+            sha256: message.document.sha256,
+            caption: message.document.caption,
+            filename: message.document.filename,
             contactName: contact?.profile?.name
           });
         }
@@ -249,7 +306,11 @@ export function extractMessageStatuses(body: WhatsAppWebhookBody): WhatsAppMessa
 }
 
 export function isWhatsAppAudioMessage(message: WhatsAppInboundMessage): message is WhatsAppAudioMessage {
-  return "mediaId" in message;
+  return "mediaId" in message && (!("type" in message) || message.type === "audio");
+}
+
+export function isWhatsAppMediaMessage(message: WhatsAppInboundMessage): message is WhatsAppMediaMessage {
+  return "mediaId" in message && "type" in message && ["image", "video", "document"].includes(message.type);
 }
 
 export function isWhatsAppTextMessage(message: WhatsAppInboundMessage): message is WhatsAppTextMessage {

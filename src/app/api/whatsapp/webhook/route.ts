@@ -8,6 +8,7 @@ import {
   extractInboundMessages,
   extractMessageStatuses,
   isWhatsAppAudioMessage,
+  isWhatsAppMediaMessage,
   isWhatsAppTextMessage,
   sendWhatsAppReplyButtons,
   sendWhatsAppText,
@@ -52,11 +53,12 @@ export async function POST(request: NextRequest) {
   for (const message of messages) {
     const isText = isWhatsAppTextMessage(message);
     let agentMessage = isText ? message.text : "";
+    const initialBody = isText ? agentMessage : getInboundMediaBody(message);
 
     const stored = await recordIncomingMessage({
       phone: message.from,
       waMessageId: message.id,
-      text: agentMessage || "Audio recibido",
+      text: initialBody,
       contactName: message.contactName
     });
 
@@ -98,6 +100,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (isWhatsAppMediaMessage(message) && stored.messageId) {
+      try {
+        const media = await downloadWhatsAppMedia(message.mediaId);
+
+        await saveMessageMedia({
+          messageId: stored.messageId,
+          waMediaId: media.waMediaId,
+          mimeType: media.mimeType,
+          filename: message.filename ?? inboundMediaFilename(message.type, media.mimeType),
+          fileSize: media.fileSize,
+          sha256: media.sha256 ?? message.sha256,
+          dataBase64: media.dataBase64
+        });
+
+        agentMessage = getInboundMediaBody(message);
+      } catch (error) {
+        console.error("No pudimos procesar archivo de WhatsApp.", error);
+        await updateMessageBody(stored.messageId, `${getInboundMediaLabel(message)} recibido (no pudimos descargarlo).`);
+      }
+    }
+
     if (!stored.aiEnabled) {
       continue;
     }
@@ -111,6 +134,70 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+function getInboundMediaBody(message: InboundWhatsAppMessage) {
+  if (isWhatsAppTextMessage(message)) {
+    return message.text;
+  }
+
+  if (isWhatsAppAudioMessage(message)) {
+    return "Audio recibido";
+  }
+
+  const label = getInboundMediaLabel(message);
+  return message.caption ? `${label} recibido: ${message.caption}` : `${label} recibido`;
+}
+
+function getInboundMediaLabel(message: InboundWhatsAppMessage) {
+  if (!isWhatsAppMediaMessage(message)) {
+    return "Archivo";
+  }
+
+  if (message.type === "image") {
+    return "Imagen";
+  }
+
+  if (message.type === "video") {
+    return "Video";
+  }
+
+  return "Documento";
+}
+
+function inboundMediaFilename(type: "image" | "video" | "document", mimeType: string) {
+  const extension = extensionForMime(mimeType, type);
+  return `whatsapp-${type}-${Date.now()}.${extension}`;
+}
+
+function extensionForMime(mimeType: string, fallbackType: "image" | "video" | "document") {
+  const normalized = mimeType.toLowerCase();
+
+  if (normalized.includes("jpeg") || normalized.includes("jpg")) {
+    return "jpg";
+  }
+
+  if (normalized.includes("png")) {
+    return "png";
+  }
+
+  if (normalized.includes("webp")) {
+    return "webp";
+  }
+
+  if (normalized.includes("mp4")) {
+    return "mp4";
+  }
+
+  if (normalized.includes("3gpp") || normalized.includes("3gp")) {
+    return "3gp";
+  }
+
+  if (normalized.includes("pdf")) {
+    return "pdf";
+  }
+
+  return fallbackType === "image" ? "jpg" : fallbackType === "video" ? "mp4" : "bin";
 }
 
 type InboundWhatsAppMessage = ReturnType<typeof extractInboundMessages>[number];

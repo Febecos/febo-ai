@@ -7,6 +7,7 @@ export type WhatsAppTextMessage = {
   text: string;
   contactName?: string;
   interactiveId?: string;
+  flowResponse?: Record<string, unknown>;
 };
 
 export type WhatsAppAudioMessage = {
@@ -73,6 +74,7 @@ type WhatsAppWebhookBody = {
           interactive?: {
             type?: string;
             button_reply?: { id?: string; title?: string };
+            nfm_reply?: { name?: string; body?: string; response_json?: string };
           };
         }>;
         statuses?: Array<{
@@ -164,6 +166,18 @@ export function extractInboundMessages(body: WhatsAppWebhookBody): WhatsAppInbou
           });
         }
 
+        if (message.type === "interactive" && message.interactive?.nfm_reply) {
+          const response = parseFlowResponse(message.interactive.nfm_reply.response_json);
+          messages.push({
+            from: message.from,
+            id: message.id,
+            text: buildFlowResponseText(response, message.interactive.nfm_reply.body),
+            interactiveId: `flow:${message.interactive.nfm_reply.name ?? "unknown"}`,
+            flowResponse: response,
+            contactName: contact?.profile?.name
+          });
+        }
+
         if (message.type === "audio" && message.audio?.id && message.audio.mime_type) {
           messages.push({
             from: message.from,
@@ -221,6 +235,31 @@ export function extractInboundMessages(body: WhatsAppWebhookBody): WhatsAppInbou
   }
 
   return messages;
+}
+
+function parseFlowResponse(responseJson?: string) {
+  if (!responseJson) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(responseJson);
+    return typeof parsed === "object" && parsed ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function buildFlowResponseText(response: Record<string, unknown>, fallback?: string) {
+  const entries = Object.entries(response)
+    .filter(([, value]) => value !== null && value !== undefined && String(value).trim())
+    .map(([key, value]) => `${humanizeTemplateName(key)}: ${String(value)}`);
+
+  if (entries.length) {
+    return `Selector WhatsApp completado:\n${entries.join("\n")}`;
+  }
+
+  return fallback || "Selector WhatsApp completado";
 }
 
 export async function fetchWhatsAppMessageTemplates() {
@@ -431,6 +470,69 @@ export async function sendWhatsAppReplyButtons(input: {
 
   if (!response.ok) {
     throw new Error(await getWhatsAppErrorMessage(response, "enviar los botones"));
+  }
+
+  return response.json();
+}
+
+export async function sendWhatsAppSelectorFlow(input: {
+  to: string;
+  conversationId: string;
+  contactName?: string | null;
+}) {
+  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
+  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+  const flowId = requireEnv("WHATSAPP_SELECTOR_FLOW_ID");
+
+  const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: input.to,
+      type: "interactive",
+      interactive: {
+        type: "flow",
+        header: {
+          type: "text",
+          text: "Selector Febecos"
+        },
+        body: {
+          text: "Completa estos datos dentro de WhatsApp y te sugerimos el equipo de bombeo solar adecuado."
+        },
+        footer: {
+          text: "Febecos bombas solares"
+        },
+        action: {
+          name: "flow",
+          parameters: {
+            flow_message_version: "3",
+            flow_id: flowId,
+            flow_token: JSON.stringify({
+              source: "febo-ai",
+              conversationId: input.conversationId
+            }),
+            flow_cta: "Abrir selector",
+            flow_action: "navigate",
+            flow_action_payload: {
+              screen: config.WHATSAPP_SELECTOR_FLOW_SCREEN,
+              data: {
+                nombre: input.contactName ?? "",
+                origen: "febo-ai"
+              }
+            }
+          }
+        }
+      }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(await getWhatsAppErrorMessage(response, "enviar el selector de WhatsApp"));
   }
 
   return response.json();

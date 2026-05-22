@@ -2172,6 +2172,32 @@ function InboxList({
     await refreshConversations(filters, { silent: true });
   }
 
+  async function sendSelectorFlowToSelected() {
+    if (!selected?.id) {
+      return;
+    }
+
+    setReplyError("");
+    const response = await fetchWithTimeout("/api/conversation-messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        conversationId: selected.id,
+        kind: "selector-flow"
+      })
+    });
+    const payload = await readJsonResponse(response);
+
+    if (!response.ok) {
+      setReplyError(payload?.error ?? "No pudimos enviar el selector de WhatsApp.");
+      return;
+    }
+
+    setMessages(payload?.messages ?? []);
+    setEventMenuOpen(false);
+    await refreshConversations(filters, { silent: true });
+  }
+
   function updateFilters(next: Partial<typeof filters>) {
     const nextFilters = { ...filters, ...next };
     setFilters(nextFilters);
@@ -2959,10 +2985,13 @@ function InboxList({
                   <summary onClick={(event) => { event.preventDefault(); setEventMenuOpen(!eventMenuOpen); }}>
                     <Calendar size={17} />
                     Enviar evento
-                    <span>2</span>
+                    <span>3</span>
                   </summary>
                   <div>
                     <strong>ENVIAR EVENTO</strong>
+                    <button onClick={() => void sendSelectorFlowToSelected()} type="button">
+                      <Calendar size={17} /> <span>Selector Febecos<small>WhatsApp Flow</small></span><b>Enviar</b>
+                    </button>
                     <button type="button"><Calendar size={17} /> <span>Compra<small>Purchase</small></span><b>Enviar</b></button>
                     <button type="button"><Calendar size={17} /> <span>Lead</span><b>Enviar</b></button>
                   </div>

@@ -8,6 +8,7 @@ import {
   sendWhatsAppDocument,
   sendWhatsAppDocumentLink,
   sendWhatsAppImage,
+  sendWhatsAppSelectorFlow,
   sendWhatsAppText,
   sendWhatsAppVideo,
   sendWhatsAppVideoLink,
@@ -32,6 +33,10 @@ const linkedMediaSchema = schema.extend({
     size: z.number().int().positive().max(100 * 1024 * 1024),
     url: z.string().url()
   })
+});
+
+const selectorFlowSchema = schema.extend({
+  kind: z.literal("selector-flow")
 });
 
 const supportedImageMimeTypes = ["image/jpeg", "image/png", "image/webp"];
@@ -221,7 +226,24 @@ export async function POST(request: NextRequest) {
         fileSize: whatsappFile.size,
         dataBase64: buffer.toString("base64")
       });
-    } else {
+    } else if ("kind" in parsed.data && parsed.data.kind === "selector-flow") {
+      const sent = await sendWhatsAppSelectorFlow({
+        to: target.phone,
+        conversationId: parsed.data.conversationId
+      });
+      await recordManualOutboundMessage({
+        conversationId: parsed.data.conversationId,
+        contactId: target.contact_id,
+        userId: user.id,
+        body: "Selector Febecos enviado por WhatsApp.",
+        waMessageId: getSentMessageId(sent),
+        metadata: {
+          source: "manual",
+          whatsapp_interactive_type: "flow",
+          whatsapp_flow: "selector-febecos"
+        }
+      });
+    } else if ("text" in parsed.data) {
       const sent = await sendWhatsAppText(target.phone, parsed.data.text);
       await recordManualOutboundMessage({
         conversationId: parsed.data.conversationId,
@@ -284,7 +306,7 @@ async function parseAttachmentRequest(request: NextRequest) {
 }
 
 function parseJsonSendRequest(input: unknown) {
-  return z.union([sendSchema, linkedMediaSchema]).safeParse(input);
+  return z.union([sendSchema, linkedMediaSchema, selectorFlowSchema]).safeParse(input);
 }
 
 function isSupportedWhatsAppAudio(mimeType: string) {

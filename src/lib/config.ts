@@ -12,6 +12,8 @@ const schema = z.object({
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().optional(),
   WHATSAPP_APP_SECRET: z.string().optional(),
+  WHATSAPP_SELECTOR_FLOW_ID: z.string().optional(),
+  WHATSAPP_SELECTOR_FLOW_SCREEN: z.string().default("DATOS_CAMPO"),
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default("mailto:guille.aol@gmail.com"),

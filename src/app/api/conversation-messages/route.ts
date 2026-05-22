@@ -13,6 +13,8 @@ import {
   uploadWhatsAppMedia
 } from "@/lib/whatsapp";
 
+export const maxDuration = 60;
+
 const schema = z.object({
   conversationId: z.string().uuid()
 });
@@ -251,6 +253,26 @@ function getAttachmentMimeType(file: Pick<File, "name" | "type">) {
     return "video/3gpp";
   }
 
+  if (["m4a", "mp4a"].includes(extension ?? "") && (!normalized || normalized === "application/octet-stream")) {
+    return "audio/mp4";
+  }
+
+  if (extension === "aac" && (!normalized || normalized === "application/octet-stream")) {
+    return "audio/aac";
+  }
+
+  if (extension === "mp3" && (!normalized || normalized === "application/octet-stream")) {
+    return "audio/mpeg";
+  }
+
+  if (extension === "ogg" && (!normalized || normalized === "application/octet-stream")) {
+    return "audio/ogg";
+  }
+
+  if (extension === "wav" && (!normalized || normalized === "application/octet-stream")) {
+    return "audio/wav";
+  }
+
   if (normalized && normalized !== "application/octet-stream") {
     return normalized;
   }
@@ -261,6 +283,26 @@ function getAttachmentMimeType(file: Pick<File, "name" | "type">) {
 
   if (extension === "3gp") {
     return "video/3gpp";
+  }
+
+  if (["m4a", "mp4a"].includes(extension ?? "")) {
+    return "audio/mp4";
+  }
+
+  if (extension === "aac") {
+    return "audio/aac";
+  }
+
+  if (extension === "mp3") {
+    return "audio/mpeg";
+  }
+
+  if (extension === "ogg") {
+    return "audio/ogg";
+  }
+
+  if (extension === "wav") {
+    return "audio/wav";
   }
 
   return normalized;

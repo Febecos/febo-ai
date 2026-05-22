@@ -101,6 +101,7 @@ const TAG_FILTERS = [
   "presupuesto-enviado"
 ];
 const DIRECT_ATTACHMENT_UPLOAD_LIMIT_BYTES = 3.8 * 1024 * 1024;
+const MANUAL_REPLY_TIMEOUT_MS = 70000;
 
 export function InboxApp({
   conversations,
@@ -1418,6 +1419,8 @@ function InboxList({
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const audioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaRecorderChunksRef = useRef<Blob[]>([]);
   const recordingSamplesRef = useRef<Int16Array[]>([]);
   const recordingSampleRateRef = useRef(44100);
   const recordingStreamRef = useRef<MediaStream | null>(null);
@@ -2198,12 +2201,16 @@ function InboxList({
     try {
       if (replyFile && shouldUseBlobUpload(replyFile)) {
         const uploadFile = normalizeClientAttachmentFile(replyFile);
-        const blob = await upload(uploadFile.name || "archivo", uploadFile, {
-          access: "public",
-          handleUploadUrl: "/api/blob/upload"
-        });
+        const blob = await withTimeout(
+          upload(uploadFile.name || "archivo", uploadFile, {
+            access: "public",
+            handleUploadUrl: "/api/blob/upload"
+          }),
+          MANUAL_REPLY_TIMEOUT_MS,
+          "La subida del archivo tardo demasiado. Proba con un audio mas corto o reenviarlo."
+        );
 
-        response = await fetch("/api/conversation-messages", {
+        response = await fetchWithTimeout("/api/conversation-messages", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
@@ -2231,7 +2238,7 @@ function InboxList({
             })()
           : JSON.stringify({ conversationId: selected.id, text: replyText.trim() });
 
-        response = await fetch("/api/conversation-messages", {
+        response = await fetchWithTimeout("/api/conversation-messages", {
           method: "POST",
           headers: replyFile ? undefined : { "content-type": "application/json" },
           body
@@ -2239,7 +2246,7 @@ function InboxList({
       }
     } catch (error) {
       setSendingReply(false);
-      setReplyError(error instanceof Error ? error.message : "No pudimos subir el archivo.");
+      setReplyError(error instanceof Error ? error.message : "No pudimos enviar el mensaje.");
       return;
     }
 
@@ -2319,6 +2326,27 @@ function InboxList({
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       recordingStreamRef.current = stream;
+      const mediaRecorderMimeType = getSupportedRecordingMimeType();
+
+      if (mediaRecorderMimeType && typeof MediaRecorder !== "undefined") {
+        const recorder = new MediaRecorder(stream, { mimeType: mediaRecorderMimeType });
+        mediaRecorderRef.current = recorder;
+        mediaRecorderChunksRef.current = [];
+
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            mediaRecorderChunksRef.current.push(event.data);
+          }
+        };
+
+        recorder.onstop = () => {
+          finishMediaRecorderAudio(recorder.mimeType || mediaRecorderMimeType);
+        };
+
+        recorder.start();
+        markRecordingStarted();
+        return;
+      }
 
       const AudioContextConstructor =
         window.AudioContext ??
@@ -2380,6 +2408,17 @@ function InboxList({
   }
 
   function stopRecording() {
+    const recorder = mediaRecorderRef.current;
+
+    if (recorder && recorder.state !== "inactive") {
+      clearRecordingTimer();
+      setRecording(false);
+      setPreparingRecording(true);
+      setReplyError("");
+      recorder.stop();
+      return;
+    }
+
     const samples = [...recordingSamplesRef.current];
     const sampleRate = recordingSampleRateRef.current;
 
@@ -2408,6 +2447,8 @@ function InboxList({
   }
 
   function stopRecorderTracks() {
+    mediaRecorderRef.current = null;
+    mediaRecorderChunksRef.current = [];
     audioProcessorRef.current?.disconnect();
     audioProcessorRef.current = null;
     audioSourceRef.current?.disconnect();
@@ -2417,6 +2458,27 @@ function InboxList({
     void audioContextRef.current?.close();
     audioContextRef.current = null;
     recordingSamplesRef.current = [];
+  }
+
+  function finishMediaRecorderAudio(mimeType: string) {
+    try {
+      const chunks = mediaRecorderChunksRef.current;
+      if (!chunks.length) {
+        setReplyError("No se detecto audio grabado. Proba grabar dos segundos y detener.");
+        return;
+      }
+
+      const normalizedMimeType = mimeType.split(";")[0].trim().toLowerCase() || "audio/mp4";
+      const extension = getRecordingExtension(normalizedMimeType);
+      const file = new File(chunks, `audio-febo-${Date.now()}.${extension}`, { type: normalizedMimeType });
+      setAttachment(file);
+      setReplyText("");
+    } catch {
+      setReplyError("No pudimos preparar el audio grabado. Proba de nuevo o adjunta un audio.");
+    } finally {
+      setPreparingRecording(false);
+      stopRecorderTracks();
+    }
   }
 
   function clearRecordingTimer() {
@@ -3332,6 +3394,26 @@ function getClientAttachmentMimeType(file: File) {
     return "video/3gpp";
   }
 
+  if (["m4a", "mp4a"].includes(extension ?? "") && (!mimeType || mimeType === "application/octet-stream")) {
+    return "audio/mp4";
+  }
+
+  if (extension === "aac" && (!mimeType || mimeType === "application/octet-stream")) {
+    return "audio/aac";
+  }
+
+  if (extension === "mp3" && (!mimeType || mimeType === "application/octet-stream")) {
+    return "audio/mpeg";
+  }
+
+  if (extension === "ogg" && (!mimeType || mimeType === "application/octet-stream")) {
+    return "audio/ogg";
+  }
+
+  if (extension === "wav" && (!mimeType || mimeType === "application/octet-stream")) {
+    return "audio/wav";
+  }
+
   if (mimeType && mimeType !== "application/octet-stream") {
     return mimeType;
   }
@@ -3342,6 +3424,26 @@ function getClientAttachmentMimeType(file: File) {
 
   if (extension === "3gp") {
     return "video/3gpp";
+  }
+
+  if (["m4a", "mp4a"].includes(extension ?? "")) {
+    return "audio/mp4";
+  }
+
+  if (extension === "aac") {
+    return "audio/aac";
+  }
+
+  if (extension === "mp3") {
+    return "audio/mpeg";
+  }
+
+  if (extension === "ogg") {
+    return "audio/ogg";
+  }
+
+  if (extension === "wav") {
+    return "audio/wav";
   }
 
   return mimeType;
@@ -3356,6 +3458,33 @@ function isSupportedClientAudio(mimeType: string) {
   }
 
   return ["audio/aac", "audio/amr", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/wav", "audio/x-wav"].includes(normalized);
+}
+
+function getSupportedRecordingMimeType() {
+  if (typeof MediaRecorder === "undefined") {
+    return "";
+  }
+
+  const candidates = [
+    "audio/mp4",
+    "audio/aac",
+    "audio/ogg;codecs=opus",
+    "audio/ogg"
+  ];
+
+  return candidates.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? "";
+}
+
+function getRecordingExtension(mimeType: string) {
+  if (mimeType === "audio/ogg") {
+    return "ogg";
+  }
+
+  if (mimeType === "audio/aac") {
+    return "aac";
+  }
+
+  return "m4a";
 }
 
 function getAttachmentSendLabel(file: File) {
@@ -3667,6 +3796,40 @@ async function readJsonResponse(response: Response) {
   } catch {
     return { error: text.trim() };
   }
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = MANUAL_REPLY_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("El envio tardo demasiado y se corto. Proba con un audio mas corto o reenviarlo.");
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
 }
 
 function getReplySendError(response: Response, payload: { error?: string } | null) {

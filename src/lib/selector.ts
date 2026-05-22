@@ -87,7 +87,7 @@ export async function suggestPump(input: {
     search.set("mode", input.mode);
   }
 
-  const url = new URL(`/api/suggest-pump?${search.toString()}`, config.FEBECOS_SELECTOR_API_BASE_URL);
+  const url = new URL(`suggest-pump?${search.toString()}`, ensureTrailingSlash(config.FEBECOS_SELECTOR_API_BASE_URL));
   const response = await fetch(url, { cache: "no-store" });
 
   if (!response.ok) {
@@ -95,4 +95,8 @@ export async function suggestPump(input: {
   }
 
   return selectorPumpSchema.parse(await response.json());
+}
+
+function ensureTrailingSlash(value: string) {
+  return value.endsWith("/") ? value : `${value}/`;
 }

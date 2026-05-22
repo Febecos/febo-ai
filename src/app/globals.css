@@ -1146,6 +1146,7 @@ button:disabled {
 }
 
 .conversation-row.unread .row-menu::before {
+  animation: unread-pulse 1.9s ease-in-out infinite;
   background: #ff334b;
   border: 2px solid #20252a;
   border-radius: 999px;
@@ -1157,6 +1158,21 @@ button:disabled {
   top: 50%;
   transform: translateY(-50%);
   width: 10px;
+}
+
+@keyframes unread-pulse {
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: translateY(-50%) scale(0.88);
+    box-shadow: 0 0 0 2px rgba(255, 51, 75, 0.12), 0 0 6px rgba(255, 51, 75, 0.12);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.08);
+    box-shadow: 0 0 0 5px rgba(255, 51, 75, 0.2), 0 0 16px rgba(255, 51, 75, 0.42);
+  }
 }
 
 .conversation-row.active.unread .row-menu::before {
@@ -1214,6 +1230,9 @@ button:disabled {
   border-radius: 8px;
   color: #ffffff;
   display: flex;
+  font-family: "Segoe UI", Roboto, Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
   gap: 10px;
   min-height: 34px;
   padding: 0 10px;
@@ -1228,6 +1247,7 @@ button:disabled {
 
 .action-popover .danger {
   color: #ff4960;
+  font-weight: 600;
 }
 
 .type-submenu {

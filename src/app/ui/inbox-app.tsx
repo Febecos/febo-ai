@@ -480,6 +480,10 @@ function LabelsPanel({
   labels: LabelDefinition[];
   onLabelsChange: (labels: LabelDefinition[]) => void;
 }) {
+  const sortedLabels = useMemo(
+    () => [...labels].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)),
+    [labels]
+  );
   const [form, setForm] = useState({
     slug: "",
     name: "",
@@ -488,10 +492,20 @@ function LabelsPanel({
     active: true,
     sortOrder: 100
   });
+  const [selectedSlug, setSelectedSlug] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const selectedLabel = sortedLabels.find((label) => label.slug === selectedSlug) ?? sortedLabels[0];
+  const activeCount = labels.filter((label) => label.active).length;
+
+  useEffect(() => {
+    if (!selectedSlug && sortedLabels[0]) {
+      editLabel(sortedLabels[0]);
+    }
+  }, [selectedSlug, sortedLabels]);
 
   function editLabel(label: LabelDefinition) {
+    setSelectedSlug(label.slug);
     setForm({
       slug: label.slug,
       name: label.name,
@@ -505,6 +519,7 @@ function LabelsPanel({
 
   function newLabel() {
     setForm({ slug: "", name: "", color: "#38bdf8", instructions: "", active: true, sortOrder: 100 });
+    setSelectedSlug("");
     setMessage("");
   }
 
@@ -533,6 +548,7 @@ function LabelsPanel({
     setMessage("Etiqueta guardada.");
     if (!form.slug && payload?.label?.slug) {
       setForm((current) => ({ ...current, slug: payload.label.slug }));
+      setSelectedSlug(payload.label.slug);
     }
   }
 
@@ -540,70 +556,136 @@ function LabelsPanel({
     <section className="admin-panel labels-panel">
       <div className="panel-title">
         <div>
-          <h2>Etiquetas</h2>
-          <p>Defini nombre, color e instrucciones operativas para que FEBO sepa como tratarlas.</p>
+          <h2>Etiquetas autom&aacute;ticas de IA</h2>
+          <p>Estas etiquetas ayudan a FEBO a clasificar conversaciones y orientar automatizaciones.</p>
+          <small>
+            {activeCount} / {labels.length} activas. La descripci&oacute;n orienta a la IA y conviene mantenerla breve.
+          </small>
         </div>
-        <button className="secondary" onClick={newLabel} type="button">
-          <UserPlus size={17} />
-          Nueva etiqueta
-        </button>
+        <div className="label-panel-actions">
+          <button className="secondary compact" onClick={() => setMessage("La base ya esta sincronizada con Neon.")} type="button">
+            Restaurar base
+          </button>
+          <button className="secondary compact" onClick={newLabel} type="button">
+            <UserPlus size={15} />
+            Agregar etiqueta
+          </button>
+        </div>
       </div>
 
-      <form className="label-config-form" onSubmit={saveLabel}>
-        <label className="field">
-          Nombre
-          <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
-        </label>
-        <label className="field">
-          Slug
-          <input
-            placeholder="se genera solo"
-            value={form.slug}
-            onChange={(event) => setForm({ ...form, slug: event.target.value })}
-          />
-        </label>
-        <label className="field">
-          Color
-          <input type="color" value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} />
-        </label>
-        <label className="field">
-          Orden
-          <input
-            type="number"
-            value={form.sortOrder}
-            onChange={(event) => setForm({ ...form, sortOrder: Number(event.target.value) })}
-          />
-        </label>
-        <label className="field wide">
-          Instruccion para esta etiqueta
-          <textarea
-            placeholder="Ej: Si esta etiqueta esta activa, priorizar seguimiento y derivar al vendedor asignado."
-            value={form.instructions}
-            onChange={(event) => setForm({ ...form, instructions: event.target.value })}
-          />
-        </label>
-        <label className="check-field">
-          <input checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} type="checkbox" />
-          Activa
-        </label>
-        <div className="template-actions">
-          {message ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
-          <button className="primary" disabled={saving} type="submit">
-            <Save size={17} />
-            {saving ? "Guardando" : "Guardar etiqueta"}
-          </button>
-        </div>
-      </form>
+      <div className="label-config-workspace">
+        <aside className="label-config-sidebar">
+          <span className="label-sidebar-caption">Seleccion&aacute; una etiqueta para editarla.</span>
+          <div className="label-config-stack">
+            {sortedLabels.map((label) => {
+              const isBase = TAG_FILTERS.includes(label.slug) || CONSULTYPE_OPTIONS.some((option) => option.value === label.slug);
+              return (
+                <button
+                  className={`label-config-item ${selectedLabel?.slug === label.slug ? "selected" : ""}`}
+                  key={label.slug}
+                  onClick={() => editLabel(label)}
+                  type="button"
+                >
+                  <span className="tag-pill preview" style={{ "--tag-color": label.color } as CSSProperties}>
+                    {label.name}
+                  </span>
+                  <span>
+                    <strong>{label.name}</strong>
+                    <small>
+                      {isBase ? "Base" : "Personalizada"} - {label.active ? "Activa" : "Inactiva"}
+                    </small>
+                  </span>
+                  <span className="label-edit-hint">Editar</span>
+                </button>
+              );
+            })}
+          </div>
+        </aside>
 
-      <div className="label-config-list">
-        {labels.map((label) => (
-          <button className="label-config-card" key={label.slug} onClick={() => editLabel(label)} type="button">
-            <span className="tag-dot" style={{ background: label.color }} />
-            <strong>{label.name}</strong>
-            <small>{label.slug}</small>
-            <p>{label.instructions || "Sin instruccion cargada."}</p>
-          </button>
-        ))}
+        <form className="label-config-form" onSubmit={saveLabel}>
+          <div className="label-editor-head">
+            <div>
+              <span className="tag-pill preview" style={{ "--tag-color": form.color } as CSSProperties}>
+                {form.name || "Nueva etiqueta"}
+              </span>
+              <h3>{form.name || "Nueva etiqueta"}</h3>
+              <p>Pod&eacute;s ajustar color, estado y descripci&oacute;n. Si quer&eacute;s reemplazar una base, desactivala.</p>
+            </div>
+            <small>ID t&eacute;cnico: {form.slug || "se genera al guardar"}</small>
+          </div>
+
+          <div className="label-editor-grid">
+            <label className="field">
+              Nombre visible
+              <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+              <small>Las etiquetas base conservan su nombre del sistema.</small>
+            </label>
+            <label className="field">
+              Descripci&oacute;n para la IA
+              <textarea
+                placeholder="Ej: Usar cuando el cliente esta listo para comprar y conviene derivarlo al vendedor asignado."
+                value={form.instructions}
+                onChange={(event) => setForm({ ...form, instructions: event.target.value })}
+              />
+              <small>{form.instructions.trim().split(/\s+/).filter(Boolean).length} / 25 palabras sugeridas</small>
+            </label>
+            <label className="field">
+              Slug
+              <input
+                placeholder="se genera solo"
+                value={form.slug}
+                onChange={(event) => setForm({ ...form, slug: event.target.value })}
+              />
+            </label>
+            <label className="field">
+              Orden
+              <input
+                type="number"
+                value={form.sortOrder}
+                onChange={(event) => setForm({ ...form, sortOrder: Number(event.target.value) })}
+              />
+            </label>
+            <label className="field color-field">
+              Color
+              <span>
+                <input type="color" value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} />
+                <input value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} />
+              </span>
+            </label>
+            <label className="check-field label-state-toggle">
+              <input checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} type="checkbox" />
+              Etiqueta activa
+            </label>
+          </div>
+
+          <div className="label-preview-zone">
+            <span>Previsualizaci&oacute;n</span>
+            <div className="label-preview-chat">
+              <span>Cliente ficticio: &ldquo;Hola, quisiera saber si tienen stock y precio.&rdquo;</span>
+              <div className="label-preview-ai">
+                <small>La IA podr&iacute;a clasificar esta conversaci&oacute;n as&iacute;</small>
+                <span className="tag-pill preview" style={{ "--tag-color": form.color } as CSSProperties}>
+                  {form.name || "Etiqueta"}
+                </span>
+              </div>
+            </div>
+            <div className="label-preview-strip">
+              {sortedLabels.slice(0, 10).map((label) => (
+                <span className="tag-pill preview" key={label.slug} style={{ "--tag-color": label.color } as CSSProperties}>
+                  {label.name}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="template-actions label-save-actions">
+            {message ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
+            <button className="primary" disabled={saving} type="submit">
+              <Save size={17} />
+              {saving ? "Guardando" : "Guardar etiquetas automaticas"}
+            </button>
+          </div>
+        </form>
       </div>
     </section>
   );

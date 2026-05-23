@@ -1,7 +1,14 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { runFebecosAgent, transcribeAudio } from "@/lib/agent";
 import { config } from "@/lib/config";
-import { recordAgentReply, recordIncomingMessage, recordWhatsAppMessageStatuses, saveMessageMedia, updateMessageBody } from "@/lib/crm";
+import {
+  getAutomaticReplyCandidate,
+  recordAgentReply,
+  recordIncomingMessage,
+  recordWhatsAppMessageStatuses,
+  saveMessageMedia,
+  updateMessageBody
+} from "@/lib/crm";
 import { sendPushNotificationToAll } from "@/lib/push";
 import { suggestPump } from "@/lib/selector";
 import {
@@ -343,6 +350,16 @@ async function sendAutomaticReply(input: {
   stored: StoredIncomingMessage;
 }) {
   const { message, interactiveId, agentMessage, stored } = input;
+  const candidate = await getAutomaticReplyCandidate({
+    conversationId: stored.threadId,
+    messageId: stored.messageId
+  });
+
+  if (!candidate.shouldReply) {
+    return;
+  }
+
+  const effectiveAgentMessage = candidate.combinedMessage?.trim() || agentMessage;
 
   if (interactiveId === WHATSAPP_BUTTON_TALK_TO_ADVISOR) {
     const handoffAnswer = "Perfecto. Te paso con un asesor de Febecos para que lo vean directo y coordinen como seguir.";
@@ -376,7 +393,7 @@ async function sendAutomaticReply(input: {
     return;
   }
 
-  if (!agentMessage) {
+  if (!effectiveAgentMessage) {
     const fallbackAnswer = "Recibi tu audio, pero no pude leerlo bien. Me lo podes mandar por escrito?";
 
     const sent = await sendWhatsAppText(message.from, fallbackAnswer);
@@ -397,7 +414,7 @@ async function sendAutomaticReply(input: {
   try {
     result = await runFebecosAgent({
       phone: message.from,
-      message: agentMessage,
+      message: effectiveAgentMessage,
       contactName: message.contactName,
       conversationId: stored.threadId
     });

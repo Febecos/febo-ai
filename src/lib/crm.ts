@@ -1090,6 +1090,88 @@ export async function listAgentConversationContext(conversationId: string | null
   `) as AgentConversationMessage[];
 }
 
+export async function getAutomaticReplyCandidate(input: {
+  conversationId?: string | null;
+  messageId?: string | null;
+}) {
+  if (!isDbConfigured() || !input.conversationId || !input.messageId) {
+    return { shouldReply: true, combinedMessage: null as string | null };
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    with target_message as (
+      select id, created_at
+      from messages
+      where id = ${input.messageId}
+        and conversation_id = ${input.conversationId}
+        and direction = 'inbound'
+      limit 1
+    ),
+    latest_inbound as (
+      select id
+      from messages
+      where conversation_id = ${input.conversationId}
+        and direction = 'inbound'
+      order by created_at desc
+      limit 1
+    ),
+    latest_message as (
+      select direction
+      from messages
+      where conversation_id = ${input.conversationId}
+      order by created_at desc
+      limit 1
+    ),
+    last_outbound_before_target as (
+      select max(created_at) as created_at
+      from messages
+      where conversation_id = ${input.conversationId}
+        and direction in ('outbound', 'internal')
+        and created_at < (select created_at from target_message)
+    ),
+    pending_inbound as (
+      select body, created_at
+      from messages
+      where conversation_id = ${input.conversationId}
+        and direction = 'inbound'
+        and nullif(trim(body), '') is not null
+        and created_at > coalesce((select created_at from last_outbound_before_target), '-infinity'::timestamptz)
+      order by created_at asc
+      limit 12
+    )
+    select
+      exists(select 1 from target_message) as target_exists,
+      (select id::text from latest_inbound) = ${input.messageId} as is_latest_inbound,
+      (select direction from latest_message) = 'inbound' as latest_is_inbound,
+      c.ai_enabled,
+      (
+        select string_agg(body, E'\n' order by created_at asc)
+        from pending_inbound
+      ) as combined_message
+    from conversations c
+    where c.id = ${input.conversationId}
+    limit 1
+  `) as Array<{
+    target_exists: boolean;
+    is_latest_inbound: boolean;
+    latest_is_inbound: boolean;
+    ai_enabled: boolean;
+    combined_message: string | null;
+  }>;
+
+  const row = rows[0];
+
+  if (!row) {
+    return { shouldReply: false, combinedMessage: null };
+  }
+
+  return {
+    shouldReply: row.target_exists && row.is_latest_inbound && row.latest_is_inbound && row.ai_enabled,
+    combinedMessage: row.combined_message
+  };
+}
+
 export async function getConversationReplyTarget(conversationId: string) {
   if (!isDbConfigured()) {
     return null;

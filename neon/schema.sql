@@ -201,6 +201,20 @@ create table if not exists label_definitions (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists app_settings (
+  key text primary key,
+  value jsonb not null default '{}'::jsonb,
+  label text not null default '',
+  description text not null default '',
+  updated_at timestamptz not null default now()
+);
+
+insert into app_settings (key, value, label, description)
+values
+  ('auto_reply_delay_seconds', '90'::jsonb, 'Demora de respuesta IA', 'Segundos que FEBO espera antes de responder automaticamente.'),
+  ('hot_lead_default_assignee_id', 'null'::jsonb, 'Vendedor por defecto de calientes', 'Usuario asignado por defecto para leads calientes si no hay regla especifica.')
+on conflict (key) do nothing;
+
 insert into label_definitions (slug, name, color, instructions, sort_order)
 values
   ('caliente', 'Caliente', '#f43f5e', 'Cliente con intencion clara de compra o avance comercial. Debe priorizarse y, si esta asignado, verse en el CRM del vendedor.', 10),
@@ -270,6 +284,11 @@ for each row execute function set_updated_at();
 drop trigger if exists set_label_definitions_updated_at on label_definitions;
 create trigger set_label_definitions_updated_at
 before update on label_definitions
+for each row execute function set_updated_at();
+
+drop trigger if exists set_app_settings_updated_at on app_settings;
+create trigger set_app_settings_updated_at
+before update on app_settings
 for each row execute function set_updated_at();
 
 drop trigger if exists set_quick_replies_updated_at on quick_replies;

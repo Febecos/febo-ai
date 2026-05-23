@@ -209,6 +209,14 @@ export type ConversationEvent = {
   created_at: string;
 };
 
+export type AppSetting = {
+  key: string;
+  value: unknown;
+  label: string;
+  description: string;
+  updated_at: string;
+};
+
 export type AgentConversationMessage = {
   direction: "inbound" | "outbound" | "internal";
   body: string;
@@ -418,6 +426,21 @@ export async function getUsers() {
 
 async function getHotLeadAssigneeId() {
   const sql = getSql();
+  const configuredAssignee = await getSettingValue<string | null>("hot_lead_default_assignee_id", null);
+
+  if (configuredAssignee) {
+    const configured = (await sql`
+      select id::text
+      from app_users
+      where id = ${configuredAssignee}::uuid and active = true
+      limit 1
+    `) as Array<{ id: string }>;
+
+    if (configured[0]?.id) {
+      return configured[0].id;
+    }
+  }
+
   const rows = (await sql`
     select id::text
     from app_users
@@ -438,6 +461,60 @@ async function getHotLeadAssigneeId() {
   `) as Array<{ id: string }>;
 
   return fallback[0]?.id ?? null;
+}
+
+export async function listAppSettings() {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  return (await sql`
+    select key, value, label, description, updated_at::text
+    from app_settings
+    order by key
+  `) as AppSetting[];
+}
+
+export async function getSettingValue<T>(key: string, fallback: T): Promise<T> {
+  if (!isDbConfigured()) {
+    return fallback;
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    select value
+    from app_settings
+    where key = ${key}
+    limit 1
+  `) as Array<{ value: T }>;
+
+  return rows[0]?.value ?? fallback;
+}
+
+export async function upsertAppSetting(input: {
+  key: string;
+  value: unknown;
+  label?: string;
+  description?: string;
+}) {
+  if (!isDbConfigured()) {
+    return null;
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    insert into app_settings (key, value, label, description)
+    values (${input.key}, ${JSON.stringify(input.value)}::jsonb, ${input.label ?? ""}, ${input.description ?? ""})
+    on conflict (key) do update
+    set value = excluded.value,
+        label = coalesce(nullif(excluded.label, ''), app_settings.label),
+        description = coalesce(nullif(excluded.description, ''), app_settings.description),
+        updated_at = now()
+    returning key, value, label, description, updated_at::text
+  `) as AppSetting[];
+
+  return rows[0] ?? null;
 }
 
 async function findActiveUserByName(name: string | null | undefined) {

@@ -2299,6 +2299,38 @@ button:disabled {
   min-height: 0;
 }
 
+.settings-panel {
+  display: grid;
+  gap: 14px;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.settings-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-content: start;
+}
+
+.settings-card {
+  background: rgba(14, 47, 80, 0.62);
+  border: 1px solid rgba(142, 213, 245, 0.24);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.settings-card h3 {
+  font-size: 16px;
+  margin: 0 0 4px;
+}
+
+.settings-card p {
+  color: var(--muted);
+  margin: 0;
+}
+
 .labels-panel .panel-title {
   align-items: flex-start;
   border-bottom: 1px solid rgba(142, 213, 245, 0.2);

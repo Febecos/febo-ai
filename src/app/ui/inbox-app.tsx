@@ -60,6 +60,14 @@ type Stats = {
   hot: number;
 };
 
+type AppSetting = {
+  key: string;
+  value: unknown;
+  label: string;
+  description: string;
+  updated_at: string;
+};
+
 type AgentTestResponse = {
   respuesta: string;
   consultype: string;
@@ -219,7 +227,7 @@ function ToolWorkspace({
   stats: Stats;
   users: AppUser[];
 }) {
-  const [activeTool, setActiveTool] = useState<"conversations" | "metrics" | "contacts" | "crm" | "templates" | "labels" | "users" | "ai">("conversations");
+  const [activeTool, setActiveTool] = useState<"conversations" | "metrics" | "contacts" | "crm" | "templates" | "labels" | "settings" | "users" | "ai">("conversations");
   const [workspaceConversations, setWorkspaceConversations] = useState(conversations);
   const [labelDefinitions, setLabelDefinitions] = useState<LabelDefinition[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
@@ -347,6 +355,10 @@ function ToolWorkspace({
               <ShieldCheck size={18} />
               Usuarios y accesos
             </button>
+            <button className={activeTool === "settings" ? "active" : ""} onClick={() => setActiveTool("settings")} type="button">
+              <KeyRound size={18} />
+              Configuracion
+            </button>
             <button className={activeTool === "ai" ? "active" : ""} onClick={() => setActiveTool("ai")} type="button">
               <Bot size={18} />
               Probar IA
@@ -443,6 +455,7 @@ function ToolWorkspace({
         {activeTool === "users" && currentUser.role === "admin" ? (
           <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} />
         ) : null}
+        {activeTool === "settings" && currentUser.role === "admin" ? <SettingsPanel users={users} /> : null}
         {activeTool === "ai" && currentUser.role === "admin" ? <AgentTester /> : null}
       </div>
     </section>
@@ -472,6 +485,134 @@ function MetricsPanel({ stats }: { stats: Stats }) {
       </div>
     </section>
   );
+}
+
+function SettingsPanel({ users }: { users: AppUser[] }) {
+  const [settings, setSettings] = useState<AppSetting[]>([]);
+  const [savingKey, setSavingKey] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    void loadSettings();
+  }, []);
+
+  async function loadSettings() {
+    const response = await fetch("/api/settings");
+    const payload = await readJsonResponse(response);
+
+    if (response.ok) {
+      setSettings(payload?.settings ?? []);
+    }
+  }
+
+  function getValue(key: string, fallback: unknown = "") {
+    return settings.find((setting) => setting.key === key)?.value ?? fallback;
+  }
+
+  async function saveSetting(key: "auto_reply_delay_seconds" | "hot_lead_default_assignee_id", value: string | number | null) {
+    setSavingKey(key);
+    setMessage("");
+
+    const response = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key, value })
+    });
+    const payload = await readJsonResponse(response);
+    setSavingKey("");
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos guardar la configuracion.");
+      return;
+    }
+
+    setSettings(payload?.settings ?? []);
+    setMessage("Configuracion guardada.");
+  }
+
+  const delayValue = Number(getValue("auto_reply_delay_seconds", 90));
+  const hotLeadAssignee = String(getValue("hot_lead_default_assignee_id", "") ?? "");
+
+  return (
+    <section className="admin-panel settings-panel">
+      <div className="panel-title">
+        <div>
+          <h2>Configuracion</h2>
+          <p>Parametros operativos editables sin tocar codigo ni Vercel.</p>
+        </div>
+        {message ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
+      </div>
+
+      <div className="settings-grid">
+        <article className="settings-card">
+          <div>
+            <h3>Demora de respuesta IA</h3>
+            <p>Tiempo que FEBO espera antes de responder automaticamente. Sirve para juntar mensajes seguidos.</p>
+          </div>
+          <label className="field">
+            Segundos
+            <input
+              max={900}
+              min={0}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                setSettings((current) => upsertLocalSetting(current, "auto_reply_delay_seconds", value));
+              }}
+              type="number"
+              value={delayValue}
+            />
+          </label>
+          <button
+            className="primary"
+            disabled={savingKey === "auto_reply_delay_seconds"}
+            onClick={() => void saveSetting("auto_reply_delay_seconds", delayValue)}
+            type="button"
+          >
+            {savingKey === "auto_reply_delay_seconds" ? "Guardando" : "Guardar demora"}
+          </button>
+        </article>
+
+        <article className="settings-card">
+          <div>
+            <h3>Vendedor por defecto de calientes</h3>
+            <p>Si FEBO detecta un caliente y no hay regla de etiqueta mas especifica, lo asigna a este vendedor.</p>
+          </div>
+          <label className="field">
+            Usuario
+            <select
+              onChange={(event) => {
+                setSettings((current) => upsertLocalSetting(current, "hot_lead_default_assignee_id", event.target.value || null));
+              }}
+              value={hotLeadAssignee}
+            >
+              <option value="">Automatico por prioridad</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>{user.full_name}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="primary"
+            disabled={savingKey === "hot_lead_default_assignee_id"}
+            onClick={() => void saveSetting("hot_lead_default_assignee_id", hotLeadAssignee || null)}
+            type="button"
+          >
+            {savingKey === "hot_lead_default_assignee_id" ? "Guardando" : "Guardar vendedor"}
+          </button>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function upsertLocalSetting(settings: AppSetting[], key: string, value: unknown) {
+  const exists = settings.some((setting) => setting.key === key);
+
+  if (!exists) {
+    return [...settings, { key, value, label: key, description: "", updated_at: "" }];
+  }
+
+  return settings.map((setting) => setting.key === key ? { ...setting, value } : setting);
 }
 
 function LabelsPanel({

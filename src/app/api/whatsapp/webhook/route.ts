@@ -3,6 +3,7 @@ import { refreshConversationMemory, runFebecosAgent, transcribeAudio } from "@/l
 import { config } from "@/lib/config";
 import {
   getAutomaticReplyCandidate,
+  getSettingValue,
   recordAgentReply,
   recordIncomingMessage,
   recordWhatsAppMessageStatuses,
@@ -505,7 +506,8 @@ async function refreshMemorySafely(conversationId: string | null | undefined) {
 }
 
 async function waitBeforeAutomaticReply() {
-  const delaySeconds = Number(process.env.FEBO_AUTO_REPLY_DELAY_SECONDS ?? DEFAULT_AUTO_REPLY_DELAY_SECONDS);
+  const configuredDelay = await getSettingValue("auto_reply_delay_seconds", Number(process.env.FEBO_AUTO_REPLY_DELAY_SECONDS ?? DEFAULT_AUTO_REPLY_DELAY_SECONDS));
+  const delaySeconds = Number(configuredDelay);
   const safeDelaySeconds = Number.isFinite(delaySeconds) && delaySeconds >= 0 ? delaySeconds : DEFAULT_AUTO_REPLY_DELAY_SECONDS;
   await sleep(safeDelaySeconds * 1000);
 }

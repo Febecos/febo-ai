@@ -202,6 +202,13 @@ export type ConversationNote = {
   created_by_name: string | null;
 };
 
+export type ConversationEvent = {
+  id: string;
+  event: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
 export type AgentConversationMessage = {
   direction: "inbound" | "outbound" | "internal";
   body: string;
@@ -1319,6 +1326,30 @@ export async function listConversationNotes(conversationId: string, limit = 80) 
     order by n.created_at desc
     limit ${safeLimit}
   ` as ConversationNote[];
+
+  return rows.reverse();
+}
+
+export async function listConversationEvents(conversationId: string, limit = 80) {
+  if (!isDbConfigured() || !conversationId) {
+    return [];
+  }
+
+  const sql = getSql();
+  const safeLimit = Math.min(Math.max(limit, 20), 200);
+
+  const rows = await sql`
+    select
+      pe.id::text,
+      pe.event,
+      pe.payload,
+      pe.created_at::text
+    from platform_events pe
+    join conversations c on c.contact_id = pe.contact_id
+    where c.id = ${conversationId}
+    order by pe.created_at desc
+    limit ${safeLimit}
+  ` as ConversationEvent[];
 
   return rows.reverse();
 }

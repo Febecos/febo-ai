@@ -45,6 +45,7 @@ import type {
   ContactSummary,
   ConversationMessage,
   ConversationNote,
+  ConversationEvent,
   ConversationSummary,
   LabelDefinition,
   MessageTemplate,
@@ -1856,9 +1857,11 @@ function InboxList({
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [notes, setNotes] = useState<ConversationNote[]>([]);
-  const [activeConversationTab, setActiveConversationTab] = useState<"chat" | "notes">("chat");
+  const [events, setEvents] = useState<ConversationEvent[]>([]);
+  const [activeConversationTab, setActiveConversationTab] = useState<"chat" | "notes" | "audit">("chat");
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingNotes, setLoadingNotes] = useState(false);
+  const [loadingEvents, setLoadingEvents] = useState(false);
   const [messageError, setMessageError] = useState("");
   const [noteError, setNoteError] = useState("");
   const [noteText, setNoteText] = useState("");
@@ -2093,6 +2096,7 @@ function InboxList({
     setTemplateComposerOpen(false);
     void loadConversationMessages(selected?.id);
     void loadConversationNotes(selected?.id);
+    void loadConversationEvents(selected?.id);
   }, [selected?.id]);
 
   useEffect(() => {
@@ -2160,6 +2164,7 @@ function InboxList({
       await refreshConversations(filters, { silent: true });
       await loadConversationMessages(selectedIdRef.current, { silent: true });
       await loadConversationNotes(selectedIdRef.current, { silent: true });
+      await loadConversationEvents(selectedIdRef.current, { silent: true });
     }
 
     const intervalId = window.setInterval(() => {
@@ -2240,6 +2245,37 @@ function InboxList({
     }
 
     setNotes(payload?.notes ?? []);
+  }
+
+  async function loadConversationEvents(conversationId?: string, options: { silent?: boolean } = {}) {
+    if (!conversationId) {
+      setEvents([]);
+      return;
+    }
+
+    if (!options.silent) {
+      setLoadingEvents(true);
+    }
+
+    const response = await fetch(`/api/conversation-events?conversationId=${conversationId}`);
+    const payload = await readJsonResponse(response);
+
+    if (conversationId !== selectedIdRef.current) {
+      return;
+    }
+
+    if (!options.silent) {
+      setLoadingEvents(false);
+    }
+
+    if (!response.ok) {
+      if (!options.silent) {
+        setEvents([]);
+      }
+      return;
+    }
+
+    setEvents(payload?.events ?? []);
   }
 
   function primeNotificationBaseline(nextItems: ConversationSummary[]) {
@@ -3561,9 +3597,18 @@ function InboxList({
                 Notas internas
                 <span>{notes.length}</span>
               </button>
+              <button
+                className={activeConversationTab === "audit" ? "active" : ""}
+                onClick={() => setActiveConversationTab("audit")}
+                type="button"
+              >
+                <ShieldCheck size={17} />
+                Auditoria
+                <span>{events.length}</span>
+              </button>
             </div>
 
-            <div className={`conversation-workspace ${activeConversationTab === "notes" ? "show-notes" : ""}`}>
+            <div className={`conversation-workspace ${activeConversationTab === "notes" ? "show-notes" : ""} ${activeConversationTab === "audit" ? "show-audit" : ""}`}>
               <div className="thread-panel">
                 {loadingMessages ? <div className="empty-state">Cargando mensajes...</div> : null}
                 {messageError ? <div className="empty-state warn">{messageError}</div> : null}
@@ -3633,6 +3678,21 @@ function InboxList({
                   {noteError ? <span className="warn">{noteError}</span> : null}
                 </form>
               </div>
+              <div className="audit-panel">
+                {loadingEvents ? <div className="empty-state">Cargando auditoria...</div> : null}
+                {!loadingEvents && events.length ? (
+                  <div className="audit-list">
+                    {events.map((event) => (
+                      <article className="audit-card" key={event.id}>
+                        <strong>{getConversationEventTitle(event)}</strong>
+                        <p>{getConversationEventDescription(event)}</p>
+                        <small>{formatMessageTime(event.created_at)}</small>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+                {!loadingEvents && !events.length ? <div className="empty-state">Sin eventos automaticos todavia.</div> : null}
+              </div>
             </div>
 
             {activeConversationTab === "chat" ? (
@@ -3680,6 +3740,13 @@ function InboxList({
                     type="button"
                   >
                     Notas internas
+                  </button>
+                  <button
+                    className="audit-tab"
+                    onClick={() => setActiveConversationTab("audit")}
+                    type="button"
+                  >
+                    Auditoria
                   </button>
                 </div>
                 {recording ? (
@@ -3760,11 +3827,18 @@ function InboxList({
                     Conversacion
                   </button>
                   <button
-                    className="notes-tab active"
+                    className={`notes-tab ${activeConversationTab === "notes" ? "active" : ""}`}
                     onClick={() => setActiveConversationTab("notes")}
                     type="button"
                   >
                     Notas internas
+                  </button>
+                  <button
+                    className={`audit-tab ${activeConversationTab === "audit" ? "active" : ""}`}
+                    onClick={() => setActiveConversationTab("audit")}
+                    type="button"
+                  >
+                    Auditoria
                   </button>
                 </div>
               </div>
@@ -3785,6 +3859,34 @@ function formatMessageTime(value: string) {
     minute: "2-digit",
     month: "2-digit"
   }).format(new Date(value));
+}
+
+function getConversationEventTitle(event: ConversationEvent) {
+  if (event.event === "label_automation_assigned") {
+    return "Asignacion automatica por etiqueta";
+  }
+
+  if (event.event === "selector_checkout_abierto") {
+    return "Checkout desde selector";
+  }
+
+  return humanizeTemplateName(event.event);
+}
+
+function getConversationEventDescription(event: ConversationEvent) {
+  const payload = event.payload ?? {};
+
+  if (event.event === "label_automation_assigned") {
+    const labelName = typeof payload.labelName === "string" ? payload.labelName : payload.label;
+    const assignedName = typeof payload.assignedName === "string" ? payload.assignedName : "vendedor";
+    return `FEBO asigno la conversacion a ${assignedName} por la etiqueta ${labelName ?? "configurada"}.`;
+  }
+
+  if (event.event === "selector_checkout_abierto") {
+    return "El cliente abrio o envio datos desde el selector de Febecos.";
+  }
+
+  return JSON.stringify(payload);
 }
 
 function formatListDate(value: string) {

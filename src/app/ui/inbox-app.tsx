@@ -39,13 +39,14 @@ import {
   UsersRound,
   X
 } from "lucide-react";
-import { DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AppUser,
   ContactSummary,
   ConversationMessage,
   ConversationNote,
   ConversationSummary,
+  LabelDefinition,
   MessageTemplate,
   QuickReply,
   UserAdminSummary
@@ -217,8 +218,9 @@ function ToolWorkspace({
   stats: Stats;
   users: AppUser[];
 }) {
-  const [activeTool, setActiveTool] = useState<"conversations" | "metrics" | "contacts" | "crm" | "templates" | "users" | "ai">("conversations");
+  const [activeTool, setActiveTool] = useState<"conversations" | "metrics" | "contacts" | "crm" | "templates" | "labels" | "users" | "ai">("conversations");
   const [workspaceConversations, setWorkspaceConversations] = useState(conversations);
+  const [labelDefinitions, setLabelDefinitions] = useState<LabelDefinition[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [conversationNavSignal, setConversationNavSignal] = useState(0);
   const [focusedConversation, setFocusedConversation] = useState({ id: "", signal: 0 });
@@ -250,6 +252,19 @@ function ToolWorkspace({
   useEffect(() => {
     window.localStorage.setItem("febo-crm-favorites", JSON.stringify(favoriteIds));
   }, [favoriteIds]);
+
+  useEffect(() => {
+    void loadLabelDefinitions();
+  }, []);
+
+  async function loadLabelDefinitions() {
+    const response = await fetch("/api/labels?all=1");
+    const payload = await readJsonResponse(response);
+
+    if (response.ok && Array.isArray(payload?.labels)) {
+      setLabelDefinitions(payload.labels);
+    }
+  }
 
   function toggleFavorite(conversationId: string) {
     setFavoriteIds((current) =>
@@ -317,6 +332,14 @@ function ToolWorkspace({
           <MessageSquareText size={18} />
           Plantillas
         </button>
+        <button
+          className={activeTool === "labels" ? "active" : ""}
+          onClick={() => setActiveTool("labels")}
+          type="button"
+        >
+          <Tags size={18} />
+          Etiquetas
+        </button>
         {currentUser.role === "admin" ? (
           <>
             <button className={activeTool === "users" ? "active" : ""} onClick={() => setActiveTool("users")} type="button">
@@ -356,6 +379,8 @@ function ToolWorkspace({
             conversations={workspaceConversations}
             currentUser={currentUser}
             favoriteIds={favoriteIds}
+            labelDefinitions={labelDefinitions}
+            onLabelsChange={setLabelDefinitions}
             onConversationsChange={setWorkspaceConversations}
             focusedConversation={focusedConversation}
             resetMobileDetailSignal={conversationNavSignal}
@@ -366,6 +391,9 @@ function ToolWorkspace({
         ) : null}
         {activeTool === "metrics" ? <MetricsPanel stats={stats} /> : null}
         {activeTool === "templates" ? <TemplatesPanel /> : null}
+        {activeTool === "labels" ? (
+          <LabelsPanel labels={labelDefinitions} onLabelsChange={setLabelDefinitions} />
+        ) : null}
         {activeTool === "contacts" ? (
           <ContactsPanel
             focusedContact={focusedContact}
@@ -440,6 +468,142 @@ function MetricsPanel({ stats }: { stats: Stats }) {
         <Metric label="Conversaciones" value={stats.conversations} />
         <Metric label="Escaladas" value={stats.handoffs} />
         <Metric label="Calientes" value={stats.hot} />
+      </div>
+    </section>
+  );
+}
+
+function LabelsPanel({
+  labels,
+  onLabelsChange
+}: {
+  labels: LabelDefinition[];
+  onLabelsChange: (labels: LabelDefinition[]) => void;
+}) {
+  const [form, setForm] = useState({
+    slug: "",
+    name: "",
+    color: "#38bdf8",
+    instructions: "",
+    active: true,
+    sortOrder: 100
+  });
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  function editLabel(label: LabelDefinition) {
+    setForm({
+      slug: label.slug,
+      name: label.name,
+      color: label.color,
+      instructions: label.instructions,
+      active: label.active,
+      sortOrder: label.sort_order
+    });
+    setMessage("");
+  }
+
+  function newLabel() {
+    setForm({ slug: "", name: "", color: "#38bdf8", instructions: "", active: true, sortOrder: 100 });
+    setMessage("");
+  }
+
+  async function saveLabel(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+
+    const response = await fetch("/api/labels", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(form)
+    });
+    const payload = await readJsonResponse(response);
+    setSaving(false);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos guardar la etiqueta.");
+      return;
+    }
+
+    if (Array.isArray(payload?.labels)) {
+      onLabelsChange(payload.labels);
+    }
+
+    setMessage("Etiqueta guardada.");
+    if (!form.slug && payload?.label?.slug) {
+      setForm((current) => ({ ...current, slug: payload.label.slug }));
+    }
+  }
+
+  return (
+    <section className="admin-panel labels-panel">
+      <div className="panel-title">
+        <div>
+          <h2>Etiquetas</h2>
+          <p>Defini nombre, color e instrucciones operativas para que FEBO sepa como tratarlas.</p>
+        </div>
+        <button className="secondary" onClick={newLabel} type="button">
+          <UserPlus size={17} />
+          Nueva etiqueta
+        </button>
+      </div>
+
+      <form className="label-config-form" onSubmit={saveLabel}>
+        <label className="field">
+          Nombre
+          <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+        </label>
+        <label className="field">
+          Slug
+          <input
+            placeholder="se genera solo"
+            value={form.slug}
+            onChange={(event) => setForm({ ...form, slug: event.target.value })}
+          />
+        </label>
+        <label className="field">
+          Color
+          <input type="color" value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} />
+        </label>
+        <label className="field">
+          Orden
+          <input
+            type="number"
+            value={form.sortOrder}
+            onChange={(event) => setForm({ ...form, sortOrder: Number(event.target.value) })}
+          />
+        </label>
+        <label className="field wide">
+          Instruccion para esta etiqueta
+          <textarea
+            placeholder="Ej: Si esta etiqueta esta activa, priorizar seguimiento y derivar al vendedor asignado."
+            value={form.instructions}
+            onChange={(event) => setForm({ ...form, instructions: event.target.value })}
+          />
+        </label>
+        <label className="check-field">
+          <input checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} type="checkbox" />
+          Activa
+        </label>
+        <div className="template-actions">
+          {message ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
+          <button className="primary" disabled={saving} type="submit">
+            <Save size={17} />
+            {saving ? "Guardando" : "Guardar etiqueta"}
+          </button>
+        </div>
+      </form>
+
+      <div className="label-config-list">
+        {labels.map((label) => (
+          <button className="label-config-card" key={label.slug} onClick={() => editLabel(label)} type="button">
+            <span className="tag-dot" style={{ background: label.color }} />
+            <strong>{label.name}</strong>
+            <small>{label.slug}</small>
+            <p>{label.instructions || "Sin instruccion cargada."}</p>
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -1557,6 +1721,8 @@ function InboxList({
   currentUser,
   favoriteIds,
   focusedConversation,
+  labelDefinitions,
+  onLabelsChange,
   onConversationsChange,
   onSetFavorite,
   resetMobileDetailSignal,
@@ -1567,6 +1733,8 @@ function InboxList({
   currentUser: AppUser;
   favoriteIds: string[];
   focusedConversation: { id: string; signal: number };
+  labelDefinitions: LabelDefinition[];
+  onLabelsChange: (labels: LabelDefinition[]) => void;
   onConversationsChange: (conversations: ConversationSummary[]) => void;
   onSetFavorite: (conversationId: string, active: boolean) => void;
   resetMobileDetailSignal: number;
@@ -1608,6 +1776,7 @@ function InboxList({
   const [activeQuickReplyIndex, setActiveQuickReplyIndex] = useState(0);
   const [templateComposerOpen, setTemplateComposerOpen] = useState(false);
   const [tagPanelOpen, setTagPanelOpen] = useState(false);
+  const [tagSearch, setTagSearch] = useState("");
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [quickRepliesOpen, setQuickRepliesOpen] = useState(false);
   const [eventMenuOpen, setEventMenuOpen] = useState(false);
@@ -1648,9 +1817,56 @@ function InboxList({
     assignedTo: "all"
   });
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
+  const availableLabels = useMemo(() => {
+    const bySlug = new Map<string, LabelDefinition>();
+
+    for (const option of CONSULTYPE_OPTIONS) {
+      bySlug.set(option.value, {
+        slug: option.value,
+        name: option.label,
+        color: getFallbackLabelColor(option.value),
+        instructions: "",
+        active: true,
+        sort_order: 100,
+        created_at: "",
+        updated_at: ""
+      });
+    }
+
+    for (const slug of TAG_FILTERS) {
+      if (!bySlug.has(slug)) {
+        bySlug.set(slug, {
+          slug,
+          name: humanizeTemplateName(slug),
+          color: getFallbackLabelColor(slug),
+          instructions: "",
+          active: true,
+          sort_order: 100,
+          created_at: "",
+          updated_at: ""
+        });
+      }
+    }
+
+    for (const label of labelDefinitions) {
+      if (label.active) {
+        bySlug.set(label.slug, label);
+      }
+    }
+
+    return Array.from(bySlug.values()).sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+  }, [labelDefinitions]);
   const activeFiltersCount =
     selectedTags.length + selectedClassifications.length + (filters.assignedTo !== "all" ? 1 : 0);
   const quickReplyQuery = getQuickReplyQuery(replyText);
+  const filteredLabels = useMemo(() => {
+    const query = normalizeTemplateSearchKey(tagSearch);
+    return availableLabels.filter((label) => {
+      const haystack = normalizeTemplateSearchKey(`${label.name} ${label.slug}`);
+      return !query || haystack.includes(query);
+    });
+  }, [availableLabels, tagSearch]);
+  const labelBySlug = useMemo(() => new Map(availableLabels.map((label) => [label.slug, label])), [availableLabels]);
   const matchingQuickReplies = useMemo(
     () => quickReplyQuery === null ? [] : quickReplies
       .filter((reply) => {
@@ -1786,11 +2002,12 @@ function InboxList({
         return;
       }
 
-      if (event.target.closest(".row-menu, .chat-actions-menu")) {
+      if (event.target.closest(".row-menu, .chat-actions-menu, .tag-editor-anchor")) {
         return;
       }
 
       closeConversationMenus();
+      setTagPanelOpen(false);
     }
 
     function closeFiltersOnOutsideClick(event: PointerEvent) {
@@ -1809,6 +2026,7 @@ function InboxList({
       if (event.key === "Escape") {
         closeConversationMenus();
         setFiltersOpen(false);
+        setTagPanelOpen(false);
       }
     }
 
@@ -2233,7 +2451,8 @@ function InboxList({
 
   function toggleAllTags() {
     setSelectedTags((current) => {
-      const nextTags = current.length === TAG_FILTERS.length ? [] : [...TAG_FILTERS];
+      const allTags = availableLabels.map((label) => label.slug);
+      const nextTags = current.length === allTags.length ? [] : allTags;
       selectedTagsRef.current = nextTags;
       const nextFilters = { ...filters, consultype: nextTags.length === 1 ? nextTags[0] : "all" };
       setFilters(nextFilters);
@@ -2369,6 +2588,37 @@ function InboxList({
 
     await patchConversation(conversationId, { consultype });
     closeConversationMenus();
+  }
+
+  async function createAndApplyLabel(name: string) {
+    const trimmed = name.trim();
+
+    if (!trimmed || !selected) {
+      return;
+    }
+
+    const response = await fetch("/api/labels", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: trimmed,
+        color: "#38bdf8",
+        instructions: "Etiqueta creada desde el chat. Completar instrucciones en Configuracion de etiquetas."
+      })
+    });
+    const payload = await readJsonResponse(response);
+
+    if (!response.ok || !payload?.label?.slug) {
+      setReplyError(payload?.error ?? "No pudimos crear la etiqueta.");
+      return;
+    }
+
+    if (Array.isArray(payload?.labels)) {
+      onLabelsChange(payload.labels);
+    }
+
+    setTagSearch("");
+    await changeConversationType(selected.id, payload.label.slug);
   }
 
   function closeConversationMenus() {
@@ -2826,22 +3076,22 @@ function InboxList({
             </div>
             <div className="filter-group">
               <span>ETIQUETAS</span>
-              <label className={selectedTags.length === TAG_FILTERS.length ? "selected" : ""}>
+              <label className={selectedTags.length === availableLabels.length ? "selected" : ""}>
                 <input
-                  checked={selectedTags.length === TAG_FILTERS.length}
+                  checked={selectedTags.length === availableLabels.length}
                   onChange={toggleAllTags}
                   type="checkbox"
                 />
                 Todas
               </label>
-              {TAG_FILTERS.map((tagName) => (
-                <label className={selectedTags.includes(tagName) ? "selected" : ""} key={tagName}>
+              {availableLabels.map((label) => (
+                <label className={selectedTags.includes(label.slug) ? "selected" : ""} key={label.slug}>
                   <input
-                    checked={selectedTags.includes(tagName)}
-                    onChange={() => toggleSelectedTag(tagName)}
+                    checked={selectedTags.includes(label.slug)}
+                    onChange={() => toggleSelectedTag(label.slug)}
                     type="checkbox"
                   />
-                  {humanizeTemplateName(tagName)}
+                  {label.name}
                 </label>
               ))}
             </div>
@@ -2864,7 +3114,7 @@ function InboxList({
                 </span>
                 <strong>{conversation.display_name || conversation.phone}</strong>
                 <small>Sentimiento: {conversation.sentiment || "neutro"}</small>
-                <span className={`tag ${conversation.consultype}`}>{getConsultypeLabel(conversation.consultype)}</span>
+                <span className={`tag ${conversation.consultype}`}>{labelBySlug.get(conversation.consultype)?.name ?? getConsultypeLabel(conversation.consultype)}</span>
                 {conversation.assigned_name ? <span className="assigned-pill">asignado: {conversation.assigned_name}</span> : null}
               </button>
               <details className="row-menu">
@@ -2876,15 +3126,16 @@ function InboxList({
                     <summary><Tags size={15} /> Cambiar tipo</summary>
                     <div>
                       <strong>CAMBIAR TIPO</strong>
-                      {CONSULTYPE_OPTIONS.map((option) => (
+                      {availableLabels.map((option) => (
                         <button
-                          className={`type-choice ${option.value} ${conversation.consultype === option.value ? "active" : ""}`}
-                          key={option.value}
-                          onClick={() => void changeConversationType(conversation.id, option.value)}
+                          className={`type-choice ${option.slug} ${conversation.consultype === option.slug ? "active" : ""}`}
+                          key={option.slug}
+                          onClick={() => void changeConversationType(conversation.id, option.slug)}
+                          style={{ "--label-color": option.color } as CSSProperties}
                           type="button"
                         >
                           <span />
-                          {option.label}
+                          {option.name}
                         </button>
                       ))}
                     </div>
@@ -2955,15 +3206,16 @@ function InboxList({
                       <summary><Tags size={15} /> Cambiar tipo</summary>
                       <div>
                         <strong>CAMBIAR TIPO</strong>
-                        {CONSULTYPE_OPTIONS.map((option) => (
+                        {availableLabels.map((option) => (
                           <button
-                            className={`type-choice ${option.value} ${selected.consultype === option.value ? "active" : ""}`}
-                            key={option.value}
-                            onClick={() => void changeConversationType(selected.id, option.value)}
+                            className={`type-choice ${option.slug} ${selected.consultype === option.slug ? "active" : ""}`}
+                            key={option.slug}
+                            onClick={() => void changeConversationType(selected.id, option.slug)}
+                            style={{ "--label-color": option.color } as CSSProperties}
                             type="button"
                           >
                             <span />
-                            {option.label}
+                            {option.name}
                           </button>
                         ))}
                       </div>
@@ -2983,7 +3235,43 @@ function InboxList({
               </label>
               <button className="secondary" onClick={saveChatName} type="button">Guardar</button>
               <div className="toolbar-icons">
-                <button className="icon-action" onClick={() => setTagPanelOpen(!tagPanelOpen)} title="Editar etiqueta" type="button"><Tags size={17} /></button>
+                <span className="tag-editor-anchor">
+                  <button className="icon-action" onClick={() => setTagPanelOpen(!tagPanelOpen)} title="Editar etiqueta" type="button"><Tags size={17} /></button>
+                  {tagPanelOpen ? (
+                    <div className="tag-editor-panel">
+                      <input
+                        onChange={(event) => setTagSearch(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && tagSearch.trim()) {
+                            event.preventDefault();
+                            void createAndApplyLabel(tagSearch);
+                          }
+                        }}
+                        placeholder="Buscar o crear etiqueta..."
+                        value={tagSearch}
+                      />
+                      {tagSearch.trim() && !filteredLabels.some((label) => normalizeTemplateSearchKey(label.name) === normalizeTemplateSearchKey(tagSearch)) ? (
+                        <button className="tag-create-row" onClick={() => void createAndApplyLabel(tagSearch)} type="button">
+                          <Tags size={15} />
+                          Crear "{tagSearch.trim()}"
+                        </button>
+                      ) : null}
+                      {filteredLabels.map((label) => (
+                        <div className="tag-editor-row" key={label.slug}>
+                          <span className="tag-dot" style={{ background: label.color }} />
+                          <strong>{label.name}</strong>
+                          <button onClick={() => void changeConversationType(selected.id, label.slug)} type="button">
+                            {selected.consultype === label.slug ? "Actual" : "Agregar"}
+                          </button>
+                          <small>{label.instructions}</small>
+                        </div>
+                      ))}
+                      {!filteredLabels.length && !tagSearch.trim() ? (
+                        <div className="empty-state">No hay etiquetas activas.</div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </span>
                 <button className="icon-action" onClick={() => setSummaryOpen(true)} title="Generar resumen" type="button"><ClipboardList size={17} /></button>
                 <button className="icon-action active" onClick={() => setTemplateComposerOpen(true)} title="Enviar plantilla" type="button"><FilePenLine size={17} /></button>
                 <button className="icon-action" onClick={() => setQuickRepliesOpen(true)} title="Respuestas rapidas" type="button"><MessageCircleMore size={17} /></button>
@@ -3004,20 +3292,6 @@ function InboxList({
                 </details>
               </div>
             </div>
-
-            {tagPanelOpen ? (
-              <div className="tag-editor-panel">
-                <input placeholder="Buscar o crear etiqueta..." />
-                {TAG_FILTERS.map((tagName) => (
-                  <div className="tag-editor-row" key={tagName}>
-                    <span className={`tag-dot ${tagName}`} />
-                    <strong>{humanizeTemplateName(tagName)}</strong>
-                    <button onClick={() => void changeConversationType(selected.id, tagName)} type="button">Agregar</button>
-                    <button className="icon-action danger" type="button"><Trash2 size={14} /></button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
 
             {summaryOpen ? (
               <div className="modal-backdrop">
@@ -3897,6 +4171,25 @@ function getStatusLabel(value: string) {
 
 function getConsultypeLabel(value: string) {
   return CONSULTYPE_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
+function getFallbackLabelColor(slug: string) {
+  const colors: Record<string, string> = {
+    caliente: "#f43f5e",
+    cliente: "#42c767",
+    comparador: "#fbbf24",
+    cotizado: "#16a34a",
+    "contacto-de-bobbio": "#38bdf8",
+    "esperando-respuesta": "#f97316",
+    "fuera-de-horario": "#f97316",
+    "no-leido": "#f97316",
+    "pasar-presupuesto": "#38bdf8",
+    "pocero-instalador": "#38bdf8",
+    "presupuesto-enviado": "#38bdf8",
+    otro: "#94a3b8"
+  };
+
+  return colors[slug] ?? "#38bdf8";
 }
 
 function hardRefreshApp() {

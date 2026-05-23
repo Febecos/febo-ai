@@ -190,6 +190,38 @@ create table if not exists message_templates (
   unique (name, language_code)
 );
 
+create table if not exists label_definitions (
+  slug text primary key,
+  name text not null,
+  color text not null default '#38bdf8',
+  instructions text not null default '',
+  active boolean not null default true,
+  sort_order integer not null default 100,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+insert into label_definitions (slug, name, color, instructions, sort_order)
+values
+  ('caliente', 'Caliente', '#f43f5e', 'Cliente con intencion clara de compra o avance comercial. Debe priorizarse y, si esta asignado, verse en el CRM del vendedor.', 10),
+  ('cliente', 'Cliente', '#42c767', 'Contacto que ya compro o debe tratarse como cliente activo.', 20),
+  ('comparador', 'Comparador', '#fbbf24', 'Esta comparando opciones, precios o alternativas antes de decidir.', 30),
+  ('contacto-de-bobbio', 'Contacto de Bobbio', '#38bdf8', 'Contacto derivado o vinculado a Bobbio.', 40),
+  ('cotizado', 'Cotizado', '#16a34a', 'Ya recibio cotizacion o presupuesto.', 50),
+  ('esperando-respuesta', 'Esperando Respuesta', '#f97316', 'Queda pendiente respuesta del cliente o seguimiento.', 60),
+  ('fuera-de-horario', 'Fuera de Horario', '#f97316', 'Contacto atendido o entrante fuera del horario habitual.', 70),
+  ('no-leido', 'No Leido', '#f97316', 'Debe llamar la atencion porque falta lectura/revision interna.', 80),
+  ('pasar-presupuesto', 'Pasar Presupuesto', '#38bdf8', 'Requiere armado o envio de presupuesto.', 90),
+  ('pocero-instalador', 'Pocero / instalador', '#38bdf8', 'Contacto tecnico, pocero, instalador o posible canal profesional.', 100),
+  ('presupuesto-enviado', 'Presupuesto enviado', '#38bdf8', 'Ya se envio presupuesto formal.', 110),
+  ('otro', 'Otro', '#94a3b8', 'Etiqueta neutra cuando no corresponde una categoria especifica.', 999)
+on conflict (slug) do update
+set name = excluded.name,
+    color = excluded.color,
+    instructions = case when label_definitions.instructions = '' then excluded.instructions else label_definitions.instructions end,
+    sort_order = excluded.sort_order,
+    updated_at = now();
+
 insert into message_templates (label, name, language_code, category, body)
 values (
   'Hola inicial',
@@ -233,6 +265,11 @@ for each row execute function set_updated_at();
 drop trigger if exists set_message_templates_updated_at on message_templates;
 create trigger set_message_templates_updated_at
 before update on message_templates
+for each row execute function set_updated_at();
+
+drop trigger if exists set_label_definitions_updated_at on label_definitions;
+create trigger set_label_definitions_updated_at
+before update on label_definitions
 for each row execute function set_updated_at();
 
 drop trigger if exists set_quick_replies_updated_at on quick_replies;

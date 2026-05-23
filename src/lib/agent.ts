@@ -7,6 +7,7 @@ import {
   AgentConversationMessage,
   ConversationMemory,
   getConversationMemory,
+  listLabelDefinitions,
   listAgentConversationContext,
   upsertConversationMemory
 } from "./crm";
@@ -174,6 +175,7 @@ export async function runFebecosAgent(input: {
   const prompt = await getOperatingPrompt();
   const history = await listAgentConversationContext(input.conversationId, 50);
   const memory = await getConversationMemory(input.conversationId);
+  const labelDefinitions = await listLabelDefinitions();
   const conversationHistory = buildConversationHistory(history);
   const conversationMemory = buildConversationMemoryContext(memory);
   const selectorCheckoutResult = buildSelectorCheckoutResult(input.message);
@@ -225,6 +227,7 @@ export async function runFebecosAgent(input: {
       prompt,
       "Regla critica de contexto: usa el historial de conversacion como fuente principal para entender el caso. No trates cada mensaje como si fuera el primer contacto.",
       "Usa memoriaComercial como contexto persistente del contacto: datos tecnicos, cotizaciones, objeciones, asesor y proximo paso. Esa memoria pesa mas que un mensaje aislado.",
+      "Usa etiquetasDisponibles para entender que significa cada etiqueta operativa y como deberia clasificarse o priorizarse el contacto.",
       "No repreguntes datos que el cliente ya dio en el historial. Si faltan datos, pregunta solo el dato faltante mas importante.",
       "Si el ultimo mensaje puede ser continuidad de un caso viejo, menciona brevemente lo que venian hablando y pregunta si siguen con eso o si quiere arrancar algo nuevo.",
       "Responde al ultimo mensaje del cliente, pero manteniendo continuidad con lo ya conversado.",
@@ -255,7 +258,12 @@ export async function runFebecosAgent(input: {
                 name: input.contactName ?? null,
                 message: input.message,
                 history: conversationHistory,
-                memoriaComercial: conversationMemory
+                memoriaComercial: conversationMemory,
+                etiquetasDisponibles: labelDefinitions.map((label) => ({
+                  slug: label.slug,
+                  name: label.name,
+                  instructions: label.instructions
+                }))
               },
               febecos: {
                 profile,

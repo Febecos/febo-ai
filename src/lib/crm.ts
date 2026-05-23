@@ -76,6 +76,17 @@ export type QuickReply = {
   updated_at: string;
 };
 
+export type LabelDefinition = {
+  slug: string;
+  name: string;
+  color: string;
+  instructions: string;
+  active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ConversationMessage = {
   id: string;
   direction: "inbound" | "outbound" | "internal";
@@ -248,7 +259,15 @@ export function normalizeConsultype(value: string | null | undefined) {
     "otro"
   ]);
 
-  return allowed.has(normalized) ? normalized : "otro";
+  if (allowed.has(normalized)) {
+    return normalized;
+  }
+
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalized) ? normalized.slice(0, 60) : "otro";
+}
+
+export function slugifyLabel(value: string) {
+  return normalizeConsultype(value);
 }
 
 export function normalizeSentiment(value: string | null | undefined) {
@@ -351,6 +370,58 @@ export async function listMessageTemplates() {
     from message_templates
     order by active desc, label
   `) as MessageTemplate[];
+}
+
+export async function listLabelDefinitions(includeInactive = false) {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  return (await sql`
+    select slug, name, color, instructions, active, sort_order, created_at::text, updated_at::text
+    from label_definitions
+    where (${includeInactive}::boolean = true or active = true)
+    order by sort_order, name
+  `) as LabelDefinition[];
+}
+
+export async function upsertLabelDefinition(input: {
+  slug?: string | null;
+  name: string;
+  color: string;
+  instructions?: string;
+  active?: boolean;
+  sortOrder?: number;
+}) {
+  if (!isDbConfigured()) {
+    return null;
+  }
+
+  const sql = getSql();
+  const slug = slugifyLabel(input.slug || input.name);
+  const color = /^#[0-9a-f]{6}$/i.test(input.color) ? input.color : "#38bdf8";
+  const rows = (await sql`
+    insert into label_definitions (slug, name, color, instructions, active, sort_order)
+    values (
+      ${slug},
+      ${input.name.trim()},
+      ${color},
+      ${input.instructions?.trim() ?? ""},
+      ${input.active ?? true},
+      ${input.sortOrder ?? 100}
+    )
+    on conflict (slug) do update
+    set name = excluded.name,
+        color = excluded.color,
+        instructions = excluded.instructions,
+        active = excluded.active,
+        sort_order = excluded.sort_order,
+        updated_at = now()
+    returning slug, name, color, instructions, active, sort_order, created_at::text, updated_at::text
+  `) as LabelDefinition[];
+
+  return rows[0] ?? null;
 }
 
 export async function getMessageTemplate(templateId: string) {

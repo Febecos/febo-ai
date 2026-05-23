@@ -74,6 +74,8 @@ type AgentTestResponse = {
   escalar: boolean;
 };
 
+type ToolKey = "conversations" | "metrics" | "contacts" | "crm" | "templates" | "labels" | "settings" | "users" | "ai";
+
 const CONSULTYPE_OPTIONS = [
   { value: "caliente", label: "Caliente" },
   { value: "comparador", label: "Comparador" },
@@ -227,7 +229,7 @@ function ToolWorkspace({
   stats: Stats;
   users: AppUser[];
 }) {
-  const [activeTool, setActiveTool] = useState<"conversations" | "metrics" | "contacts" | "crm" | "templates" | "labels" | "settings" | "users" | "ai">("conversations");
+  const [activeTool, setActiveTool] = useState<ToolKey>("conversations");
   const [workspaceConversations, setWorkspaceConversations] = useState(conversations);
   const [labelDefinitions, setLabelDefinitions] = useState<LabelDefinition[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
@@ -236,6 +238,7 @@ function ToolWorkspace({
   const [focusedContact, setFocusedContact] = useState({ id: "", signal: 0 });
   const [pushStatus, setPushStatus] = useState("Notificaciones");
   const [actionNotice, setActionNotice] = useState("");
+  const isAdmin = currentUser.role === "admin";
 
   useEffect(() => {
     if (!actionNotice) {
@@ -267,7 +270,7 @@ function ToolWorkspace({
   }, []);
 
   async function loadLabelDefinitions() {
-    const response = await fetch("/api/labels?all=1");
+    const response = await fetch(currentUser.role === "admin" ? "/api/labels?all=1" : "/api/labels");
     const payload = await readJsonResponse(response);
 
     if (response.ok && Array.isArray(payload?.labels)) {
@@ -309,14 +312,16 @@ function ToolWorkspace({
           <WhatsAppMark />
           Conversaciones
         </button>
-        <button
-          className={activeTool === "metrics" ? "active" : ""}
-          onClick={() => setActiveTool("metrics")}
-          type="button"
-        >
-          <BarChart3 size={18} />
-          M&eacute;tricas
-        </button>
+        {isAdmin ? (
+          <button
+            className={activeTool === "metrics" ? "active" : ""}
+            onClick={() => setActiveTool("metrics")}
+            type="button"
+          >
+            <BarChart3 size={18} />
+            M&eacute;tricas
+          </button>
+        ) : null}
         <button
           className={activeTool === "contacts" ? "active" : ""}
           onClick={() => setActiveTool("contacts")}
@@ -333,14 +338,16 @@ function ToolWorkspace({
           <LayoutDashboard size={18} />
           Tablero CRM
         </button>
-        <button
-          className={activeTool === "templates" ? "active" : ""}
-          onClick={() => setActiveTool("templates")}
-          type="button"
-        >
-          <MessageSquareText size={18} />
-          Plantillas
-        </button>
+        {isAdmin ? (
+          <button
+            className={activeTool === "templates" ? "active" : ""}
+            onClick={() => setActiveTool("templates")}
+            type="button"
+          >
+            <MessageSquareText size={18} />
+            Plantillas
+          </button>
+        ) : null}
         <button
           className={activeTool === "labels" ? "active" : ""}
           onClick={() => setActiveTool("labels")}
@@ -349,7 +356,11 @@ function ToolWorkspace({
           <Tags size={18} />
           Etiquetas
         </button>
-        {currentUser.role === "admin" ? (
+        <button className={activeTool === "ai" ? "active" : ""} onClick={() => setActiveTool("ai")} type="button">
+          <Bot size={18} />
+          Probar IA
+        </button>
+        {isAdmin ? (
           <>
             <button className={activeTool === "users" ? "active" : ""} onClick={() => setActiveTool("users")} type="button">
               <ShieldCheck size={18} />
@@ -358,10 +369,6 @@ function ToolWorkspace({
             <button className={activeTool === "settings" ? "active" : ""} onClick={() => setActiveTool("settings")} type="button">
               <KeyRound size={18} />
               Configuracion
-            </button>
-            <button className={activeTool === "ai" ? "active" : ""} onClick={() => setActiveTool("ai")} type="button">
-              <Bot size={18} />
-              Probar IA
             </button>
           </>
         ) : null}
@@ -402,10 +409,10 @@ function ToolWorkspace({
             users={users}
           />
         ) : null}
-        {activeTool === "metrics" ? <MetricsPanel stats={stats} /> : null}
-        {activeTool === "templates" ? <TemplatesPanel /> : null}
+        {activeTool === "metrics" && isAdmin ? <MetricsPanel stats={stats} /> : null}
+        {activeTool === "templates" && isAdmin ? <TemplatesPanel /> : null}
         {activeTool === "labels" ? (
-          <LabelsPanel labels={labelDefinitions} onLabelsChange={setLabelDefinitions} />
+          <LabelsPanel currentUser={currentUser} labels={labelDefinitions} onLabelsChange={setLabelDefinitions} />
         ) : null}
         {activeTool === "contacts" ? (
           <ContactsPanel
@@ -452,11 +459,11 @@ function ToolWorkspace({
             }}
           />
         ) : null}
-        {activeTool === "users" && currentUser.role === "admin" ? (
+        {activeTool === "users" && isAdmin ? (
           <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} />
         ) : null}
-        {activeTool === "settings" && currentUser.role === "admin" ? <SettingsPanel users={users} /> : null}
-        {activeTool === "ai" && currentUser.role === "admin" ? <AgentTester /> : null}
+        {activeTool === "settings" && isAdmin ? <SettingsPanel users={users} /> : null}
+        {activeTool === "ai" ? <AgentTester /> : null}
       </div>
     </section>
   );
@@ -616,9 +623,11 @@ function upsertLocalSetting(settings: AppSetting[], key: string, value: unknown)
 }
 
 function LabelsPanel({
+  currentUser,
   labels,
   onLabelsChange
 }: {
+  currentUser: AppUser;
   labels: LabelDefinition[];
   onLabelsChange: (labels: LabelDefinition[]) => void;
 }) {
@@ -639,12 +648,13 @@ function LabelsPanel({
   const [message, setMessage] = useState("");
   const selectedLabel = sortedLabels.find((label) => label.slug === selectedSlug) ?? sortedLabels[0];
   const activeCount = labels.filter((label) => label.active).length;
+  const isAdmin = currentUser.role === "admin";
 
   useEffect(() => {
-    if (!selectedSlug && sortedLabels[0]) {
+    if (isAdmin && !selectedSlug && sortedLabels[0]) {
       editLabel(sortedLabels[0]);
     }
-  }, [selectedSlug, sortedLabels]);
+  }, [isAdmin, selectedSlug, sortedLabels]);
 
   function editLabel(label: LabelDefinition) {
     setSelectedSlug(label.slug);
@@ -692,6 +702,11 @@ function LabelsPanel({
       setForm((current) => ({ ...current, slug: payload.label.slug }));
       setSelectedSlug(payload.label.slug);
     }
+
+    if (!isAdmin) {
+      setForm({ slug: "", name: "", color: "#38bdf8", instructions: "", active: true, sortOrder: 100 });
+      setSelectedSlug("");
+    }
   }
 
   async function restoreBaseLabels() {
@@ -720,6 +735,52 @@ function LabelsPanel({
     }
 
     setMessage("Etiquetas base restauradas.");
+  }
+
+  if (!isAdmin) {
+    return (
+      <section className="admin-panel labels-panel">
+        <div className="panel-title">
+          <div>
+            <h2>Etiquetas</h2>
+            <p>Pod&eacute;s crear etiquetas simples para ordenar conversaciones. La configuraci&oacute;n de IA queda para administrador.</p>
+            <small>{activeCount} etiquetas activas disponibles.</small>
+          </div>
+        </div>
+
+        <form className="admin-form compact-label-form" onSubmit={saveLabel}>
+          <label className="field">
+            Nombre de etiqueta
+            <input
+              placeholder="Ej: Seguimiento especial"
+              value={form.name}
+              onChange={(event) => setForm({ ...form, name: event.target.value })}
+              required
+            />
+          </label>
+          <label className="field color-field">
+            Color
+            <span>
+              <input type="color" value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} />
+              <input value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} />
+            </span>
+          </label>
+          <button className="primary" disabled={saving} type="submit">
+            <UserPlus size={17} />
+            {saving ? "Guardando" : "Agregar etiqueta"}
+          </button>
+          {message ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
+        </form>
+
+        <div className="label-preview-strip label-simple-strip">
+          {sortedLabels.map((label) => (
+            <span className="tag-pill preview" key={label.slug} style={{ "--tag-color": label.color } as CSSProperties}>
+              {label.name}
+            </span>
+          ))}
+        </div>
+      </section>
+    );
   }
 
   return (

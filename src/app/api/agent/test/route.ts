@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { runFebecosAgent } from "@/lib/agent";
+import { getCurrentUser } from "@/lib/auth";
 
 const schema = z.object({
   phone: z.string().min(6),
@@ -8,6 +9,12 @@ const schema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
   const parsed = schema.safeParse(await request.json());
 
   if (!parsed.success) {

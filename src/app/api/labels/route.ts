@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({
-    labels: await listLabelDefinitions(request.nextUrl.searchParams.get("all") === "1")
+    labels: await listLabelDefinitions(user.role === "admin" && request.nextUrl.searchParams.get("all") === "1")
   });
 }
 
@@ -38,6 +38,10 @@ export async function POST(request: NextRequest) {
   const restore = restoreSchema.safeParse(body);
 
   if (restore.success) {
+    if (user.role !== "admin") {
+      return NextResponse.json({ error: "Solo administrador puede restaurar etiquetas base." }, { status: 403 });
+    }
+
     return NextResponse.json({
       labels: await restoreBaseLabelDefinitions()
     });
@@ -49,7 +53,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Etiqueta invalida." }, { status: 400 });
   }
 
-  const label = await upsertLabelDefinition(parsed.data);
+  const label = await upsertLabelDefinition(
+    user.role === "admin"
+      ? parsed.data
+      : {
+          name: parsed.data.name,
+          color: parsed.data.color,
+          instructions: "Etiqueta creada desde ventas. Revisar instrucciones desde administrador.",
+          active: true,
+          sortOrder: 500
+        }
+  );
 
   return NextResponse.json({
     label,

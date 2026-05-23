@@ -4003,6 +4003,30 @@ function formatMessageTime(value: string) {
 }
 
 function getConversationEventTitle(event: ConversationEvent) {
+  if (event.event === "conversation_assigned") {
+    return "Transferencia manual";
+  }
+
+  if (event.event === "conversation_unassigned") {
+    return "Desasignacion";
+  }
+
+  if (event.event === "conversation_status_changed") {
+    return "Cambio de estado";
+  }
+
+  if (event.event === "conversation_ai_toggled") {
+    return "Cambio de IA";
+  }
+
+  if (event.event === "conversation_label_changed") {
+    return "Cambio de etiqueta";
+  }
+
+  if (event.event === "conversation_name_changed") {
+    return "Cambio de nombre";
+  }
+
   if (event.event === "label_automation_assigned") {
     return "Asignacion automatica por etiqueta";
   }
@@ -4016,6 +4040,39 @@ function getConversationEventTitle(event: ConversationEvent) {
 
 function getConversationEventDescription(event: ConversationEvent) {
   const payload = event.payload ?? {};
+  const actorName = typeof payload.actorName === "string" ? payload.actorName : "Sistema";
+
+  if (event.event === "conversation_assigned") {
+    const assignedName = typeof payload.toAssignedName === "string" ? payload.toAssignedName : "vendedor";
+    return `${actorName} transfirio la conversacion a ${assignedName}.`;
+  }
+
+  if (event.event === "conversation_unassigned") {
+    return `${actorName} dejo la conversacion sin vendedor asignado.`;
+  }
+
+  if (event.event === "conversation_status_changed") {
+    const fromStatus = typeof payload.fromStatus === "string" ? humanizeTemplateName(payload.fromStatus) : "estado anterior";
+    const toStatus = typeof payload.toStatus === "string" ? humanizeTemplateName(payload.toStatus) : "estado nuevo";
+    return `${actorName} cambio el estado de ${fromStatus} a ${toStatus}.`;
+  }
+
+  if (event.event === "conversation_ai_toggled") {
+    const enabled = Boolean(payload.enabled);
+    return `${actorName} ${enabled ? "activo" : "desactivo"} la IA de esta conversacion.`;
+  }
+
+  if (event.event === "conversation_label_changed") {
+    const fromLabel = typeof payload.fromLabel === "string" ? humanizeTemplateName(payload.fromLabel) : "sin etiqueta";
+    const toLabel = typeof payload.toLabel === "string" ? humanizeTemplateName(payload.toLabel) : "sin etiqueta";
+    return `${actorName} cambio la etiqueta de ${fromLabel} a ${toLabel}.`;
+  }
+
+  if (event.event === "conversation_name_changed") {
+    const fromName = typeof payload.fromName === "string" && payload.fromName ? payload.fromName : "sin nombre";
+    const toName = typeof payload.toName === "string" && payload.toName ? payload.toName : "sin nombre";
+    return `${actorName} cambio el nombre de ${fromName} a ${toName}.`;
+  }
 
   if (event.event === "label_automation_assigned") {
     const labelName = typeof payload.labelName === "string" ? payload.labelName : payload.label;

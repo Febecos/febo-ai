@@ -1855,6 +1855,8 @@ export async function updateConversation(input: {
   consultype?: string;
   displayName?: string | null;
   unread?: boolean;
+  actorUserId?: string | null;
+  actorName?: string | null;
 }) {
   const sql = getSql();
   const status = input.status ?? null;
@@ -1866,12 +1868,30 @@ export async function updateConversation(input: {
   const displayName = input.displayName === undefined ? undefined : input.displayName?.trim() || null;
 
   const previous = (await sql`
-    select c.assigned_to::text as assigned_to, u.full_name as assigned_name
+    select
+      c.contact_id::text,
+      ct.phone,
+      c.status,
+      c.ai_enabled,
+      c.assigned_to::text as assigned_to,
+      u.full_name as assigned_name,
+      ct.consultype,
+      ct.display_name
     from conversations c
+    join contacts ct on ct.id = c.contact_id
     left join app_users u on u.id = c.assigned_to
     where c.id = ${input.conversationId}
     limit 1
-  `) as Array<{ assigned_to: string | null; assigned_name: string | null }>;
+  `) as Array<{
+    contact_id: string;
+    phone: string;
+    status: string;
+    ai_enabled: boolean;
+    assigned_to: string | null;
+    assigned_name: string | null;
+    consultype: string;
+    display_name: string | null;
+  }>;
 
   await sql`
     update conversations
@@ -1916,20 +1936,88 @@ export async function updateConversation(input: {
     `;
   }
 
-  if (!changeAssigned) {
-    return { assignedChanged: false, assignedName: previous[0]?.assigned_name ?? null };
-  }
-
   const next = (await sql`
-    select c.assigned_to::text as assigned_to, u.full_name as assigned_name
+    select
+      c.contact_id::text,
+      ct.phone,
+      c.status,
+      c.ai_enabled,
+      c.assigned_to::text as assigned_to,
+      u.full_name as assigned_name,
+      ct.consultype,
+      ct.display_name
     from conversations c
+    join contacts ct on ct.id = c.contact_id
     left join app_users u on u.id = c.assigned_to
     where c.id = ${input.conversationId}
     limit 1
-  `) as Array<{ assigned_to: string | null; assigned_name: string | null }>;
+  `) as Array<{
+    contact_id: string;
+    phone: string;
+    status: string;
+    ai_enabled: boolean;
+    assigned_to: string | null;
+    assigned_name: string | null;
+    consultype: string;
+    display_name: string | null;
+  }>;
+
+  const before = previous[0];
+  const after = next[0];
+  const actor = {
+    actorUserId: input.actorUserId ?? null,
+    actorName: input.actorName ?? "Sistema"
+  };
+
+  async function recordConversationEvent(event: string, payload: Record<string, unknown>) {
+    if (!after?.contact_id) {
+      return;
+    }
+
+    await sql`
+      insert into platform_events (contact_id, phone, event, payload)
+      values (${after.contact_id}, ${after.phone}, ${event}, ${JSON.stringify({ ...actor, ...payload })}::jsonb)
+    `;
+  }
+
+  if (before && after && changeAssigned && before.assigned_to !== after.assigned_to) {
+    await recordConversationEvent(after.assigned_to ? "conversation_assigned" : "conversation_unassigned", {
+      fromAssignedTo: before.assigned_to,
+      fromAssignedName: before.assigned_name,
+      toAssignedTo: after.assigned_to,
+      toAssignedName: after.assigned_name
+    });
+  }
+
+  if (before && after && status !== null && before.status !== after.status) {
+    await recordConversationEvent("conversation_status_changed", {
+      fromStatus: before.status,
+      toStatus: after.status
+    });
+  }
+
+  if (before && after && aiEnabled !== null && before.ai_enabled !== after.ai_enabled) {
+    await recordConversationEvent("conversation_ai_toggled", {
+      enabled: after.ai_enabled
+    });
+  }
+
+  if (before && after && consultype && before.consultype !== after.consultype) {
+    await recordConversationEvent("conversation_label_changed", {
+      fromLabel: before.consultype,
+      toLabel: after.consultype
+    });
+  }
+
+  if (before && after && displayName !== undefined && before.display_name !== after.display_name) {
+    await recordConversationEvent("conversation_name_changed", {
+      fromName: before.display_name,
+      toName: after.display_name
+    });
+  }
 
   return {
-    assignedChanged: previous[0]?.assigned_to !== next[0]?.assigned_to,
-    assignedName: next[0]?.assigned_name ?? null
+    assignedChanged: before?.assigned_to !== after?.assigned_to,
+    assignedName: after?.assigned_name ?? null
   };
 }

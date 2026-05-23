@@ -47,7 +47,11 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Datos invalidos." }, { status: 400 });
   }
 
-  const result = await updateConversation(parsed.data);
+  const result = await updateConversation({
+    ...parsed.data,
+    actorUserId: user.id,
+    actorName: user.full_name
+  });
 
   if (parsed.data.assignedTo !== undefined && result?.assignedChanged) {
     const assignee = result.assignedName ? ` a ${result.assignedName}` : " sin asignar";

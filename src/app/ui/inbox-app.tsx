@@ -552,6 +552,34 @@ function LabelsPanel({
     }
   }
 
+  async function restoreBaseLabels() {
+    setSaving(true);
+    setMessage("");
+
+    const response = await fetch("/api/labels", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "restore-base" })
+    });
+    const payload = await readJsonResponse(response);
+    setSaving(false);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos restaurar las etiquetas base.");
+      return;
+    }
+
+    if (Array.isArray(payload?.labels)) {
+      onLabelsChange(payload.labels);
+      const current = payload.labels.find((label: LabelDefinition) => label.slug === selectedSlug) ?? payload.labels[0];
+      if (current) {
+        editLabel(current);
+      }
+    }
+
+    setMessage("Etiquetas base restauradas.");
+  }
+
   return (
     <section className="admin-panel labels-panel">
       <div className="panel-title">
@@ -563,7 +591,7 @@ function LabelsPanel({
           </small>
         </div>
         <div className="label-panel-actions">
-          <button className="secondary compact" onClick={() => setMessage("La base ya esta sincronizada con Neon.")} type="button">
+          <button className="secondary compact" disabled={saving} onClick={restoreBaseLabels} type="button">
             Restaurar base
           </button>
           <button className="secondary compact" onClick={newLabel} type="button">

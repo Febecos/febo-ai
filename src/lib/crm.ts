@@ -87,6 +87,93 @@ export type LabelDefinition = {
   updated_at: string;
 };
 
+const BASE_LABEL_DEFINITIONS = [
+  {
+    slug: "caliente",
+    name: "Caliente",
+    color: "#f43f5e",
+    instructions: "Cliente con intencion clara de compra o avance comercial. Debe priorizarse y, si esta asignado, verse en el CRM del vendedor.",
+    sortOrder: 10
+  },
+  {
+    slug: "cliente",
+    name: "Cliente",
+    color: "#42c767",
+    instructions: "Contacto que ya compro o debe tratarse como cliente activo.",
+    sortOrder: 20
+  },
+  {
+    slug: "comparador",
+    name: "Comparador",
+    color: "#fbbf24",
+    instructions: "Esta comparando opciones, precios o alternativas antes de decidir.",
+    sortOrder: 30
+  },
+  {
+    slug: "contacto-de-bobbio",
+    name: "Contacto de Bobbio",
+    color: "#38bdf8",
+    instructions: "Contacto derivado o vinculado a Bobbio.",
+    sortOrder: 40
+  },
+  {
+    slug: "cotizado",
+    name: "Cotizado",
+    color: "#16a34a",
+    instructions: "Ya recibio cotizacion o presupuesto.",
+    sortOrder: 50
+  },
+  {
+    slug: "esperando-respuesta",
+    name: "Esperando Respuesta",
+    color: "#f97316",
+    instructions: "Queda pendiente respuesta del cliente o seguimiento.",
+    sortOrder: 60
+  },
+  {
+    slug: "fuera-de-horario",
+    name: "Fuera de Horario",
+    color: "#f97316",
+    instructions: "Contacto atendido o entrante fuera del horario habitual.",
+    sortOrder: 70
+  },
+  {
+    slug: "no-leido",
+    name: "No Leido",
+    color: "#f97316",
+    instructions: "Debe llamar la atencion porque falta lectura/revision interna.",
+    sortOrder: 80
+  },
+  {
+    slug: "pasar-presupuesto",
+    name: "Pasar Presupuesto",
+    color: "#38bdf8",
+    instructions: "Requiere armado o envio de presupuesto.",
+    sortOrder: 90
+  },
+  {
+    slug: "pocero-instalador",
+    name: "Pocero / instalador",
+    color: "#38bdf8",
+    instructions: "Contacto tecnico, pocero, instalador o posible canal profesional.",
+    sortOrder: 100
+  },
+  {
+    slug: "presupuesto-enviado",
+    name: "Presupuesto enviado",
+    color: "#38bdf8",
+    instructions: "Ya se envio presupuesto formal.",
+    sortOrder: 110
+  },
+  {
+    slug: "otro",
+    name: "Otro",
+    color: "#94a3b8",
+    instructions: "Etiqueta neutra cuando no corresponde una categoria especifica.",
+    sortOrder: 999
+  }
+] as const;
+
 export type ConversationMessage = {
   id: string;
   direction: "inbound" | "outbound" | "internal";
@@ -388,16 +475,22 @@ function extractAssigneeNameFromInstructions(instructions: string) {
   return candidate || null;
 }
 
-async function getLabelAutomationAssigneeId(consultype: string) {
+async function getLabelAutomationAssignment(consultype: string) {
   const labels = await listLabelDefinitions(true);
   const label = labels.find((item) => item.active && item.slug === consultype);
   const assigneeName = extractAssigneeNameFromInstructions(label?.instructions ?? "");
 
-  if (!assigneeName) {
+  if (!label || !assigneeName) {
     return null;
   }
 
-  return (await findActiveUserByName(assigneeName))?.id ?? null;
+  const user = await findActiveUserByName(assigneeName);
+
+  if (!user) {
+    return null;
+  }
+
+  return { label, user };
 }
 
 export async function getAdminUsers() {
@@ -476,6 +569,21 @@ export async function upsertLabelDefinition(input: {
   `) as LabelDefinition[];
 
   return rows[0] ?? null;
+}
+
+export async function restoreBaseLabelDefinitions() {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  for (const label of BASE_LABEL_DEFINITIONS) {
+    await upsertLabelDefinition({
+      ...label,
+      active: true
+    });
+  }
+
+  return listLabelDefinitions(true);
 }
 
 export async function getMessageTemplate(templateId: string) {
@@ -917,9 +1025,9 @@ export async function recordAgentReply(input: {
 
   const sql = getSql();
   const consultype = normalizeConsultype(input.intent);
-  const labelAssigneeId = await getLabelAutomationAssigneeId(consultype);
-  const needsHuman = input.needsHuman || Boolean(labelAssigneeId);
-  const humanAssigneeId = labelAssigneeId ?? (needsHuman || consultype === "caliente" ? await getHotLeadAssigneeId() : null);
+  const labelAssignment = await getLabelAutomationAssignment(consultype);
+  const needsHuman = input.needsHuman || Boolean(labelAssignment);
+  const humanAssigneeId = labelAssignment?.user.id ?? (needsHuman || consultype === "caliente" ? await getHotLeadAssigneeId() : null);
 
   const metadata = input.replyOptions?.length
     ? JSON.stringify({ source: "febo_ai", reply_options: input.replyOptions })
@@ -965,6 +1073,30 @@ export async function recordAgentReply(input: {
     await sql`
       insert into handoffs (conversation_id, contact_id, reason, status, assigned_to)
       values (${input.threadId}, ${input.contactId}, ${input.intent}, 'assigned', ${humanAssigneeId}::uuid)
+    `;
+  }
+
+  if (labelAssignment) {
+    await sql`
+      insert into conversation_notes (conversation_id, body)
+      values (
+        ${input.threadId},
+        ${`FEBO asigno automaticamente esta conversacion a ${labelAssignment.user.full_name} por la etiqueta "${labelAssignment.label.name}".`}
+      )
+    `;
+
+    await sql`
+      insert into platform_events (contact_id, event, payload)
+      values (
+        ${input.contactId},
+        'label_automation_assigned',
+        ${JSON.stringify({
+          label: labelAssignment.label.slug,
+          labelName: labelAssignment.label.name,
+          assignedTo: labelAssignment.user.id,
+          assignedName: labelAssignment.user.full_name
+        })}::jsonb
+      )
     `;
   }
 }

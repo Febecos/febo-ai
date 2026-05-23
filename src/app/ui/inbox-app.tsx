@@ -1665,6 +1665,14 @@ function InboxList({
     setActiveQuickReplyIndex(0);
   }, [quickReplyQuery]);
 
+  function scrollThreadToBottom() {
+    if (messageThreadRef.current) {
+      messageThreadRef.current.scrollTop = messageThreadRef.current.scrollHeight;
+    }
+
+    threadEndRef.current?.scrollIntoView({ block: "end" });
+  }
+
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
@@ -1721,20 +1729,18 @@ function InboxList({
   }, []);
 
   useEffect(() => {
-    const scrollToBottom = () => {
-      if (messageThreadRef.current) {
-        messageThreadRef.current.scrollTop = messageThreadRef.current.scrollHeight;
-      }
-    };
+    if (activeConversationTab !== "chat") {
+      return;
+    }
 
     window.requestAnimationFrame(() => {
-      scrollToBottom();
-      window.requestAnimationFrame(scrollToBottom);
+      scrollThreadToBottom();
+      window.requestAnimationFrame(scrollThreadToBottom);
     });
 
-    const timeoutId = window.setTimeout(scrollToBottom, 120);
+    const timeoutId = window.setTimeout(scrollThreadToBottom, 160);
     return () => window.clearTimeout(timeoutId);
-  }, [activeConversationTab, messages.length, selected?.id]);
+  }, [activeConversationTab, loadingMessages, messages.length, mobileDetailOpen, selected?.id]);
 
   useEffect(() => {
     if (!replyFile?.type.startsWith("audio/")) {

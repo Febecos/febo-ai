@@ -2967,13 +2967,13 @@ select option:hover {
   .tool-brand {
     border-bottom: 0;
     justify-content: center;
-    min-height: 40px;
+    min-height: 36px;
     padding: 0;
   }
 
   .brand-mark {
-    height: 34px;
-    width: 34px;
+    height: 31px;
+    width: 31px;
   }
 
   .tool-brand strong {
@@ -2984,24 +2984,55 @@ select option:hover {
     aspect-ratio: 1;
     font-size: 0;
     justify-content: center;
-    min-height: 36px;
+    margin: 0 auto;
+    min-height: 34px;
     overflow: hidden;
     padding: 0;
     white-space: nowrap;
-    width: 36px;
+    width: 34px;
   }
 
   .tool-sidebar-bottom {
     background: var(--panel);
+    border-radius: 8px;
+    flex: 0 0 auto;
     gap: 2px;
     margin-top: auto;
-    padding-top: 3px;
-    position: sticky;
-    bottom: 0;
+    padding: 3px 0 0;
   }
 
   .tool-sidebar button svg {
     flex: 0 0 auto;
+  }
+
+  @media (max-height: 620px) {
+    .admin-workspace {
+      grid-template-columns: 40px minmax(0, 1fr);
+    }
+
+    .tool-brand {
+      min-height: 32px;
+    }
+
+    .brand-mark {
+      height: 28px;
+      width: 28px;
+    }
+
+    .tool-sidebar {
+      gap: 1px;
+      padding: 2px;
+    }
+
+    .tool-sidebar button {
+      min-height: 31px;
+      width: 31px;
+    }
+
+    .tool-sidebar-bottom {
+      gap: 1px;
+      padding-top: 2px;
+    }
   }
 
   .agent-panel {
@@ -3292,7 +3323,7 @@ select option:hover {
   }
 
   .message-thread {
-    height: auto;
+    height: 100%;
     max-height: none;
     min-height: 0;
   }

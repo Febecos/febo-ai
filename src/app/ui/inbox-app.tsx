@@ -547,6 +547,36 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
     setMessage("Configuracion guardada.");
   }
 
+  async function saveSettingsBatch(items: Array<{ key: SettingKey; value: string | number | null }>, savingId: string) {
+    setSavingKey(savingId);
+    setMessage("");
+
+    let latestSettings: AppSetting[] | null = null;
+
+    for (const item of items) {
+      const response = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(item)
+      });
+      const payload = await readJsonResponse(response);
+
+      if (!response.ok) {
+        setSavingKey("");
+        setMessage(payload?.error ?? "No pudimos guardar la configuracion.");
+        return;
+      }
+
+      latestSettings = payload?.settings ?? latestSettings;
+    }
+
+    setSavingKey("");
+    if (latestSettings) {
+      setSettings(latestSettings);
+    }
+    setMessage("Configuracion guardada.");
+  }
+
   const delayValue = Number(getValue("auto_reply_delay_seconds", 90));
   const hotLeadAssignee = String(getValue("hot_lead_default_assignee_id", "") ?? "");
   const selectorFlowId = String(getValue("whatsapp_selector_flow_id", "") ?? "");
@@ -637,8 +667,8 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
 
         <article className="settings-card settings-card-wide">
           <div>
-            <h3>WhatsApp Flow del selector</h3>
-            <p>Datos editables del Flow que FEBO envia cuando el cliente necesita cargar datos tecnicos dentro de WhatsApp.</p>
+            <h3>Mensaje para abrir Flow publicado</h3>
+            <p>Configura como FEBO envia por WhatsApp el selector ya publicado en Meta. No edita los campos internos del Flow.</p>
           </div>
           <label className="field">
             <FieldHelpLabel
@@ -703,24 +733,26 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
             />
           </label>
           <div className="settings-actions-row">
-            {[
-              ["whatsapp_selector_flow_id", selectorFlowId],
-              ["whatsapp_selector_flow_screen", selectorFlowScreen],
-              ["whatsapp_selector_flow_header", selectorFlowHeader],
-              ["whatsapp_selector_flow_body", selectorFlowBody],
-              ["whatsapp_selector_flow_footer", selectorFlowFooter],
-              ["whatsapp_selector_flow_cta", selectorFlowCta]
-            ].map(([key, value]) => (
-              <button
-                className="secondary compact"
-                disabled={savingKey === key}
-                key={key}
-                onClick={() => void saveSetting(key as SettingKey, value)}
-                type="button"
-              >
-                {savingKey === key ? "Guardando" : "Guardar"}
-              </button>
-            ))}
+            <button
+              className="primary"
+              disabled={savingKey === "selector-flow"}
+              onClick={() =>
+                void saveSettingsBatch(
+                  [
+                    { key: "whatsapp_selector_flow_id", value: selectorFlowId },
+                    { key: "whatsapp_selector_flow_screen", value: selectorFlowScreen },
+                    { key: "whatsapp_selector_flow_header", value: selectorFlowHeader },
+                    { key: "whatsapp_selector_flow_body", value: selectorFlowBody },
+                    { key: "whatsapp_selector_flow_footer", value: selectorFlowFooter },
+                    { key: "whatsapp_selector_flow_cta", value: selectorFlowCta }
+                  ],
+                  "selector-flow"
+                )
+              }
+              type="button"
+            >
+              {savingKey === "selector-flow" ? "Guardando" : "Guardar configuracion del Flow"}
+            </button>
           </div>
         </article>
       </div>

@@ -1,5 +1,5 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import { runFebecosAgent, transcribeAudio } from "@/lib/agent";
+import { refreshConversationMemory, runFebecosAgent, transcribeAudio } from "@/lib/agent";
 import { config } from "@/lib/config";
 import {
   getAutomaticReplyCandidate,
@@ -373,6 +373,7 @@ async function sendAutomaticReply(input: {
       needsHuman: true,
       waMessageId: getSentMessageId(sent)
     });
+    await refreshMemorySafely(stored.threadId);
 
     return;
   }
@@ -389,6 +390,7 @@ async function sendAutomaticReply(input: {
       needsHuman: false,
       waMessageId: getSentMessageId(sent)
     });
+    await refreshMemorySafely(stored.threadId);
 
     return;
   }
@@ -406,6 +408,7 @@ async function sendAutomaticReply(input: {
       needsHuman: false,
       waMessageId: getSentMessageId(sent)
     });
+    await refreshMemorySafely(stored.threadId);
 
     return;
   }
@@ -487,8 +490,17 @@ async function sendAutomaticReply(input: {
       waMessageId: getSentMessageId(sent),
       replyOptions: sentReplyOptions
     });
+    await refreshMemorySafely(stored.threadId);
   } catch (error) {
     console.error("No pudimos enviar o registrar la respuesta automatica.", error);
+  }
+}
+
+async function refreshMemorySafely(conversationId: string | null | undefined) {
+  try {
+    await refreshConversationMemory(conversationId);
+  } catch (error) {
+    console.error("No pudimos actualizar la memoria comercial.", error);
   }
 }
 

@@ -113,6 +113,18 @@ export type AgentConversationMessage = {
   source: string | null;
 };
 
+export type ConversationMemory = {
+  conversation_id: string;
+  summary: string;
+  technical_facts: Record<string, unknown>;
+  commercial_facts: Record<string, unknown>;
+  pending_questions: string[];
+  last_intent: string | null;
+  last_topic: string | null;
+  updated_through_message_id: string | null;
+  updated_at: string;
+};
+
 export type SelectorCheckoutLead = {
   origen: "selector";
   evento: "checkout_abierto";
@@ -1074,7 +1086,7 @@ export async function listAgentConversationContext(conversationId: string | null
   }
 
   const sql = getSql();
-  const safeLimit = Math.min(Math.max(limit, 8), 40);
+  const safeLimit = Math.min(Math.max(limit, 8), 80);
 
   return (await sql`
     select direction, body, consultype, needs_human, created_at::text, metadata->>'source' as source
@@ -1088,6 +1100,80 @@ export async function listAgentConversationContext(conversationId: string | null
     ) recent
     order by created_at asc
   `) as AgentConversationMessage[];
+}
+
+export async function getConversationMemory(conversationId: string | null | undefined) {
+  if (!isDbConfigured() || !conversationId) {
+    return null;
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    select
+      conversation_id::text,
+      summary,
+      technical_facts,
+      commercial_facts,
+      pending_questions,
+      last_intent,
+      last_topic,
+      updated_through_message_id::text,
+      updated_at::text
+    from conversation_memory
+    where conversation_id = ${conversationId}
+    limit 1
+  `) as ConversationMemory[];
+
+  return rows[0] ?? null;
+}
+
+export async function upsertConversationMemory(input: {
+  conversationId: string | null | undefined;
+  summary: string;
+  technicalFacts: Record<string, unknown>;
+  commercialFacts: Record<string, unknown>;
+  pendingQuestions: string[];
+  lastIntent?: string | null;
+  lastTopic?: string | null;
+  updatedThroughMessageId?: string | null;
+}) {
+  if (!isDbConfigured() || !input.conversationId) {
+    return;
+  }
+
+  const sql = getSql();
+
+  await sql`
+    insert into conversation_memory (
+      conversation_id,
+      summary,
+      technical_facts,
+      commercial_facts,
+      pending_questions,
+      last_intent,
+      last_topic,
+      updated_through_message_id
+    )
+    values (
+      ${input.conversationId},
+      ${input.summary},
+      ${JSON.stringify(input.technicalFacts)}::jsonb,
+      ${JSON.stringify(input.commercialFacts)}::jsonb,
+      ${JSON.stringify(input.pendingQuestions)}::jsonb,
+      ${input.lastIntent ?? null},
+      ${input.lastTopic ?? null},
+      ${input.updatedThroughMessageId ?? null}
+    )
+    on conflict (conversation_id) do update
+    set summary = excluded.summary,
+        technical_facts = excluded.technical_facts,
+        commercial_facts = excluded.commercial_facts,
+        pending_questions = excluded.pending_questions,
+        last_intent = excluded.last_intent,
+        last_topic = excluded.last_topic,
+        updated_through_message_id = excluded.updated_through_message_id,
+        updated_at = now()
+  `;
 }
 
 export async function getAutomaticReplyCandidate(input: {

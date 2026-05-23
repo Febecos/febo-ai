@@ -3,7 +3,13 @@ import path from "node:path";
 import OpenAI, { toFile } from "openai";
 import { z } from "zod";
 import { config, requireEnv } from "./config";
-import { AgentConversationMessage, listAgentConversationContext } from "./crm";
+import {
+  AgentConversationMessage,
+  ConversationMemory,
+  getConversationMemory,
+  listAgentConversationContext,
+  upsertConversationMemory
+} from "./crm";
 import { createLead, createSupportTicket, getProfileByPhone, platformFallbackContext, recordPlatformEvent } from "./febecos";
 import { SelectorPumpResult, suggestPump } from "./selector";
 
@@ -52,6 +58,42 @@ const quoteExtractionSchema = z.object({
 });
 
 type QuoteExtraction = z.infer<typeof quoteExtractionSchema>;
+
+const memorySchema = z.object({
+  summary: z.string(),
+  technicalFacts: z.object({
+    zona: z.string().nullable(),
+    uso: z.string().nullable(),
+    litrosDia: z.string().nullable(),
+    alturaTotal: z.string().nullable(),
+    profundidadPozo: z.string().nullable(),
+    nivelAgua: z.string().nullable(),
+    alturaTanque: z.string().nullable(),
+    distanciaHorizontal: z.string().nullable(),
+    diametro: z.string().nullable(),
+    equipoSugerido: z.string().nullable(),
+    precio: z.string().nullable(),
+    cuotas: z.string().nullable(),
+    stock: z.string().nullable(),
+    selectorOrigen: z.string().nullable(),
+    notasTecnicas: z.string().nullable()
+  }),
+  commercialFacts: z.object({
+    estadoCompra: z.string().nullable(),
+    intencion: z.string().nullable(),
+    asesorAsignado: z.string().nullable(),
+    presupuestoEnviado: z.string().nullable(),
+    formaPago: z.string().nullable(),
+    envioFactura: z.string().nullable(),
+    objeciones: z.string().nullable(),
+    proximoPaso: z.string().nullable()
+  }),
+  pendingQuestions: z.array(z.string()),
+  lastIntent: z.string().nullable(),
+  lastTopic: z.string().nullable()
+});
+
+type ConversationMemoryUpdate = z.infer<typeof memorySchema>;
 
 let openai: OpenAI | null = null;
 let operatingPrompt: string | null = null;
@@ -130,8 +172,10 @@ export async function runFebecosAgent(input: {
   const profile = await getProfileByPhone(input.phone);
   const fallback = platformFallbackContext();
   const prompt = await getOperatingPrompt();
-  const history = await listAgentConversationContext(input.conversationId, 30);
+  const history = await listAgentConversationContext(input.conversationId, 50);
+  const memory = await getConversationMemory(input.conversationId);
   const conversationHistory = buildConversationHistory(history);
+  const conversationMemory = buildConversationMemoryContext(memory);
   const selectorCheckoutResult = buildSelectorCheckoutResult(input.message);
 
   if (selectorCheckoutResult) {
@@ -158,7 +202,8 @@ export async function runFebecosAgent(input: {
 
   const quoteExtraction = await extractQuoteRequest({
     message: input.message,
-    history: conversationHistory
+    history: conversationHistory,
+    memory: conversationMemory
   });
   const selectorQuote = await getSelectorQuote(quoteExtraction);
 
@@ -179,7 +224,9 @@ export async function runFebecosAgent(input: {
     instructions: [
       prompt,
       "Regla critica de contexto: usa el historial de conversacion como fuente principal para entender el caso. No trates cada mensaje como si fuera el primer contacto.",
+      "Usa memoriaComercial como contexto persistente del contacto: datos tecnicos, cotizaciones, objeciones, asesor y proximo paso. Esa memoria pesa mas que un mensaje aislado.",
       "No repreguntes datos que el cliente ya dio en el historial. Si faltan datos, pregunta solo el dato faltante mas importante.",
+      "Si el ultimo mensaje puede ser continuidad de un caso viejo, menciona brevemente lo que venian hablando y pregunta si siguen con eso o si quiere arrancar algo nuevo.",
       "Responde al ultimo mensaje del cliente, pero manteniendo continuidad con lo ya conversado.",
       "Si el historial muestra que un humano ya tomo la conversacion o la IA esta pausada, no intentes cerrar ni avanzar por tu cuenta.",
       "Cuando el contexto incluya selectorQuote, usalo como unica fuente para modelo, precio, caudal, stock y cuotas. No digas que no tenes acceso al sistema.",
@@ -207,7 +254,8 @@ export async function runFebecosAgent(input: {
                 phone: input.phone,
                 name: input.contactName ?? null,
                 message: input.message,
-                history: conversationHistory
+                history: conversationHistory,
+                memoriaComercial: conversationMemory
               },
               febecos: {
                 profile,
@@ -304,6 +352,22 @@ function buildConversationHistory(history: AgentConversationMessage[]) {
     needsHuman: message.needs_human,
     at: message.created_at
   }));
+}
+
+function buildConversationMemoryContext(memory: ConversationMemory | null) {
+  if (!memory) {
+    return null;
+  }
+
+  return {
+    summary: memory.summary,
+    technicalFacts: memory.technical_facts,
+    commercialFacts: memory.commercial_facts,
+    pendingQuestions: memory.pending_questions,
+    lastIntent: memory.last_intent,
+    lastTopic: memory.last_topic,
+    updatedAt: memory.updated_at
+  };
 }
 
 function buildSelectorCheckoutResult(message: string): AgentResult | null {
@@ -411,12 +475,14 @@ function normalizeSpanish(value: string) {
 async function extractQuoteRequest(input: {
   message: string;
   history: ReturnType<typeof buildConversationHistory>;
+  memory: ReturnType<typeof buildConversationMemoryContext>;
 }): Promise<QuoteExtraction> {
   const response = await getOpenAI().responses.create({
     model: config.OPENAI_MODEL,
     instructions: [
       "Extrae datos para cotizar una bomba solar Febecos desde una conversacion de WhatsApp.",
       "No respondas al cliente. Solo devolve JSON.",
+      "Usa memoriaComercial para recuperar datos previos aunque no aparezcan en los ultimos mensajes.",
       "shouldQuote=true si el cliente pide precio/cotizacion/modelo o si ya dio datos suficientes para cotizar.",
       "hasEnoughData=true solo si hay altura/profundidad, consumo diario y diametro maximo de bomba compatible.",
       "Para ganado calcula litrosPerDay = animales * 60.",
@@ -438,7 +504,8 @@ async function extractQuoteRequest(input: {
             type: "input_text",
             text: JSON.stringify({
               ultimoMensaje: input.message,
-              historial: input.history
+              historial: input.history,
+              memoriaComercial: input.memory
             })
           }
         ]
@@ -491,9 +558,14 @@ async function extractQuoteRequest(input: {
 
 function normalizeQuoteExtraction(
   extraction: QuoteExtraction,
-  input: { message: string; history: ReturnType<typeof buildConversationHistory> }
+  input: {
+    message: string;
+    history: ReturnType<typeof buildConversationHistory>;
+    memory: ReturnType<typeof buildConversationMemoryContext>;
+  }
 ): QuoteExtraction {
   const sourceText = [
+    input.memory ? JSON.stringify(input.memory) : "",
     ...input.history
       .filter((message) => message.speaker === "cliente" || message.speaker === "humano_febecos")
       .map((message) => message.text),
@@ -770,6 +842,145 @@ function formatCoverage(value?: number) {
   }
 
   return `${Math.round(value)}%`;
+}
+
+export async function refreshConversationMemory(conversationId: string | null | undefined) {
+  if (!conversationId) {
+    return;
+  }
+
+  const previousMemory = await getConversationMemory(conversationId);
+  const history = await listAgentConversationContext(conversationId, 80);
+
+  if (!history.length) {
+    return;
+  }
+
+  const response = await getOpenAI().responses.create({
+    model: config.OPENAI_MODEL,
+    instructions: [
+      "Actualiza la memoria comercial persistente de una conversacion de WhatsApp de Febecos.",
+      "La memoria debe conservar datos importantes aunque no aparezcan en el ultimo mensaje.",
+      "No inventes datos tecnicos, precios, stock, cuotas ni nombres. Si un dato no esta, usa null.",
+      "Si hay una cotizacion anterior, equipo sugerido, zona, litros, altura, diametro, forma de pago, asesor o pendiente comercial, conservalo.",
+      "Si el cliente cambia de tema, no borres el caso anterior: resumilo y marca lastTopic con el tema actual.",
+      "pendingQuestions debe incluir solo preguntas o datos realmente pendientes para avanzar.",
+      "Devolve exclusivamente JSON valido con el esquema pedido."
+    ].join("\n"),
+    input: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: JSON.stringify({
+              memoriaAnterior: previousMemory ? buildConversationMemoryContext(previousMemory) : null,
+              mensajesRecientes: buildConversationHistory(history)
+            })
+          }
+        ]
+      }
+    ],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "febo_conversation_memory",
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["summary", "technicalFacts", "commercialFacts", "pendingQuestions", "lastIntent", "lastTopic"],
+          properties: {
+            summary: { type: "string" },
+            technicalFacts: {
+              type: "object",
+              additionalProperties: false,
+              required: [
+                "zona",
+                "uso",
+                "litrosDia",
+                "alturaTotal",
+                "profundidadPozo",
+                "nivelAgua",
+                "alturaTanque",
+                "distanciaHorizontal",
+                "diametro",
+                "equipoSugerido",
+                "precio",
+                "cuotas",
+                "stock",
+                "selectorOrigen",
+                "notasTecnicas"
+              ],
+              properties: nullableStringProperties([
+                "zona",
+                "uso",
+                "litrosDia",
+                "alturaTotal",
+                "profundidadPozo",
+                "nivelAgua",
+                "alturaTanque",
+                "distanciaHorizontal",
+                "diametro",
+                "equipoSugerido",
+                "precio",
+                "cuotas",
+                "stock",
+                "selectorOrigen",
+                "notasTecnicas"
+              ])
+            },
+            commercialFacts: {
+              type: "object",
+              additionalProperties: false,
+              required: [
+                "estadoCompra",
+                "intencion",
+                "asesorAsignado",
+                "presupuestoEnviado",
+                "formaPago",
+                "envioFactura",
+                "objeciones",
+                "proximoPaso"
+              ],
+              properties: nullableStringProperties([
+                "estadoCompra",
+                "intencion",
+                "asesorAsignado",
+                "presupuestoEnviado",
+                "formaPago",
+                "envioFactura",
+                "objeciones",
+                "proximoPaso"
+              ])
+            },
+            pendingQuestions: { type: "array", items: { type: "string" } },
+            lastIntent: { type: ["string", "null"] },
+            lastTopic: { type: ["string", "null"] }
+          }
+        },
+        strict: true
+      }
+    }
+  });
+
+  const memory = memorySchema.parse(JSON.parse(normalizeJson(response.output_text)));
+  await saveConversationMemory(conversationId, memory);
+}
+
+function nullableStringProperties(keys: string[]) {
+  return Object.fromEntries(keys.map((key) => [key, { type: ["string", "null"] }]));
+}
+
+async function saveConversationMemory(conversationId: string, memory: ConversationMemoryUpdate) {
+  await upsertConversationMemory({
+    conversationId,
+    summary: memory.summary,
+    technicalFacts: memory.technicalFacts,
+    commercialFacts: memory.commercialFacts,
+    pendingQuestions: memory.pendingQuestions,
+    lastIntent: memory.lastIntent,
+    lastTopic: memory.lastTopic
+  });
 }
 
 async function executeAgentAction(input: {

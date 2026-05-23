@@ -25,6 +25,7 @@ import {
   Mic,
   MoreVertical,
   Paperclip,
+  CircleHelp,
   RefreshCcw,
   Save,
   Search,
@@ -577,7 +578,10 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
             <p>Tiempo que FEBO espera antes de responder automaticamente. Sirve para juntar mensajes seguidos.</p>
           </div>
           <label className="field">
-            Segundos
+            <FieldHelpLabel
+              help="Cuantos segundos espera FEBO antes de responder. Ayuda a juntar varios mensajes seguidos y evitar respuestas repetidas."
+              label="Segundos"
+            />
             <input
               max={900}
               min={0}
@@ -605,7 +609,10 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
             <p>Si FEBO detecta un caliente y no hay regla de etiqueta mas especifica, lo asigna a este vendedor.</p>
           </div>
           <label className="field">
-            Usuario
+            <FieldHelpLabel
+              help="Vendedor que recibe los leads calientes cuando no hay otra regla mas especifica. No cambia conversaciones ya asignadas."
+              label="Usuario"
+            />
             <select
               onChange={(event) => {
                 setSettings((current) => upsertLocalSetting(current, "hot_lead_default_assignee_id", event.target.value || null));
@@ -634,7 +641,10 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
             <p>Datos editables del Flow que FEBO envia cuando el cliente necesita cargar datos tecnicos dentro de WhatsApp.</p>
           </div>
           <label className="field">
-            Flow ID publicado
+            <FieldHelpLabel
+              help="ID del Flow ya publicado en Meta. Cambiarlo aca no edita Meta; solo le dice a FEBO que Flow debe enviar."
+              label="Flow ID publicado"
+            />
             <input
               placeholder="Ej: 890862800687247"
               onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_id", event.target.value))}
@@ -642,35 +652,50 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
             />
           </label>
           <label className="field">
-            Pantalla inicial
+            <FieldHelpLabel
+              help="Nombre tecnico de la pantalla inicial del Flow. Tiene que existir dentro del Flow publicado en Meta."
+              label="Pantalla inicial"
+            />
             <input
               onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_screen", event.target.value))}
               value={selectorFlowScreen}
             />
           </label>
           <label className="field">
-            Titulo
+            <FieldHelpLabel
+              help="Titulo del mensaje interactivo que FEBO envia por WhatsApp antes de abrir el Flow."
+              label="Titulo"
+            />
             <input
               onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_header", event.target.value))}
               value={selectorFlowHeader}
             />
           </label>
           <label className="field">
-            Texto
+            <FieldHelpLabel
+              help="Texto que acompana el boton. Esto no cambia los campos del Flow, solo el mensaje que ve el cliente."
+              label="Texto"
+            />
             <textarea
               onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_body", event.target.value))}
               value={selectorFlowBody}
             />
           </label>
           <label className="field">
-            Pie
+            <FieldHelpLabel
+              help="Linea chica al pie del mensaje interactivo de WhatsApp. Sirve para marca o aclaracion breve."
+              label="Pie"
+            />
             <input
               onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_footer", event.target.value))}
               value={selectorFlowFooter}
             />
           </label>
           <label className="field">
-            Boton
+            <FieldHelpLabel
+              help="Texto del boton que abre el Flow en WhatsApp. Meta permite hasta 20 caracteres."
+              label="Boton"
+            />
             <input
               maxLength={20}
               onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_cta", event.target.value))}
@@ -700,6 +725,18 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
         </article>
       </div>
     </section>
+  );
+}
+
+function FieldHelpLabel({ help, label }: { help: string; label: string }) {
+  return (
+    <span className="field-help-label">
+      {label}
+      <span className="help-tip" tabIndex={0}>
+        <CircleHelp size={14} />
+        <span className="help-tip-box">{help}</span>
+      </span>
+    </span>
   );
 }
 

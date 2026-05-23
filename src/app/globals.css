@@ -2341,6 +2341,51 @@ button:disabled {
   gap: 8px;
 }
 
+.field-help-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.help-tip {
+  align-items: center;
+  border: 1px solid rgba(142, 213, 245, 0.4);
+  border-radius: 999px;
+  color: #c8ecff;
+  cursor: help;
+  display: inline-flex;
+  height: 18px;
+  justify-content: center;
+  position: relative;
+  width: 18px;
+}
+
+.help-tip-box {
+  background: #092f4f;
+  border: 1px solid rgba(142, 213, 245, 0.36);
+  border-radius: 8px;
+  bottom: calc(100% + 8px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
+  color: #eef8ff;
+  display: none;
+  font-size: 12px;
+  font-weight: 500;
+  left: 50%;
+  line-height: 1.35;
+  max-width: min(280px, 70vw);
+  min-width: 220px;
+  padding: 9px 10px;
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: normal;
+  z-index: 40;
+}
+
+.help-tip:hover .help-tip-box,
+.help-tip:focus .help-tip-box {
+  display: block;
+}
+
 .labels-panel .panel-title {
   align-items: flex-start;
   border-bottom: 1px solid rgba(142, 213, 245, 0.2);

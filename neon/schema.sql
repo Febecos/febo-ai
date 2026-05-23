@@ -168,6 +168,23 @@ create table if not exists handoffs (
   resolved_at timestamptz
 );
 
+create table if not exists follow_ups (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid references conversations(id) on delete cascade,
+  contact_id uuid references contacts(id) on delete set null,
+  phone text,
+  due_at timestamptz not null,
+  status text not null default 'proposed' check (status in ('proposed', 'pending', 'sent', 'cancelled')),
+  reason text not null default '',
+  source text not null default 'febo_ai',
+  created_by uuid references app_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists follow_ups_status_due_idx on follow_ups(status, due_at);
+create index if not exists follow_ups_conversation_idx on follow_ups(conversation_id, created_at desc);
+
 create table if not exists platform_events (
   id uuid primary key default gen_random_uuid(),
   contact_id uuid references contacts(id) on delete set null,

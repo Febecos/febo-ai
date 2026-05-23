@@ -1185,6 +1185,52 @@ export async function recordAgentReply(input: {
   }
 }
 
+export async function recordFollowUpSuggestion(input: {
+  contactId?: string | null;
+  threadId?: string | null;
+  phone?: string | null;
+  dueAt: Date;
+  reason: string;
+}) {
+  if (!isDbConfigured() || !input.threadId) {
+    return;
+  }
+
+  const sql = getSql();
+  const phone = input.phone ? normalizePhone(input.phone) : null;
+
+  await sql`
+    insert into follow_ups (conversation_id, contact_id, phone, due_at, status, reason, source)
+    select
+      ${input.threadId},
+      ${input.contactId ?? null},
+      ${phone},
+      ${input.dueAt.toISOString()},
+      'proposed',
+      ${input.reason},
+      'febo_ai'
+    where not exists (
+      select 1
+      from follow_ups
+      where conversation_id = ${input.threadId}
+        and status in ('proposed', 'pending')
+    )
+  `;
+
+  await sql`
+    insert into platform_events (contact_id, phone, event, payload)
+    values (
+      ${input.contactId ?? null},
+      ${phone},
+      'follow_up_proposed',
+      ${JSON.stringify({
+        dueAt: input.dueAt.toISOString(),
+        reason: input.reason
+      })}::jsonb
+    )
+  `;
+}
+
 export async function listConversations(filters: ConversationFilters = {}) {
   if (!isDbConfigured()) {
     return [];

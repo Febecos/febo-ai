@@ -5,6 +5,7 @@ import {
   getAutomaticReplyCandidate,
   getSettingValue,
   recordAgentReply,
+  recordFollowUpSuggestion,
   recordIncomingMessage,
   recordWhatsAppMessageStatuses,
   saveMessageMedia,
@@ -491,6 +492,18 @@ async function sendAutomaticReply(input: {
       waMessageId: getSentMessageId(sent),
       replyOptions: sentReplyOptions
     });
+
+    const followUpDueAt = inferDeferredFollowUpDueAt(effectiveAgentMessage);
+    if (result.consultype === "seguimiento" && followUpDueAt) {
+      await recordFollowUpSuggestion({
+        contactId: stored.contactId,
+        threadId: stored.threadId,
+        phone: message.from,
+        dueAt: followUpDueAt,
+        reason: "Cliente postergo la decision y FEBO ofrecio seguimiento activo."
+      });
+    }
+
     await refreshMemorySafely(stored.threadId);
   } catch (error) {
     console.error("No pudimos enviar o registrar la respuesta automatica.", error);
@@ -510,6 +523,37 @@ async function waitBeforeAutomaticReply() {
   const delaySeconds = Number(configuredDelay);
   const safeDelaySeconds = Number.isFinite(delaySeconds) && delaySeconds >= 0 ? delaySeconds : DEFAULT_AUTO_REPLY_DELAY_SECONDS;
   await sleep(safeDelaySeconds * 1000);
+}
+
+function inferDeferredFollowUpDueAt(message: string) {
+  const normalized = message
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (/\b(par\s+de\s+meses|dos\s+meses|2\s+meses)\b/.test(normalized)) {
+    return addDays(new Date(), 60);
+  }
+
+  if (/\b(tres\s+meses|3\s+meses)\b/.test(normalized)) {
+    return addDays(new Date(), 90);
+  }
+
+  if (/\b(un\s+mes|1\s+mes)\b/.test(normalized)) {
+    return addDays(new Date(), 30);
+  }
+
+  if (/\b(en\s+unos\s+meses|mas\s+adelante|proxima\s+temporada|invierno|cuando\s+junte|cuando\s+tenga\s+la\s+plata)\b/.test(normalized)) {
+    return addDays(new Date(), 90);
+  }
+
+  return null;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
 }
 
 function sleep(milliseconds: number) {

@@ -4,7 +4,16 @@ import { getCurrentUser } from "@/lib/auth";
 import { listAppSettings, upsertAppSetting } from "@/lib/crm";
 
 const settingSchema = z.object({
-  key: z.enum(["auto_reply_delay_seconds", "hot_lead_default_assignee_id"]),
+  key: z.enum([
+    "auto_reply_delay_seconds",
+    "hot_lead_default_assignee_id",
+    "whatsapp_selector_flow_id",
+    "whatsapp_selector_flow_screen",
+    "whatsapp_selector_flow_header",
+    "whatsapp_selector_flow_body",
+    "whatsapp_selector_flow_footer",
+    "whatsapp_selector_flow_cta"
+  ]),
   value: z.union([z.string(), z.number(), z.null()])
 });
 
@@ -47,6 +56,18 @@ export async function POST(request: NextRequest) {
 
   if (parsed.data.key === "hot_lead_default_assignee_id" && value === "") {
     value = null;
+  }
+
+  if (parsed.data.key.startsWith("whatsapp_selector_flow_")) {
+    value = String(value ?? "").trim();
+
+    if (!value) {
+      return NextResponse.json({ error: "El valor no puede quedar vacio." }, { status: 400 });
+    }
+
+    if (String(value).length > 700) {
+      return NextResponse.json({ error: "El texto es demasiado largo para esta configuracion." }, { status: 400 });
+    }
   }
 
   await upsertAppSetting({

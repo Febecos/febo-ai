@@ -212,8 +212,25 @@ create table if not exists app_settings (
 insert into app_settings (key, value, label, description)
 values
   ('auto_reply_delay_seconds', '90'::jsonb, 'Demora de respuesta IA', 'Segundos que FEBO espera antes de responder automaticamente.'),
-  ('hot_lead_default_assignee_id', 'null'::jsonb, 'Vendedor por defecto de calientes', 'Usuario asignado por defecto para leads calientes si no hay regla especifica.')
+  ('hot_lead_default_assignee_id', 'null'::jsonb, 'Vendedor por defecto de calientes', 'Usuario asignado por defecto para leads calientes si no hay regla especifica.'),
+  ('whatsapp_selector_flow_id', '"890862800687247"'::jsonb, 'Flow ID del selector', 'Identificador publicado del WhatsApp Flow usado para abrir el selector.'),
+  ('whatsapp_selector_flow_screen', '"DATOS_CAMPO"'::jsonb, 'Pantalla inicial del Flow', 'Screen ID inicial del WhatsApp Flow del selector.'),
+  ('whatsapp_selector_flow_header', '"Selector Febecos"'::jsonb, 'Titulo del Flow', 'Texto de encabezado del mensaje interactivo del selector.'),
+  ('whatsapp_selector_flow_body', '"Completa estos datos dentro de WhatsApp y te sugerimos el equipo de bombeo solar adecuado."'::jsonb, 'Texto del Flow', 'Cuerpo del mensaje que acompana el boton del selector.'),
+  ('whatsapp_selector_flow_footer', '"Febecos bombas solares"'::jsonb, 'Pie del Flow', 'Footer del mensaje interactivo del selector.'),
+  ('whatsapp_selector_flow_cta', '"Abrir selector"'::jsonb, 'Boton del Flow', 'Texto del boton que abre el selector.')
 on conflict (key) do nothing;
+
+insert into app_settings (key, value, label, description)
+values ('whatsapp_selector_flow_id', '"890862800687247"'::jsonb, 'Flow ID del selector', 'Identificador publicado del WhatsApp Flow usado para abrir el selector.')
+on conflict (key) do update
+set value = case
+      when app_settings.value = '""'::jsonb or app_settings.value = 'null'::jsonb then excluded.value
+      else app_settings.value
+    end,
+    label = excluded.label,
+    description = excluded.description,
+    updated_at = now();
 
 insert into label_definitions (slug, name, color, instructions, sort_order)
 values

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { config, requireEnv } from "./config";
+import { getSettingValue } from "./crm";
 
 export type WhatsAppTextMessage = {
   from: string;
@@ -484,7 +485,20 @@ export async function sendWhatsAppSelectorFlow(input: {
 }) {
   const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
   const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
-  const flowId = requireEnv("WHATSAPP_SELECTOR_FLOW_ID");
+  const configuredFlowId = await getSettingValue("whatsapp_selector_flow_id", "");
+  const flowId = configuredFlowId || config.WHATSAPP_SELECTOR_FLOW_ID || "";
+  const screen = (await getSettingValue("whatsapp_selector_flow_screen", "")) || config.WHATSAPP_SELECTOR_FLOW_SCREEN;
+  const header = (await getSettingValue("whatsapp_selector_flow_header", "")) || "Selector Febecos";
+  const body = (await getSettingValue(
+    "whatsapp_selector_flow_body",
+    ""
+  )) || "Completa estos datos dentro de WhatsApp y te sugerimos el equipo de bombeo solar adecuado.";
+  const footer = (await getSettingValue("whatsapp_selector_flow_footer", "")) || "Febecos bombas solares";
+  const cta = (await getSettingValue("whatsapp_selector_flow_cta", "")) || "Abrir selector";
+
+  if (!flowId) {
+    throw new Error("Falta configurar el Flow ID del selector de WhatsApp.");
+  }
 
   const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
     method: "POST",
@@ -501,13 +515,13 @@ export async function sendWhatsAppSelectorFlow(input: {
         type: "flow",
         header: {
           type: "text",
-          text: "Selector Febecos"
+          text: header
         },
         body: {
-          text: "Completa estos datos dentro de WhatsApp y te sugerimos el equipo de bombeo solar adecuado."
+          text: body
         },
         footer: {
-          text: "Febecos bombas solares"
+          text: footer
         },
         action: {
           name: "flow",
@@ -518,10 +532,10 @@ export async function sendWhatsAppSelectorFlow(input: {
               source: "febo-ai",
               conversationId: input.conversationId
             }),
-            flow_cta: "Abrir selector",
+            flow_cta: cta,
             flow_action: "navigate",
             flow_action_payload: {
-              screen: config.WHATSAPP_SELECTOR_FLOW_SCREEN,
+              screen,
               data: {
                 nombre: input.contactName ?? "",
                 origen: "febo-ai"

@@ -75,6 +75,15 @@ type AgentTestResponse = {
 };
 
 type ToolKey = "conversations" | "metrics" | "contacts" | "crm" | "templates" | "labels" | "settings" | "users" | "ai";
+type SettingKey =
+  | "auto_reply_delay_seconds"
+  | "hot_lead_default_assignee_id"
+  | "whatsapp_selector_flow_id"
+  | "whatsapp_selector_flow_screen"
+  | "whatsapp_selector_flow_header"
+  | "whatsapp_selector_flow_body"
+  | "whatsapp_selector_flow_footer"
+  | "whatsapp_selector_flow_cta";
 
 const CONSULTYPE_OPTIONS = [
   { value: "caliente", label: "Caliente" },
@@ -516,7 +525,7 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
     return settings.find((setting) => setting.key === key)?.value ?? fallback;
   }
 
-  async function saveSetting(key: "auto_reply_delay_seconds" | "hot_lead_default_assignee_id", value: string | number | null) {
+  async function saveSetting(key: SettingKey, value: string | number | null) {
     setSavingKey(key);
     setMessage("");
 
@@ -539,6 +548,17 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
 
   const delayValue = Number(getValue("auto_reply_delay_seconds", 90));
   const hotLeadAssignee = String(getValue("hot_lead_default_assignee_id", "") ?? "");
+  const selectorFlowId = String(getValue("whatsapp_selector_flow_id", "") ?? "");
+  const selectorFlowScreen = String(getValue("whatsapp_selector_flow_screen", "DATOS_CAMPO") ?? "DATOS_CAMPO");
+  const selectorFlowHeader = String(getValue("whatsapp_selector_flow_header", "Selector Febecos") ?? "Selector Febecos");
+  const selectorFlowBody = String(
+    getValue(
+      "whatsapp_selector_flow_body",
+      "Completa estos datos dentro de WhatsApp y te sugerimos el equipo de bombeo solar adecuado."
+    ) ?? ""
+  );
+  const selectorFlowFooter = String(getValue("whatsapp_selector_flow_footer", "Febecos bombas solares") ?? "Febecos bombas solares");
+  const selectorFlowCta = String(getValue("whatsapp_selector_flow_cta", "Abrir selector") ?? "Abrir selector");
 
   return (
     <section className="admin-panel settings-panel">
@@ -606,6 +626,77 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
           >
             {savingKey === "hot_lead_default_assignee_id" ? "Guardando" : "Guardar vendedor"}
           </button>
+        </article>
+
+        <article className="settings-card settings-card-wide">
+          <div>
+            <h3>WhatsApp Flow del selector</h3>
+            <p>Datos editables del Flow que FEBO envia cuando el cliente necesita cargar datos tecnicos dentro de WhatsApp.</p>
+          </div>
+          <label className="field">
+            Flow ID publicado
+            <input
+              placeholder="Ej: 890862800687247"
+              onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_id", event.target.value))}
+              value={selectorFlowId}
+            />
+          </label>
+          <label className="field">
+            Pantalla inicial
+            <input
+              onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_screen", event.target.value))}
+              value={selectorFlowScreen}
+            />
+          </label>
+          <label className="field">
+            Titulo
+            <input
+              onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_header", event.target.value))}
+              value={selectorFlowHeader}
+            />
+          </label>
+          <label className="field">
+            Texto
+            <textarea
+              onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_body", event.target.value))}
+              value={selectorFlowBody}
+            />
+          </label>
+          <label className="field">
+            Pie
+            <input
+              onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_footer", event.target.value))}
+              value={selectorFlowFooter}
+            />
+          </label>
+          <label className="field">
+            Boton
+            <input
+              maxLength={20}
+              onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_cta", event.target.value))}
+              value={selectorFlowCta}
+            />
+          </label>
+          <div className="settings-actions-row">
+            {[
+              ["whatsapp_selector_flow_id", selectorFlowId],
+              ["whatsapp_selector_flow_screen", selectorFlowScreen],
+              ["whatsapp_selector_flow_header", selectorFlowHeader],
+              ["whatsapp_selector_flow_body", selectorFlowBody],
+              ["whatsapp_selector_flow_footer", selectorFlowFooter],
+              ["whatsapp_selector_flow_cta", selectorFlowCta]
+            ].map(([key, value]) => (
+              <button
+                className="secondary compact"
+                disabled={savingKey === key}
+                key={key}
+                onClick={() => void saveSetting(key as SettingKey, value)}
+                type="button"
+              >
+                {savingKey === key ? "Guardando" : "Guardar"}
+              </button>
+            ))}
+          </div>
         </article>
       </div>
     </section>

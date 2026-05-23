@@ -2331,6 +2331,16 @@ button:disabled {
   margin: 0;
 }
 
+.settings-card-wide {
+  grid-column: 1 / -1;
+}
+
+.settings-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .labels-panel .panel-title {
   align-items: flex-start;
   border-bottom: 1px solid rgba(142, 213, 245, 0.2);

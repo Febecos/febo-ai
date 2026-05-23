@@ -1083,12 +1083,12 @@ function LabelsPanel({
 }
 
 const CRM_BOARD_COLUMNS = [
-  { id: "destacados", title: "Destacados", status: null },
-  { id: "nuevo", title: "NUEVO", status: "open" },
-  { id: "contacto", title: "EN CONTACTO", status: "handoff" },
-  { id: "cotizado", title: "COTIZADO", status: "quoted" },
-  { id: "cerrado", title: "CERRADO", status: "closed" },
-  { id: "no-avanza", title: "NO AVANZA", status: "lost" }
+  { id: "destacados", title: "Destacados", status: null, consultype: null },
+  { id: "nuevo", title: "NUEVO", status: "hot", consultype: "caliente" },
+  { id: "contacto", title: "EN CONTACTO", status: "handoff", consultype: "en-contacto" },
+  { id: "cotizado", title: "COTIZADO", status: "quoted", consultype: "cotizado" },
+  { id: "cerrado", title: "CERRADO", status: "closed", consultype: "cerrado" },
+  { id: "no-avanza", title: "NO AVANZA", status: "lost", consultype: "no-avanza" }
 ] as const;
 
 function CrmBoardPanel({
@@ -1139,8 +1139,8 @@ function CrmBoardPanel({
       return;
     }
 
-    const nextStatus = column.id === "nuevo" ? "hot" : column.status;
-    const nextConsultype = column.id === "nuevo" ? "caliente" : "otro";
+    const nextStatus = column.status;
+    const nextConsultype = column.consultype;
     const previous = conversations;
     const next = conversations.map((conversation) =>
       conversation.id === conversationId
@@ -1272,7 +1272,7 @@ function CrmBoardPanel({
                   <strong>{conversation.display_name || conversation.phone}</strong>
                   <div className="crm-card-tags">
                     <span>{getCrmPlatformLabel(conversation)}</span>
-                    {isHotCrmConversation(conversation) ? <span className="hot">Caliente</span> : null}
+                    <span className={isHotCrmConversation(conversation) ? "hot" : ""}>{getCrmLabelTitle(conversation)}</span>
                   </div>
                   <div className="crm-card-meta">
                     <span>Ult: {formatMessageTime(conversation.last_message_at)}</span>
@@ -1321,7 +1321,7 @@ function CrmBoardPanel({
 
 function getCrmColumnCards(columnId: string, conversations: ConversationSummary[], favoriteIds: string[]) {
   const boardConversations = conversations.filter(
-    (conversation) => favoriteIds.includes(conversation.id) || isHotCrmConversation(conversation)
+    (conversation) => favoriteIds.includes(conversation.id) || isCrmPipelineConversation(conversation)
   );
 
   if (columnId === "nuevo") {
@@ -1367,6 +1367,14 @@ function isHotCrmConversation(conversation: ConversationSummary) {
   return conversation.consultype === "caliente" || conversation.status === "hot";
 }
 
+function isCrmPipelineConversation(conversation: ConversationSummary) {
+  const pipelineStatuses = new Set(["hot", "handoff", "quoted", "closed", "lost"]);
+  const pipelineLabels = new Set<string>(
+    CRM_BOARD_COLUMNS.flatMap((column) => (column.consultype ? [column.consultype] : []))
+  );
+  return pipelineStatuses.has(conversation.status) || pipelineLabels.has(conversation.consultype);
+}
+
 function isConversationUnread(conversation: ConversationSummary) {
   return Boolean(conversation.unread || conversation.unread_count > 0);
 }
@@ -1381,6 +1389,10 @@ function canUserSeeCrmConversation(conversation: ConversationSummary, currentUse
 
 function getCrmPlatformLabel(conversation: ConversationSummary) {
   return conversation.platform || "WhatsApp";
+}
+
+function getCrmLabelTitle(conversation: ConversationSummary) {
+  return humanizeTemplateName(conversation.consultype || getCrmBoardColumnId(conversation));
 }
 
 function ContactsPanel({

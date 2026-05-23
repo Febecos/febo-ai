@@ -346,6 +346,60 @@ async function getHotLeadAssigneeId() {
   return fallback[0]?.id ?? null;
 }
 
+async function findActiveUserByName(name: string | null | undefined) {
+  const needle = normalizeSearchText(name);
+
+  if (!needle) {
+    return null;
+  }
+
+  const users = await getUsers();
+  return (
+    users.find((user) => normalizeSearchText(user.full_name) === needle) ??
+    users.find((user) => normalizeSearchText(user.full_name).split(" ").includes(needle)) ??
+    users.find((user) => normalizeSearchText(user.full_name).includes(needle)) ??
+    null
+  );
+}
+
+function normalizeSearchText(value: string | null | undefined) {
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s@._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractAssigneeNameFromInstructions(instructions: string) {
+  const normalized = normalizeSearchText(instructions);
+
+  if (!/(transfer|asign|deriv|pasar)/.test(normalized)) {
+    return null;
+  }
+
+  const match = normalized.match(/(?:transferir|transfiere|transfiera|asignar|asigna|asigne|derivar|deriva|derive|pasar|pasa|pase)\s+(?:a|al|con)\s+([a-z0-9\s._-]{2,50})/);
+  const candidate = match?.[1]
+    ?.replace(/\b(?:cuando|si|y|lo|la|el|conversacion|chat|contacto|vendedor|asesor|tecnico)\b.*$/g, "")
+    .trim();
+
+  return candidate || null;
+}
+
+async function getLabelAutomationAssigneeId(consultype: string) {
+  const labels = await listLabelDefinitions(true);
+  const label = labels.find((item) => item.active && item.slug === consultype);
+  const assigneeName = extractAssigneeNameFromInstructions(label?.instructions ?? "");
+
+  if (!assigneeName) {
+    return null;
+  }
+
+  return (await findActiveUserByName(assigneeName))?.id ?? null;
+}
+
 export async function getAdminUsers() {
   if (!isDbConfigured()) {
     return [];
@@ -863,7 +917,9 @@ export async function recordAgentReply(input: {
 
   const sql = getSql();
   const consultype = normalizeConsultype(input.intent);
-  const humanAssigneeId = input.needsHuman || consultype === "caliente" ? await getHotLeadAssigneeId() : null;
+  const labelAssigneeId = await getLabelAutomationAssigneeId(consultype);
+  const needsHuman = input.needsHuman || Boolean(labelAssigneeId);
+  const humanAssigneeId = labelAssigneeId ?? (needsHuman || consultype === "caliente" ? await getHotLeadAssigneeId() : null);
 
   const metadata = input.replyOptions?.length
     ? JSON.stringify({ source: "febo_ai", reply_options: input.replyOptions })
@@ -878,7 +934,7 @@ export async function recordAgentReply(input: {
       ${input.waMessageId ?? null},
       ${input.answer},
       ${consultype},
-      ${input.needsHuman},
+      ${needsHuman},
       ${metadata}::jsonb
     )
   `;
@@ -894,9 +950,9 @@ export async function recordAgentReply(input: {
   await sql`
     update conversations
     set last_message_at = now(),
-        ai_enabled = case when ${input.needsHuman} then false else ai_enabled end,
+        ai_enabled = case when ${needsHuman} then false else ai_enabled end,
         status = case
-          when ${input.needsHuman} then 'handoff'
+          when ${needsHuman} then 'handoff'
           when ${consultype} = 'caliente' then 'hot'
           else status
         end,
@@ -905,7 +961,7 @@ export async function recordAgentReply(input: {
     where id = ${input.threadId}
   `;
 
-  if (input.needsHuman && input.createHandoff !== false) {
+  if (needsHuman && input.createHandoff !== false) {
     await sql`
       insert into handoffs (conversation_id, contact_id, reason, status, assigned_to)
       values (${input.threadId}, ${input.contactId}, ${input.intent}, 'assigned', ${humanAssigneeId}::uuid)

@@ -32,7 +32,7 @@ const consultypeValues = [
 const agentSchema = z.object({
   respuesta: z.string(),
   sentimiento: z.enum(["positivo", "neutral", "preocupado", "molesto"]),
-  consultype: z.enum(consultypeValues),
+  consultype: z.string(),
   escalar: z.boolean(),
   nombre: z.string().nullable(),
   imagenes: z.array(z.string()),
@@ -176,6 +176,9 @@ export async function runFebecosAgent(input: {
   const history = await listAgentConversationContext(input.conversationId, 50);
   const memory = await getConversationMemory(input.conversationId);
   const labelDefinitions = await listLabelDefinitions();
+  const allowedConsultypes = Array.from(
+    new Set([...consultypeValues, ...labelDefinitions.filter((label) => label.active).map((label) => label.slug)])
+  );
   const conversationHistory = buildConversationHistory(history);
   const conversationMemory = buildConversationMemoryContext(memory);
   const selectorCheckoutResult = buildSelectorCheckoutResult(input.message);
@@ -228,6 +231,7 @@ export async function runFebecosAgent(input: {
       "Regla critica de contexto: usa el historial de conversacion como fuente principal para entender el caso. No trates cada mensaje como si fuera el primer contacto.",
       "Usa memoriaComercial como contexto persistente del contacto: datos tecnicos, cotizaciones, objeciones, asesor y proximo paso. Esa memoria pesa mas que un mensaje aislado.",
       "Usa etiquetasDisponibles para entender que significa cada etiqueta operativa y como deberia clasificarse o priorizarse el contacto.",
+      "El campo consultype debe ser el slug exacto de una etiqueta activa de etiquetasDisponibles o uno de los tipos base permitidos. Si una etiqueta indica transferir/asignar a un vendedor, usa ese slug y deja escalar=true.",
       "No repreguntes datos que el cliente ya dio en el historial. Si faltan datos, pregunta solo el dato faltante mas importante.",
       "Si el ultimo mensaje puede ser continuidad de un caso viejo, menciona brevemente lo que venian hablando y pregunta si siguen con eso o si quiere arrancar algo nuevo.",
       "Responde al ultimo mensaje del cliente, pero manteniendo continuidad con lo ya conversado.",
@@ -273,7 +277,7 @@ export async function runFebecosAgent(input: {
               outputSchema: {
                 respuesta: "respuesta lista para enviar por WhatsApp",
                 sentimiento: "positivo | neutral | preocupado | molesto",
-                consultype: consultypeValues.join(" | "),
+                consultype: allowedConsultypes.join(" | "),
                 escalar: "boolean",
                 nombre: "nombre detectado o null",
                 imagenes: "array de ids/urls de imagenes a enviar, si aplica",
@@ -312,7 +316,7 @@ export async function runFebecosAgent(input: {
             },
             consultype: {
               type: "string",
-              enum: [...consultypeValues]
+              description: "Slug exacto de una etiqueta activa o tipo base permitido."
             },
             escalar: { type: "boolean" },
             nombre: { type: ["string", "null"] },

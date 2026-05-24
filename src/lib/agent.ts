@@ -405,6 +405,31 @@ function buildSelectorCheckoutResult(message: string): AgentResult | null {
     installments ? `y referencia de 6 cuotas de ${installments}` : null
   ].filter(Boolean);
   const isEvaluatingOnly = normalized.includes("solo evaluando");
+  const needsCustomAdvisor =
+    normalized.includes("solucion a medida") ||
+    normalized.includes("multi-bomba") ||
+    normalized.includes("multi bomba") ||
+    normalized.includes("con tanque") ||
+    normalized.includes("me pueden asesorar") ||
+    normalized.includes("pueden asesorar") ||
+    normalized.includes("stock cubre solo");
+
+  if (needsCustomAdvisor) {
+    return {
+      respuesta: [
+        `Perfecto, recibimos tu seleccion del selector de Febecos. ${summaryParts.join(", ")}.`,
+        "Como el caso requiere solucion a medida, ya lo derivamos a un asesor de Febecos para que lo revise bien. Cuando este disponible te va a responder por este mismo WhatsApp."
+      ].join("\n\n"),
+      sentimiento: "positivo",
+      consultype: "caliente",
+      escalar: true,
+      nombre: null,
+      imagenes: [],
+      archivos: [],
+      action: "create_ticket",
+      actionSubject: "solucion a medida desde selector Febecos"
+    };
+  }
 
   return {
     respuesta: [

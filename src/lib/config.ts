@@ -22,7 +22,12 @@ const schema = z.object({
   FEBECOS_WEBHOOK_TOKEN: z.string().optional(),
   FEBECOS_PUBLIC_URL: z.string().url().default("https://febecos.com"),
   FEBECOS_HUMAN_SUPPORT_LABEL: z.string().default("Equipo FEBECOS"),
-  FEBECOS_SELECTOR_API_BASE_URL: z.string().url().default("https://selector.febecos.com/api")
+  FEBECOS_SELECTOR_API_BASE_URL: z.string().url().default("https://selector.febecos.com/api"),
+  CLOUDFLARE_R2_ACCOUNT_ID: z.string().optional(),
+  CLOUDFLARE_R2_ACCESS_KEY_ID: z.string().optional(),
+  CLOUDFLARE_R2_SECRET_ACCESS_KEY: z.string().optional(),
+  CLOUDFLARE_R2_BUCKET: z.string().optional(),
+  CLOUDFLARE_R2_PUBLIC_BASE_URL: z.string().url().optional()
 });
 
 export const config = schema.parse(process.env);

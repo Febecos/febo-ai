@@ -23,6 +23,9 @@ export type ConversationSummary = {
   status: string;
   ai_enabled: boolean;
   last_message_at: string;
+  account_id: string | null;
+  account_name: string | null;
+  channel: string;
   contact_id: string;
   phone: string;
   display_name: string | null;
@@ -40,6 +43,9 @@ export type ConversationSummary = {
 export type ContactSummary = {
   id: string;
   phone: string;
+  account_id: string | null;
+  account_name: string | null;
+  external_user_id: string | null;
   display_name: string | null;
   platform: string;
   contact_type: string;
@@ -189,6 +195,8 @@ export type ConversationMessage = {
   media_id: string | null;
   media_mime_type: string | null;
   media_filename: string | null;
+  media_url: string | null;
+  media_storage_provider: string | null;
   created_by: string | null;
   created_by_name: string | null;
 };
@@ -853,6 +861,10 @@ export async function recordIncomingMessage(input: {
   waMessageId?: string;
   text: string;
   contactName?: string;
+  channel?: "whatsapp" | "instagram" | "facebook" | "tiktok";
+  accountSlug?: string;
+  externalUserId?: string;
+  externalMessageId?: string;
 }) {
   if (!isDbConfigured()) {
     return { contactId: null, threadId: null, messageId: null, aiEnabled: false, duplicate: false };
@@ -860,7 +872,11 @@ export async function recordIncomingMessage(input: {
 
   const sql = getSql();
 
-  if (input.waMessageId) {
+  const channel = input.channel ?? "whatsapp";
+  const accountSlug = input.accountSlug ?? "whatsapp-principal";
+  const externalMessageId = input.externalMessageId ?? input.waMessageId ?? null;
+
+  if (externalMessageId) {
     const existingMessage = (await sql`
       select
         m.id::text as message_id,
@@ -870,7 +886,8 @@ export async function recordIncomingMessage(input: {
       from messages m
       join conversations c on c.id = m.conversation_id
       left join contacts ct on ct.id = m.contact_id
-      where m.wa_message_id = ${input.waMessageId}
+      where m.external_message_id = ${externalMessageId}
+         or m.wa_message_id = ${input.waMessageId ?? null}
       limit 1
     `) as Array<{ message_id: string; thread_id: string; ai_enabled: boolean; contact_id: string | null }>;
 
@@ -886,11 +903,22 @@ export async function recordIncomingMessage(input: {
   }
 
   const phone = normalizePhone(input.phone);
+  const externalUserId = input.externalUserId ?? phone;
   const contacts = (await sql`
-    insert into contacts (phone, display_name, platform, last_seen_at)
-    values (${phone}, ${input.contactName ?? null}, 'whatsapp', now())
+    insert into contacts (phone, account_id, external_user_id, display_name, platform, last_seen_at)
+    values (
+      ${phone},
+      (select id from channel_accounts where slug = ${accountSlug} limit 1),
+      ${externalUserId},
+      ${input.contactName ?? null},
+      ${channel},
+      now()
+    )
     on conflict (phone) do update
     set display_name = coalesce(excluded.display_name, contacts.display_name),
+        account_id = coalesce(contacts.account_id, excluded.account_id),
+        external_user_id = coalesce(contacts.external_user_id, excluded.external_user_id),
+        platform = coalesce(nullif(contacts.platform, ''), excluded.platform),
         last_seen_at = now(),
         updated_at = now()
     returning id
@@ -910,8 +938,15 @@ export async function recordIncomingMessage(input: {
     existing[0] ??
     (
       (await sql`
-        insert into conversations (contact_id, status, last_message_at, ai_enabled)
-        values (${contactId}, 'open', now(), true)
+        insert into conversations (contact_id, account_id, channel, status, last_message_at, ai_enabled)
+        values (
+          ${contactId},
+          (select account_id from contacts where id = ${contactId}),
+          ${channel},
+          'open',
+          now(),
+          true
+        )
         returning id, ai_enabled
       `) as Array<{ id: string; ai_enabled: boolean }>
     )[0];
@@ -919,17 +954,27 @@ export async function recordIncomingMessage(input: {
   const aiEnabled = created.ai_enabled;
 
   const inserted = (await sql`
-    insert into messages (conversation_id, contact_id, direction, wa_message_id, body)
-    values (${threadId}, ${contactId}, 'inbound', ${input.waMessageId ?? null}, ${input.text})
+    insert into messages (conversation_id, contact_id, account_id, channel, direction, wa_message_id, external_message_id, body)
+    values (
+      ${threadId},
+      ${contactId},
+      (select account_id from conversations where id = ${threadId}),
+      ${channel},
+      'inbound',
+      ${input.waMessageId ?? null},
+      ${externalMessageId},
+      ${input.text}
+    )
     on conflict (wa_message_id) where wa_message_id is not null do nothing
     returning id::text
   `) as Array<{ id: string }>;
 
-  if (!inserted[0] && input.waMessageId) {
+  if (!inserted[0] && externalMessageId) {
     const existingMessage = (await sql`
       select id::text
       from messages
-      where wa_message_id = ${input.waMessageId}
+      where external_message_id = ${externalMessageId}
+         or wa_message_id = ${input.waMessageId ?? null}
       limit 1
     `) as Array<{ id: string }>;
 
@@ -985,11 +1030,24 @@ export async function recordSelectorCheckoutLead(input: SelectorCheckoutLead) {
   });
 
   const contacts = (await sql`
-    insert into contacts (phone, display_name, platform, consultype, sentiment, source, assigned_to, last_seen_at)
-    values (${phone}, null, 'whatsapp', 'caliente', 'positivo', 'selector', ${assigneeId}::uuid, now())
+    insert into contacts (phone, account_id, external_user_id, display_name, platform, consultype, sentiment, source, assigned_to, last_seen_at)
+    values (
+      ${phone},
+      (select id from channel_accounts where slug = 'whatsapp-principal' limit 1),
+      ${phone},
+      null,
+      'whatsapp',
+      'caliente',
+      'positivo',
+      'selector',
+      ${assigneeId}::uuid,
+      now()
+    )
     on conflict (phone) do update
     set consultype = 'caliente',
         sentiment = 'positivo',
+        account_id = coalesce(contacts.account_id, excluded.account_id),
+        external_user_id = coalesce(contacts.external_user_id, excluded.external_user_id),
         source = coalesce(contacts.source, 'selector'),
         assigned_to = coalesce(contacts.assigned_to, ${assigneeId}::uuid),
         last_seen_at = now(),
@@ -1011,15 +1069,35 @@ export async function recordSelectorCheckoutLead(input: SelectorCheckoutLead) {
     existingConversation[0] ??
     (
       (await sql`
-        insert into conversations (contact_id, status, last_message_at, ai_enabled, assigned_to)
-        values (${contactId}, 'handoff', now(), false, ${assigneeId}::uuid)
+        insert into conversations (contact_id, account_id, channel, status, last_message_at, ai_enabled, assigned_to)
+        values (
+          ${contactId},
+          (select account_id from contacts where id = ${contactId}),
+          'whatsapp',
+          'handoff',
+          now(),
+          false,
+          ${assigneeId}::uuid
+        )
         returning id::text
       `) as Array<{ id: string }>
     )[0];
 
   const inserted = (await sql`
-    insert into messages (conversation_id, contact_id, direction, wa_message_id, body, consultype, needs_human, metadata)
-    values (${conversation.id}, ${contactId}, 'inbound', ${eventId}, ${body}, 'caliente', true, ${payload}::jsonb)
+    insert into messages (conversation_id, contact_id, account_id, channel, direction, wa_message_id, external_message_id, body, consultype, needs_human, metadata)
+    values (
+      ${conversation.id},
+      ${contactId},
+      (select account_id from conversations where id = ${conversation.id}),
+      'whatsapp',
+      'inbound',
+      ${eventId},
+      ${eventId},
+      ${body},
+      'caliente',
+      true,
+      ${payload}::jsonb
+    )
     returning id::text
   `) as Array<{ id: string }>;
 
@@ -1118,11 +1196,14 @@ export async function recordAgentReply(input: {
     : JSON.stringify({ source: "febo_ai" });
 
   await sql`
-    insert into messages (conversation_id, contact_id, direction, wa_message_id, body, consultype, needs_human, metadata)
+    insert into messages (conversation_id, contact_id, account_id, channel, direction, wa_message_id, external_message_id, body, consultype, needs_human, metadata)
     values (
       ${input.threadId},
       ${input.contactId},
+      (select account_id from conversations where id = ${input.threadId}),
+      (select channel from conversations where id = ${input.threadId}),
       'outbound',
+      ${input.waMessageId ?? null},
       ${input.waMessageId ?? null},
       ${input.answer},
       ${consultype},
@@ -1261,10 +1342,13 @@ export async function listConversations(filters: ConversationFilters = {}) {
       c.ai_enabled,
       c.unread,
       c.last_message_at::text,
+      c.account_id::text,
+      ca.name as account_name,
+      c.channel,
       ct.id as contact_id,
       ct.phone,
       ct.display_name,
-      ct.platform,
+      coalesce(nullif(c.channel, ''), ct.platform) as platform,
       ct.sentiment,
       ct.consultype,
       c.assigned_to::text,
@@ -1274,6 +1358,7 @@ export async function listConversations(filters: ConversationFilters = {}) {
       case when c.unread then 1 else 0 end::int as unread_count
     from conversations c
     join contacts ct on ct.id = c.contact_id
+    left join channel_accounts ca on ca.id = c.account_id
     left join app_users u on u.id = c.assigned_to
     left join lateral (
       select body, direction
@@ -1310,6 +1395,9 @@ export async function listContacts(filters: ContactFilters = {}) {
     select
       ct.id::text,
       ct.phone,
+      ct.account_id::text,
+      ca.name as account_name,
+      ct.external_user_id,
       ct.display_name,
       ct.platform,
       ct.contact_type,
@@ -1323,6 +1411,7 @@ export async function listContacts(filters: ContactFilters = {}) {
       c.id::text as conversation_id,
       c.status as conversation_status
     from contacts ct
+    left join channel_accounts ca on ca.id = ct.account_id
     left join app_users u on u.id = ct.assigned_to
     left join lateral (
       select id, status, last_message_at
@@ -1410,12 +1499,14 @@ export async function listConversationMessages(conversationId: string, limit = 1
       mm.id::text as media_id,
       mm.mime_type as media_mime_type,
       mm.filename as media_filename,
+      mm.media_url,
+      mm.storage_provider as media_storage_provider,
       m.created_by::text,
       u.full_name as created_by_name
     from messages m
     left join app_users u on u.id = m.created_by
     left join lateral (
-      select id, mime_type, filename
+      select id, mime_type, filename, media_url, storage_provider
       from message_media
       where message_id = m.id
       order by created_at desc
@@ -1753,11 +1844,14 @@ export async function recordManualOutboundMessage(input: {
   };
 
   const rows = (await sql`
-    insert into messages (conversation_id, contact_id, direction, wa_message_id, body, created_by, metadata)
+    insert into messages (conversation_id, contact_id, account_id, channel, direction, wa_message_id, external_message_id, body, created_by, metadata)
     values (
       ${input.conversationId},
       ${input.contactId},
+      (select account_id from conversations where id = ${input.conversationId}),
+      (select channel from conversations where id = ${input.conversationId}),
       'outbound',
+      ${input.waMessageId ?? null},
       ${input.waMessageId ?? null},
       ${input.body},
       ${input.userId},
@@ -1824,24 +1918,32 @@ export async function recordWhatsAppMessageStatuses(
 export async function saveMessageMedia(input: {
   messageId: string;
   waMediaId?: string | null;
+  externalMediaId?: string | null;
   mimeType: string;
   filename?: string | null;
   fileSize?: number | null;
   sha256?: string | null;
-  dataBase64: string;
+  dataBase64?: string | null;
+  storageProvider?: string | null;
+  r2Key?: string | null;
+  mediaUrl?: string | null;
 }) {
   const sql = getSql();
 
   const rows = (await sql`
-    insert into message_media (message_id, wa_media_id, mime_type, filename, file_size, sha256, data_base64)
+    insert into message_media (message_id, wa_media_id, external_media_id, mime_type, filename, file_size, sha256, storage_provider, r2_key, media_url, data_base64)
     values (
       ${input.messageId},
       ${input.waMediaId ?? null},
+      ${input.externalMediaId ?? input.waMediaId ?? null},
       ${input.mimeType},
       ${input.filename ?? null},
       ${input.fileSize ?? null},
       ${input.sha256 ?? null},
-      ${input.dataBase64}
+      ${input.storageProvider ?? (input.r2Key ? "r2" : "postgres")},
+      ${input.r2Key ?? null},
+      ${input.mediaUrl ?? null},
+      ${input.dataBase64 ?? null}
     )
     returning id::text
   `) as Array<{ id: string }>;
@@ -1856,12 +1958,20 @@ export async function getMessageMediaByMessageId(messageId: string) {
 
   const sql = getSql();
   const rows = (await sql`
-    select id::text, mime_type, filename, data_base64
+    select id::text, mime_type, filename, storage_provider, r2_key, media_url, data_base64
     from message_media
     where message_id = ${messageId}
     order by created_at desc
     limit 1
-  `) as Array<{ id: string; mime_type: string; filename: string | null; data_base64: string }>;
+  `) as Array<{
+    id: string;
+    mime_type: string;
+    filename: string | null;
+    storage_provider: string;
+    r2_key: string | null;
+    media_url: string | null;
+    data_base64: string | null;
+  }>;
 
   return rows[0] ?? null;
 }

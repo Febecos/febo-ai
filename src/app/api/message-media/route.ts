@@ -28,6 +28,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Archivo no encontrado." }, { status: 404 });
   }
 
+  if (!media.data_base64 && media.media_url) {
+    return NextResponse.redirect(media.media_url);
+  }
+
+  if (!media.data_base64) {
+    return NextResponse.json({ error: "Archivo sin contenido local." }, { status: 404 });
+  }
+
   return new NextResponse(Buffer.from(media.data_base64, "base64"), {
     headers: {
       "cache-control": "private, max-age=3600",

@@ -32,9 +32,39 @@ set full_name = excluded.full_name,
     active = true,
     updated_at = now();
 
+create table if not exists channel_accounts (
+  id uuid primary key default gen_random_uuid(),
+  slug text not null unique,
+  name text not null,
+  channel text not null check (channel in ('whatsapp', 'instagram', 'facebook', 'tiktok')),
+  external_account_id text,
+  phone_number text,
+  auto_reply_enabled boolean not null default false,
+  active boolean not null default true,
+  settings jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists channel_accounts_channel_external_idx
+  on channel_accounts(channel, external_account_id)
+  where external_account_id is not null;
+
+insert into channel_accounts (slug, name, channel, auto_reply_enabled, active)
+values
+  ('whatsapp-principal', 'WhatsApp principal Febecos', 'whatsapp', true, true),
+  ('whatsapp-revendedores', 'WhatsApp revendedores', 'whatsapp', false, false)
+on conflict (slug) do update
+set name = excluded.name,
+    channel = excluded.channel,
+    auto_reply_enabled = excluded.auto_reply_enabled,
+    updated_at = now();
+
 create table if not exists contacts (
   id uuid primary key default gen_random_uuid(),
   phone text not null unique,
+  account_id uuid references channel_accounts(id) on delete set null,
+  external_user_id text,
   display_name text,
   platform text not null default 'whatsapp',
   contact_type text not null default 'prospecto',
@@ -49,9 +79,26 @@ create table if not exists contacts (
   updated_at timestamptz not null default now()
 );
 
+alter table contacts
+  add column if not exists account_id uuid references channel_accounts(id) on delete set null,
+  add column if not exists external_user_id text;
+
+update contacts
+set account_id = coalesce(account_id, (select id from channel_accounts where slug = 'whatsapp-principal' limit 1)),
+    external_user_id = coalesce(external_user_id, phone)
+where platform = 'whatsapp';
+
+create index if not exists contacts_account_idx on contacts(account_id);
+create index if not exists contacts_platform_idx on contacts(platform);
+create unique index if not exists contacts_account_external_user_idx
+  on contacts(account_id, platform, external_user_id)
+  where account_id is not null and external_user_id is not null;
+
 create table if not exists conversations (
   id uuid primary key default gen_random_uuid(),
   contact_id uuid not null references contacts(id) on delete cascade,
+  account_id uuid references channel_accounts(id) on delete set null,
+  channel text not null default 'whatsapp',
   status text not null default 'open' check (status in ('open', 'waiting', 'quoted', 'hot', 'handoff', 'closed', 'lost', 'blocked', 'deleted')),
   ai_enabled boolean not null default true,
   unread boolean not null default false,
@@ -63,6 +110,16 @@ create table if not exists conversations (
 
 alter table conversations
   add column if not exists unread boolean not null default false;
+
+alter table conversations
+  add column if not exists account_id uuid references channel_accounts(id) on delete set null,
+  add column if not exists channel text not null default 'whatsapp';
+
+update conversations c
+set account_id = coalesce(c.account_id, ct.account_id),
+    channel = coalesce(nullif(c.channel, ''), ct.platform, 'whatsapp')
+from contacts ct
+where ct.id = c.contact_id;
 
 alter table conversations
   drop constraint if exists conversations_status_check;
@@ -77,13 +134,19 @@ create unique index if not exists conversations_one_active_per_contact
 
 create index if not exists conversations_last_message_idx on conversations(last_message_at desc);
 create index if not exists conversations_assigned_to_idx on conversations(assigned_to);
+create index if not exists conversations_account_channel_idx on conversations(account_id, channel, last_message_at desc);
 
 create table if not exists messages (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid references conversations(id) on delete cascade,
   contact_id uuid references contacts(id) on delete set null,
+  account_id uuid references channel_accounts(id) on delete set null,
+  channel text not null default 'whatsapp',
   direction text not null check (direction in ('inbound', 'outbound', 'internal')),
   wa_message_id text,
+  external_message_id text,
+  external_parent_id text,
+  external_post_id text,
   body text not null,
   consultype text,
   needs_human boolean not null default false,
@@ -92,8 +155,26 @@ create table if not exists messages (
   created_at timestamptz not null default now()
 );
 
+alter table messages
+  add column if not exists account_id uuid references channel_accounts(id) on delete set null,
+  add column if not exists channel text not null default 'whatsapp',
+  add column if not exists external_message_id text,
+  add column if not exists external_parent_id text,
+  add column if not exists external_post_id text;
+
+update messages m
+set account_id = coalesce(m.account_id, c.account_id),
+    channel = coalesce(nullif(m.channel, ''), c.channel, 'whatsapp'),
+    external_message_id = coalesce(m.external_message_id, m.wa_message_id)
+from conversations c
+where c.id = m.conversation_id;
+
 create index if not exists messages_conversation_created_idx on messages(conversation_id, created_at);
 create unique index if not exists messages_wa_message_unique_idx on messages(wa_message_id) where wa_message_id is not null;
+create index if not exists messages_account_channel_created_idx on messages(account_id, channel, created_at desc);
+create unique index if not exists messages_account_external_message_idx
+  on messages(account_id, channel, external_message_id)
+  where account_id is not null and external_message_id is not null;
 
 create table if not exists conversation_memory (
   conversation_id uuid primary key references conversations(id) on delete cascade,
@@ -114,15 +195,27 @@ create table if not exists message_media (
   id uuid primary key default gen_random_uuid(),
   message_id uuid not null references messages(id) on delete cascade,
   wa_media_id text,
+  external_media_id text,
   mime_type text not null,
   filename text,
   file_size integer,
   sha256 text,
-  data_base64 text not null,
+  storage_provider text not null default 'postgres',
+  r2_key text,
+  media_url text,
+  data_base64 text,
   created_at timestamptz not null default now()
 );
 
+alter table message_media
+  add column if not exists external_media_id text,
+  add column if not exists storage_provider text not null default 'postgres',
+  add column if not exists r2_key text,
+  add column if not exists media_url text,
+  alter column data_base64 drop not null;
+
 create index if not exists message_media_message_idx on message_media(message_id);
+create index if not exists message_media_r2_key_idx on message_media(r2_key) where r2_key is not null;
 
 create table if not exists conversation_notes (
   id uuid primary key default gen_random_uuid(),

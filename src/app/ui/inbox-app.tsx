@@ -1474,14 +1474,11 @@ function CrmBoardPanel({
       return;
     }
 
-    if (!isHotCrmConversation(conversation)) {
-      onToggleFavorite(conversationId);
-      return;
-    }
-
     const previous = conversations;
     const next = conversations.map((item) =>
-      item.id === conversationId ? { ...item, consultype: "otro", status: "open" } : item
+      item.id === conversationId
+        ? { ...item, assigned_name: null, assigned_to: null, consultype: "otro", status: "open" }
+        : item
     );
     const wasFavorite = favoriteIds.includes(conversationId);
     onConversationsChange(next);
@@ -1492,7 +1489,7 @@ function CrmBoardPanel({
     const response = await fetch("/api/conversations", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ conversationId, consultype: "otro", status: "open" })
+      body: JSON.stringify({ conversationId, assignedTo: null, consultype: "otro", status: "open" })
     });
 
     if (!response.ok) {

@@ -279,12 +279,14 @@ function ToolWorkspace({
   const [workspaceConversations, setWorkspaceConversations] = useState(conversations);
   const [labelDefinitions, setLabelDefinitions] = useState<LabelDefinition[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [favoritesLoaded, setFavoritesLoaded] = useState(false);
   const [conversationNavSignal, setConversationNavSignal] = useState(0);
   const [focusedConversation, setFocusedConversation] = useState({ id: "", signal: 0 });
   const [focusedContact, setFocusedContact] = useState({ id: "", signal: 0 });
   const [pushStatus, setPushStatus] = useState("Notificaciones");
   const [actionNotice, setActionNotice] = useState("");
   const isAdmin = currentUser.role === "admin";
+  const crmFavoritesStorageKey = `febo-crm-favorites:${currentUser.id}`;
 
   useEffect(() => {
     if (!actionNotice) {
@@ -296,20 +298,28 @@ function ToolWorkspace({
   }, [actionNotice]);
 
   useEffect(() => {
-    const storedFavorites = window.localStorage.getItem("febo-crm-favorites");
+    setFavoritesLoaded(false);
+    const storedFavorites =
+      window.localStorage.getItem(crmFavoritesStorageKey) ?? window.localStorage.getItem("febo-crm-favorites");
     try {
       const parsedFavorites = storedFavorites ? JSON.parse(storedFavorites) : [];
       if (Array.isArray(parsedFavorites)) {
         setFavoriteIds(parsedFavorites.filter((id) => typeof id === "string"));
       }
     } catch {
-      window.localStorage.removeItem("febo-crm-favorites");
+      window.localStorage.removeItem(crmFavoritesStorageKey);
+      setFavoriteIds([]);
     }
-  }, []);
+    setFavoritesLoaded(true);
+  }, [crmFavoritesStorageKey]);
 
   useEffect(() => {
-    window.localStorage.setItem("febo-crm-favorites", JSON.stringify(favoriteIds));
-  }, [favoriteIds]);
+    if (!favoritesLoaded) {
+      return;
+    }
+
+    window.localStorage.setItem(crmFavoritesStorageKey, JSON.stringify(favoriteIds));
+  }, [crmFavoritesStorageKey, favoriteIds, favoritesLoaded]);
 
   useEffect(() => {
     void loadLabelDefinitions();
@@ -3398,7 +3408,7 @@ function InboxList({
   async function changeConversationType(conversationId: string, consultype: string) {
     if (consultype === "caliente") {
       onSetFavorite(conversationId, true);
-      await patchConversation(conversationId, { consultype, status: "hot" });
+      await patchConversation(conversationId, { assignedTo: currentUser.id, consultype, status: "hot" });
       closeConversationMenus();
       return;
     }

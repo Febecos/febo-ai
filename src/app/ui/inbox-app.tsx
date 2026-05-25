@@ -4087,7 +4087,14 @@ function InboxList({
                         <div className="tag-editor-row" key={label.slug}>
                           <span className="tag-dot" style={{ background: label.color }} />
                           <strong>{label.name}</strong>
-                          <button onClick={() => void changeConversationType(selected.id, label.slug)} type="button">
+                          <button
+                            onClick={() => {
+                              setTagPanelOpen(false);
+                              setTagSearch("");
+                              void changeConversationType(selected.id, label.slug);
+                            }}
+                            type="button"
+                          >
                             {selected.consultype === label.slug ? "Actual" : "Agregar"}
                           </button>
                           <small>{label.instructions}</small>

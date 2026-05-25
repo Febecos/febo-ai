@@ -4060,11 +4060,22 @@ select {
   color: #0a2745;
 }
 
+.chat-bubble.inbound small {
+  color: rgba(10, 39, 69, 0.72);
+  font-weight: 600;
+}
+
 .chat-bubble.outbound,
 .chat-bubble.internal {
   background: linear-gradient(180deg, #73bdea 0%, #458fd0 100%);
   border-color: rgba(202, 239, 255, 0.68);
   color: #ffffff;
+}
+
+.chat-bubble.outbound small,
+.chat-bubble.internal small {
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 600;
 }
 
 .chat-bubble.outbound.human-outbound {

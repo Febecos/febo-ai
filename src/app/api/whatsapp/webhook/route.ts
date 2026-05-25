@@ -21,7 +21,6 @@ import {
   isWhatsAppMediaMessage,
   isWhatsAppTextMessage,
   sendWhatsAppReplyButtons,
-  sendWhatsAppSelectorFlow,
   sendWhatsAppText,
   verifyMetaSignature
 } from "@/lib/whatsapp";
@@ -435,12 +434,7 @@ async function sendAutomaticReply(input: {
   let sentReplyOptions: Array<{ id: string; title: string }> | undefined;
 
   try {
-    const sent = result.action === "send_selector_flow" ?
-      await sendWhatsAppSelectorFlow({
-        to: message.from,
-        conversationId: stored.threadId ?? ""
-      })
-    : paymentButtons ?
+    const sent = paymentButtons ?
       (
         sentReplyOptions = paymentButtons,
         await sendWhatsAppReplyButtons({

@@ -2341,6 +2341,119 @@ button:disabled {
   gap: 8px;
 }
 
+.webhook-settings-card h4 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+.webhook-layout {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(280px, 1.05fr);
+}
+
+.webhook-form,
+.webhook-list,
+.webhook-history {
+  background: rgba(6, 38, 68, 0.36);
+  border: 1px solid rgba(142, 213, 245, 0.18);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.webhook-events {
+  display: grid;
+  gap: 8px;
+}
+
+.webhook-event-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.webhook-event-option {
+  align-items: center;
+  background: rgba(142, 213, 245, 0.1);
+  border: 1px solid rgba(142, 213, 245, 0.2);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 9px;
+}
+
+.webhook-event-option input {
+  margin: 0;
+}
+
+.webhook-item {
+  align-items: start;
+  border: 1px solid rgba(142, 213, 245, 0.18);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 10px;
+}
+
+.webhook-item strong,
+.webhook-history-item strong {
+  display: block;
+  font-size: 13px;
+}
+
+.webhook-item span,
+.webhook-history-item span,
+.webhook-history-item small,
+.webhook-item small {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.webhook-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.webhook-actions button {
+  min-height: 30px;
+  padding: 0 9px;
+}
+
+.webhook-history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.webhook-history-item {
+  border-left: 3px solid rgba(148, 163, 184, 0.7);
+  display: grid;
+  gap: 2px;
+  padding: 7px 9px;
+}
+
+.webhook-history-item.success {
+  border-left-color: #42c767;
+}
+
+.webhook-history-item.failed {
+  border-left-color: #f43f5e;
+}
+
+.webhook-history-item em {
+  color: #ffc6c6;
+  font-size: 12px;
+  font-style: normal;
+}
+
 .field-help-label {
   align-items: center;
   display: inline-flex;
@@ -3289,6 +3402,18 @@ select option:hover {
 }
 
 @media (max-width: 1040px) {
+  .webhook-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .webhook-item {
+    grid-template-columns: 1fr;
+  }
+
+  .webhook-actions {
+    justify-content: flex-start;
+  }
+
   .workspace-grid,
   .inbox-panel,
   .admin-workspace,

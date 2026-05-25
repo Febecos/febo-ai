@@ -69,6 +69,30 @@ type AppSetting = {
   updated_at: string;
 };
 
+type OutgoingWebhook = {
+  id: string;
+  name: string;
+  url: string;
+  has_secret: boolean;
+  events: string[];
+  active: boolean;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type OutgoingWebhookDelivery = {
+  id: string;
+  webhook_id: string | null;
+  webhook_name: string | null;
+  event: string;
+  status: "pending" | "success" | "failed";
+  response_status: number | null;
+  response_body: string | null;
+  error: string | null;
+  created_at: string;
+};
+
 type AgentTestResponse = {
   respuesta: string;
   consultype: string;
@@ -123,6 +147,18 @@ const TAG_FILTERS = [
 ];
 const DIRECT_ATTACHMENT_UPLOAD_LIMIT_BYTES = 3.8 * 1024 * 1024;
 const MANUAL_REPLY_TIMEOUT_MS = 70000;
+const OUTGOING_WEBHOOK_EVENTS = [
+  { value: "selector_checkout_abierto", label: "Selector abierto" },
+  { value: "lead_caliente", label: "Lead caliente" },
+  { value: "asesor_asignado", label: "Asesor asignado" },
+  { value: "chat_escalado", label: "Chat escalado" },
+  { value: "mensaje_entrante", label: "Mensaje entrante" },
+  { value: "mensaje_saliente", label: "Mensaje saliente" },
+  { value: "follow_up_proposed", label: "Seguimiento propuesto" },
+  { value: "presupuesto_enviado", label: "Presupuesto enviado" },
+  { value: "venta_cerrada", label: "Venta cerrada" },
+  { value: "*", label: "Todos los eventos" }
+];
 
 export function InboxApp({
   conversations,
@@ -506,11 +542,23 @@ function MetricsPanel({ stats }: { stats: Stats }) {
 
 function SettingsPanel({ users }: { users: AppUser[] }) {
   const [settings, setSettings] = useState<AppSetting[]>([]);
+  const [webhooks, setWebhooks] = useState<OutgoingWebhook[]>([]);
+  const [webhookDeliveries, setWebhookDeliveries] = useState<OutgoingWebhookDelivery[]>([]);
+  const [webhookForm, setWebhookForm] = useState({
+    id: "",
+    name: "Selector / pagina Febecos",
+    url: "",
+    secret: "",
+    keepSecret: false,
+    events: ["selector_checkout_abierto", "lead_caliente", "chat_escalado"],
+    active: true
+  });
   const [savingKey, setSavingKey] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     void loadSettings();
+    void loadOutgoingWebhooks();
   }, []);
 
   async function loadSettings() {
@@ -519,6 +567,16 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
 
     if (response.ok) {
       setSettings(payload?.settings ?? []);
+    }
+  }
+
+  async function loadOutgoingWebhooks() {
+    const response = await fetch("/api/outgoing-webhooks");
+    const payload = await readJsonResponse(response);
+
+    if (response.ok) {
+      setWebhooks(payload?.webhooks ?? []);
+      setWebhookDeliveries(payload?.deliveries ?? []);
     }
   }
 
@@ -575,6 +633,105 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
       setSettings(latestSettings);
     }
     setMessage("Configuracion guardada.");
+  }
+
+  function editWebhook(webhook: OutgoingWebhook) {
+    setWebhookForm({
+      id: webhook.id,
+      name: webhook.name,
+      url: webhook.url,
+      secret: "",
+      keepSecret: webhook.has_secret,
+      events: webhook.events.length ? webhook.events : ["selector_checkout_abierto"],
+      active: webhook.active
+    });
+  }
+
+  function toggleWebhookEvent(eventName: string) {
+    setWebhookForm((current) => {
+      const events = current.events.includes(eventName)
+        ? current.events.filter((event) => event !== eventName)
+        : [...current.events, eventName];
+
+      return { ...current, events: events.length ? events : current.events };
+    });
+  }
+
+  async function saveOutgoingWebhook() {
+    setSavingKey("outgoing-webhook");
+    setMessage("");
+
+    const response = await fetch("/api/outgoing-webhooks", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "upsert",
+        id: webhookForm.id || null,
+        name: webhookForm.name,
+        url: webhookForm.url,
+        secret: webhookForm.secret,
+        keepSecret: webhookForm.keepSecret && !webhookForm.secret,
+        events: webhookForm.events,
+        active: webhookForm.active
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setSavingKey("");
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos guardar el webhook.");
+      return;
+    }
+
+    setWebhooks(payload?.webhooks ?? []);
+    setWebhookDeliveries(payload?.deliveries ?? []);
+    setWebhookForm((current) => ({ ...current, id: "", secret: "", keepSecret: false }));
+    setMessage("Webhook guardado.");
+  }
+
+  async function testWebhook(id: string) {
+    setSavingKey(`test-${id}`);
+    setMessage("");
+
+    const response = await fetch("/api/outgoing-webhooks", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "test", id })
+    });
+    const payload = await readJsonResponse(response);
+    setSavingKey("");
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos probar el webhook.");
+      return;
+    }
+
+    setWebhooks(payload?.webhooks ?? []);
+    setWebhookDeliveries(payload?.deliveries ?? []);
+    setMessage("Prueba enviada. Revisar estado en el historial.");
+  }
+
+  async function deleteWebhook(id: string) {
+    setSavingKey(`delete-${id}`);
+    setMessage("");
+
+    const response = await fetch("/api/outgoing-webhooks", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "delete", id })
+    });
+    const payload = await readJsonResponse(response);
+    setSavingKey("");
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos eliminar el webhook.");
+      return;
+    }
+
+    setWebhooks(payload?.webhooks ?? []);
+    setWebhookDeliveries(payload?.deliveries ?? []);
+    setWebhookForm((current) => (current.id === id ? { ...current, id: "", secret: "", keepSecret: false } : current));
+    setMessage("Webhook eliminado.");
   }
 
   const delayValue = Number(getValue("auto_reply_delay_seconds", 90));
@@ -753,6 +910,156 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
             >
               {savingKey === "selector-flow" ? "Guardando" : "Guardar configuracion del Flow"}
             </button>
+          </div>
+        </article>
+
+        <article className="settings-card settings-card-wide webhook-settings-card">
+          <div>
+            <h3>Webhooks salientes</h3>
+            <p>Envia eventos de FEBO a la pagina, selector u otro sistema. El destino debe responder 200.</p>
+          </div>
+
+          <div className="webhook-layout">
+            <div className="webhook-form">
+              <label className="field">
+                <FieldHelpLabel
+                  help="Nombre interno para reconocer el destino. Ejemplo: pagina selector Febecos."
+                  label="Nombre"
+                />
+                <input
+                  onChange={(event) => setWebhookForm((current) => ({ ...current, name: event.target.value }))}
+                  value={webhookForm.name}
+                />
+              </label>
+              <label className="field">
+                <FieldHelpLabel
+                  help="Endpoint HTTPS que recibira los eventos por POST. Code tiene que crear esta URL del lado de la pagina o selector."
+                  label="URL destino"
+                />
+                <input
+                  placeholder="https://..."
+                  onChange={(event) => setWebhookForm((current) => ({ ...current, url: event.target.value }))}
+                  value={webhookForm.url}
+                />
+              </label>
+              <label className="field">
+                <FieldHelpLabel
+                  help="Clave compartida para firmar el payload con HMAC SHA-256. Si editas un webhook existente y lo dejas vacio, conserva el secreto anterior."
+                  label="Token secreto"
+                />
+                <input
+                  placeholder={webhookForm.keepSecret ? "Ya hay token guardado; dejar vacio para conservar" : "Token compartido"}
+                  onChange={(event) => setWebhookForm((current) => ({ ...current, secret: event.target.value }))}
+                  type="password"
+                  value={webhookForm.secret}
+                />
+              </label>
+              <label className="toggle-row">
+                <input
+                  checked={webhookForm.active}
+                  onChange={(event) => setWebhookForm((current) => ({ ...current, active: event.target.checked }))}
+                  type="checkbox"
+                />
+                Activo
+              </label>
+
+              <div className="webhook-events">
+                <FieldHelpLabel
+                  help="Eventos que FEBO envia a esta URL. Para conectar selector/pagina conviene empezar con Selector abierto, Lead caliente y Chat escalado."
+                  label="Eventos"
+                />
+                <div className="webhook-event-grid">
+                  {OUTGOING_WEBHOOK_EVENTS.map((event) => (
+                    <label key={event.value} className="webhook-event-option">
+                      <input
+                        checked={webhookForm.events.includes(event.value)}
+                        onChange={() => toggleWebhookEvent(event.value)}
+                        type="checkbox"
+                      />
+                      {event.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="settings-actions-row">
+                <button
+                  className="primary"
+                  disabled={savingKey === "outgoing-webhook"}
+                  onClick={() => void saveOutgoingWebhook()}
+                  type="button"
+                >
+                  {savingKey === "outgoing-webhook" ? "Guardando" : webhookForm.id ? "Guardar cambios" : "Crear webhook"}
+                </button>
+                {webhookForm.id ? (
+                  <button
+                    onClick={() => setWebhookForm({
+                      id: "",
+                      name: "Selector / pagina Febecos",
+                      url: "",
+                      secret: "",
+                      keepSecret: false,
+                      events: ["selector_checkout_abierto", "lead_caliente", "chat_escalado"],
+                      active: true
+                    })}
+                    type="button"
+                  >
+                    Nuevo
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="webhook-list">
+              <h4>Destinos configurados</h4>
+              {webhooks.length ? webhooks.map((webhook) => (
+                <div key={webhook.id} className="webhook-item">
+                  <div>
+                    <strong>{webhook.name}</strong>
+                    <span>{webhook.active ? "Activo" : "Inactivo"} · {webhook.has_secret ? "con token" : "sin token"}</span>
+                    <small>{webhook.url}</small>
+                  </div>
+                  <div className="webhook-actions">
+                    <button onClick={() => editWebhook(webhook)} type="button">Editar</button>
+                    <button
+                      disabled={savingKey === `test-${webhook.id}`}
+                      onClick={() => void testWebhook(webhook.id)}
+                      type="button"
+                    >
+                      Probar
+                    </button>
+                    <button
+                      className="danger"
+                      disabled={savingKey === `delete-${webhook.id}`}
+                      onClick={() => void deleteWebhook(webhook.id)}
+                      type="button"
+                    >
+                      Borrar
+                    </button>
+                  </div>
+                </div>
+              )) : <p>No hay webhooks configurados todavia.</p>}
+            </div>
+          </div>
+
+          <div className="webhook-history">
+            <h4>Ultimos envios</h4>
+            {webhookDeliveries.length ? (
+              <div className="webhook-history-list">
+                {webhookDeliveries.slice(0, 10).map((delivery) => (
+                  <div key={delivery.id} className={`webhook-history-item ${delivery.status}`}>
+                    <strong>{delivery.event}</strong>
+                    <span>{delivery.webhook_name ?? "Webhook eliminado"}</span>
+                    <small>
+                      {delivery.status} {delivery.response_status ? `· HTTP ${delivery.response_status}` : ""}
+                      {" · "}
+                      {formatMessageTime(delivery.created_at)}
+                    </small>
+                    {delivery.error ? <em>{delivery.error}</em> : null}
+                  </div>
+                ))}
+              </div>
+            ) : <p>Aun no hay envios registrados.</p>}
           </div>
         </article>
       </div>

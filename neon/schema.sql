@@ -319,6 +319,34 @@ create table if not exists app_settings (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists outgoing_webhooks (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  url text not null,
+  secret text,
+  events jsonb not null default '[]'::jsonb,
+  active boolean not null default true,
+  created_by uuid references app_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists outgoing_webhook_deliveries (
+  id uuid primary key default gen_random_uuid(),
+  webhook_id uuid references outgoing_webhooks(id) on delete cascade,
+  event text not null,
+  payload jsonb not null default '{}'::jsonb,
+  status text not null default 'pending' check (status in ('pending', 'success', 'failed')),
+  response_status integer,
+  response_body text,
+  error text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists outgoing_webhooks_active_idx on outgoing_webhooks(active);
+create index if not exists outgoing_webhook_deliveries_webhook_created_idx
+  on outgoing_webhook_deliveries(webhook_id, created_at desc);
+
 insert into app_settings (key, value, label, description)
 values
   ('auto_reply_delay_seconds', '90'::jsonb, 'Demora de respuesta IA', 'Segundos que FEBO espera antes de responder automaticamente.'),
@@ -416,6 +444,11 @@ for each row execute function set_updated_at();
 drop trigger if exists set_app_settings_updated_at on app_settings;
 create trigger set_app_settings_updated_at
 before update on app_settings
+for each row execute function set_updated_at();
+
+drop trigger if exists set_outgoing_webhooks_updated_at on outgoing_webhooks;
+create trigger set_outgoing_webhooks_updated_at
+before update on outgoing_webhooks
 for each row execute function set_updated_at();
 
 drop trigger if exists set_quick_replies_updated_at on quick_replies;

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { getSql, isDbConfigured } from "./db";
 
 export type AppUser = {
@@ -223,6 +224,32 @@ export type AppSetting = {
   label: string;
   description: string;
   updated_at: string;
+};
+
+export type OutgoingWebhook = {
+  id: string;
+  name: string;
+  url: string;
+  has_secret: boolean;
+  events: string[];
+  active: boolean;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OutgoingWebhookDelivery = {
+  id: string;
+  webhook_id: string | null;
+  webhook_name: string | null;
+  event: string;
+  payload: Record<string, unknown>;
+  status: "pending" | "success" | "failed";
+  response_status: number | null;
+  response_body: string | null;
+  error: string | null;
+  created_at: string;
 };
 
 export type AgentConversationMessage = {
@@ -523,6 +550,293 @@ export async function upsertAppSetting(input: {
   `) as AppSetting[];
 
   return rows[0] ?? null;
+}
+
+function sanitizeWebhook(row: {
+  id: string;
+  name: string;
+  url: string;
+  secret?: string | null;
+  events: unknown;
+  active: boolean;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+}): OutgoingWebhook {
+  return {
+    id: row.id,
+    name: row.name,
+    url: row.url,
+    has_secret: Boolean(row.secret),
+    events: Array.isArray(row.events) ? row.events.filter((event): event is string => typeof event === "string") : [],
+    active: row.active,
+    created_by: row.created_by,
+    created_by_name: row.created_by_name,
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
+}
+
+export async function listOutgoingWebhooks() {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    select
+      w.id::text,
+      w.name,
+      w.url,
+      w.secret,
+      w.events,
+      w.active,
+      w.created_by::text,
+      u.full_name as created_by_name,
+      w.created_at::text,
+      w.updated_at::text
+    from outgoing_webhooks w
+    left join app_users u on u.id = w.created_by
+    order by w.active desc, w.created_at desc
+  `) as Array<Parameters<typeof sanitizeWebhook>[0]>;
+
+  return rows.map(sanitizeWebhook);
+}
+
+export async function listOutgoingWebhookDeliveries(limit = 30) {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  return (await sql`
+    select
+      d.id::text,
+      d.webhook_id::text,
+      w.name as webhook_name,
+      d.event,
+      d.payload,
+      d.status,
+      d.response_status,
+      d.response_body,
+      d.error,
+      d.created_at::text
+    from outgoing_webhook_deliveries d
+    left join outgoing_webhooks w on w.id = d.webhook_id
+    order by d.created_at desc
+    limit ${Math.min(Math.max(limit, 1), 100)}
+  `) as OutgoingWebhookDelivery[];
+}
+
+export async function upsertOutgoingWebhook(input: {
+  id?: string | null;
+  name: string;
+  url: string;
+  secret?: string | null;
+  keepSecret?: boolean;
+  events: string[];
+  active: boolean;
+  actorUserId?: string | null;
+}) {
+  if (!isDbConfigured()) {
+    return null;
+  }
+
+  const sql = getSql();
+  const id = input.id || null;
+  const secret = input.keepSecret ? null : input.secret?.trim() || null;
+  const rows = (await sql`
+    insert into outgoing_webhooks (id, name, url, secret, events, active, created_by)
+    values (
+      coalesce(${id}::uuid, gen_random_uuid()),
+      ${input.name.trim()},
+      ${input.url.trim()},
+      ${secret},
+      ${JSON.stringify(input.events)}::jsonb,
+      ${input.active},
+      ${input.actorUserId ?? null}::uuid
+    )
+    on conflict (id) do update
+    set name = excluded.name,
+        url = excluded.url,
+        secret = case when ${input.keepSecret ?? false} then outgoing_webhooks.secret else excluded.secret end,
+        events = excluded.events,
+        active = excluded.active,
+        updated_at = now()
+    returning id::text
+  `) as Array<{ id: string }>;
+
+  return rows[0]?.id ?? null;
+}
+
+export async function deleteOutgoingWebhook(id: string) {
+  if (!isDbConfigured()) {
+    return;
+  }
+
+  const sql = getSql();
+  await sql`delete from outgoing_webhooks where id = ${id}::uuid`;
+}
+
+async function recordOutgoingWebhookDelivery(input: {
+  webhookId: string;
+  event: string;
+  payload: Record<string, unknown>;
+  status: "success" | "failed";
+  responseStatus?: number | null;
+  responseBody?: string | null;
+  error?: string | null;
+}) {
+  const sql = getSql();
+  await sql`
+    insert into outgoing_webhook_deliveries (webhook_id, event, payload, status, response_status, response_body, error)
+    values (
+      ${input.webhookId}::uuid,
+      ${input.event},
+      ${JSON.stringify(input.payload)}::jsonb,
+      ${input.status},
+      ${input.responseStatus ?? null},
+      ${input.responseBody?.slice(0, 2000) ?? null},
+      ${input.error?.slice(0, 1000) ?? null}
+    )
+  `;
+}
+
+export async function deliverOutgoingWebhooks(event: string, data: Record<string, unknown>) {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    select id::text, name, url, secret, events
+    from outgoing_webhooks
+    where active = true
+      and (events @> ${JSON.stringify([event])}::jsonb or events @> '["*"]'::jsonb)
+  `) as Array<{ id: string; name: string; url: string; secret: string | null; events: unknown }>;
+
+  const payload = {
+    event,
+    createdAt: new Date().toISOString(),
+    source: "febo-ai",
+    data
+  };
+  const body = JSON.stringify(payload);
+  const results: Array<{ id: string; ok: boolean; status?: number; error?: string }> = [];
+
+  for (const webhook of rows) {
+    try {
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+        "x-febo-event": event,
+        "x-febo-webhook-id": webhook.id
+      };
+
+      if (webhook.secret) {
+        headers["x-febo-signature"] = `sha256=${crypto.createHmac("sha256", webhook.secret).update(body).digest("hex")}`;
+      }
+
+      const response = await fetch(webhook.url, {
+        method: "POST",
+        headers,
+        body,
+        signal: AbortSignal.timeout(10000)
+      });
+      const responseBody = await response.text().catch(() => "");
+      const status = response.ok ? "success" : "failed";
+
+      await recordOutgoingWebhookDelivery({
+        webhookId: webhook.id,
+        event,
+        payload,
+        status,
+        responseStatus: response.status,
+        responseBody
+      });
+
+      results.push({ id: webhook.id, ok: response.ok, status: response.status });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error desconocido";
+      await recordOutgoingWebhookDelivery({
+        webhookId: webhook.id,
+        event,
+        payload,
+        status: "failed",
+        error: message
+      });
+      results.push({ id: webhook.id, ok: false, error: message });
+    }
+  }
+
+  return results;
+}
+
+export async function testOutgoingWebhook(id: string, actorUserId?: string | null) {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  const webhook = (await sql`
+    select id::text, name, url, secret
+    from outgoing_webhooks
+    where id = ${id}::uuid
+    limit 1
+  `) as Array<{ id: string; name: string; url: string; secret: string | null }>;
+
+  if (!webhook[0]) {
+    return [];
+  }
+
+  const payload = {
+    event: "webhook_test",
+    createdAt: new Date().toISOString(),
+    source: "febo-ai",
+    data: {
+      message: "Prueba de webhook saliente desde FEBO",
+      actorUserId: actorUserId ?? null
+    }
+  };
+  const body = JSON.stringify(payload);
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "x-febo-event": "webhook_test",
+    "x-febo-webhook-id": webhook[0].id
+  };
+
+  if (webhook[0].secret) {
+    headers["x-febo-signature"] = `sha256=${crypto.createHmac("sha256", webhook[0].secret).update(body).digest("hex")}`;
+  }
+
+  try {
+    const response = await fetch(webhook[0].url, {
+      method: "POST",
+      headers,
+      body,
+      signal: AbortSignal.timeout(10000)
+    });
+    const responseBody = await response.text().catch(() => "");
+    await recordOutgoingWebhookDelivery({
+      webhookId: webhook[0].id,
+      event: "webhook_test",
+      payload,
+      status: response.ok ? "success" : "failed",
+      responseStatus: response.status,
+      responseBody
+    });
+    return [{ id: webhook[0].id, ok: response.ok, status: response.status }];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Error desconocido";
+    await recordOutgoingWebhookDelivery({
+      webhookId: webhook[0].id,
+      event: "webhook_test",
+      payload,
+      status: "failed",
+      error: message
+    });
+    return [{ id: webhook[0].id, ok: false, error: message }];
+  }
 }
 
 async function findActiveUserByName(name: string | null | undefined) {
@@ -1117,6 +1431,13 @@ export async function recordSelectorCheckoutLead(input: SelectorCheckoutLead) {
     values (${contactId}, ${phone}, 'selector_checkout_abierto', ${payload}::jsonb)
   `;
 
+  await deliverOutgoingWebhooks("selector_checkout_abierto", {
+    contactId,
+    conversationId: conversation.id,
+    phone,
+    selectorCheckout: input
+  }).catch((error) => console.error("outgoing webhook selector_checkout_abierto failed", error));
+
   await sql`
     insert into handoffs (conversation_id, contact_id, reason, status, assigned_to)
     values (${conversation.id}, ${contactId}, 'selector_checkout_abierto', 'assigned', ${assigneeId}::uuid)
@@ -1239,6 +1560,23 @@ export async function recordAgentReply(input: {
       insert into handoffs (conversation_id, contact_id, reason, status, assigned_to)
       values (${input.threadId}, ${input.contactId}, ${input.intent}, 'assigned', ${humanAssigneeId}::uuid)
     `;
+
+    await deliverOutgoingWebhooks("chat_escalado", {
+      contactId: input.contactId,
+      conversationId: input.threadId,
+      reason: input.intent,
+      assignedTo: humanAssigneeId,
+      answer: input.answer
+    }).catch((error) => console.error("outgoing webhook chat_escalado failed", error));
+  }
+
+  if (consultype === "caliente") {
+    await deliverOutgoingWebhooks("lead_caliente", {
+      contactId: input.contactId,
+      conversationId: input.threadId,
+      assignedTo: humanAssigneeId,
+      answer: input.answer
+    }).catch((error) => console.error("outgoing webhook lead_caliente failed", error));
   }
 
   if (labelAssignment) {
@@ -1263,6 +1601,15 @@ export async function recordAgentReply(input: {
         })}::jsonb
       )
     `;
+
+    await deliverOutgoingWebhooks("asesor_asignado", {
+      contactId: input.contactId,
+      conversationId: input.threadId,
+      label: labelAssignment.label.slug,
+      labelName: labelAssignment.label.name,
+      assignedTo: labelAssignment.user.id,
+      assignedName: labelAssignment.user.full_name
+    }).catch((error) => console.error("outgoing webhook asesor_asignado failed", error));
   }
 }
 
@@ -1310,6 +1657,14 @@ export async function recordFollowUpSuggestion(input: {
       })}::jsonb
     )
   `;
+
+  await deliverOutgoingWebhooks("follow_up_proposed", {
+    contactId: input.contactId ?? null,
+    conversationId: input.threadId,
+    phone,
+    dueAt: input.dueAt.toISOString(),
+    reason: input.reason
+  }).catch((error) => console.error("outgoing webhook follow_up_proposed failed", error));
 }
 
 export async function listConversations(filters: ConversationFilters = {}) {

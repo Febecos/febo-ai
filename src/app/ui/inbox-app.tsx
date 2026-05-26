@@ -5143,13 +5143,17 @@ function isSupportedClientAttachment(file: File) {
 }
 
 function shouldUseBlobUpload(file: File) {
-  return getClientAttachmentMimeType(file).startsWith("audio/") || file.size > DIRECT_ATTACHMENT_UPLOAD_LIMIT_BYTES;
+  return !getClientAttachmentMimeType(file).startsWith("audio/") && file.size > DIRECT_ATTACHMENT_UPLOAD_LIMIT_BYTES;
 }
 
 function getClientAttachmentMaxBytes(file: File) {
   const mimeType = getClientAttachmentMimeType(file);
 
-  if (mimeType.startsWith("audio/") || mimeType.startsWith("video/")) {
+  if (mimeType.startsWith("audio/")) {
+    return BACKEND_ATTACHMENT_UPLOAD_LIMIT_BYTES;
+  }
+
+  if (mimeType.startsWith("video/")) {
     return CLIENT_DIRECT_UPLOAD_LIMIT_BYTES;
   }
 
@@ -5269,9 +5273,6 @@ function getSupportedRecordingMimeType() {
   const candidates = [
     "audio/ogg;codecs=opus",
     "audio/ogg",
-    "audio/mp4",
-    "audio/webm;codecs=opus",
-    "audio/webm",
     "audio/aac"
   ];
 
@@ -5285,10 +5286,6 @@ function getRecordingExtension(mimeType: string) {
 
   if (mimeType === "audio/aac") {
     return "aac";
-  }
-
-  if (mimeType === "audio/webm") {
-    return "webm";
   }
 
   return "m4a";

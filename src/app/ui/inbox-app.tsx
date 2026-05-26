@@ -148,6 +148,7 @@ const TAG_FILTERS = [
 ];
 const DIRECT_ATTACHMENT_UPLOAD_LIMIT_BYTES = 3.8 * 1024 * 1024;
 const MANUAL_REPLY_TIMEOUT_MS = 70000;
+const MANUAL_BLOB_UPLOAD_TIMEOUT_MS = 25000;
 const OUTGOING_WEBHOOK_EVENTS = [
   { value: "selector_checkout_abierto", label: "Selector abierto" },
   { value: "lead_caliente", label: "Lead caliente" },
@@ -2782,6 +2783,7 @@ function InboxList({
   const [replyFile, setReplyFile] = useState<File | null>(null);
   const [replyFilePreviewUrl, setReplyFilePreviewUrl] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
+  const [replyProgress, setReplyProgress] = useState("");
   const [replyError, setReplyError] = useState("");
   const [draggingFile, setDraggingFile] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -3753,49 +3755,53 @@ function InboxList({
     }
 
     setSendingReply(true);
+    setReplyProgress(replyFile ? (getClientAttachmentMimeType(replyFile).startsWith("audio/") ? "Subiendo audio..." : "Subiendo archivo...") : "Enviando...");
     setReplyError("");
     let response: Response;
 
     try {
       if (replyFile && shouldUseBlobUpload(replyFile)) {
         const uploadFile = normalizeClientAttachmentFile(replyFile);
-        const blob = await withTimeout(
-          upload(uploadFile.name || "archivo", uploadFile, {
-            access: "public",
-            handleUploadUrl: "/api/blob/upload"
-          }),
-          MANUAL_REPLY_TIMEOUT_MS,
-          "La subida del archivo tardo demasiado. Proba con un audio mas corto o reenviarlo."
-        );
+        try {
+          const blob = await withTimeout(
+            upload(uploadFile.name || "archivo", uploadFile, {
+              access: "public",
+              handleUploadUrl: "/api/blob/upload"
+            }),
+            MANUAL_BLOB_UPLOAD_TIMEOUT_MS,
+            "La subida directa del archivo tardo demasiado."
+          );
 
-        response = await fetchWithTimeout("/api/conversation-messages", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            conversationId: selected.id,
-            media: {
-              filename: replyFile.name || "archivo",
-              mimeType: uploadFile.type || getClientAttachmentMimeType(replyFile),
-              size: uploadFile.size,
-              url: blob.url
-            },
-            text: replyText.trim() || undefined
-          })
-        });
+          setReplyProgress("Enviando a WhatsApp...");
+          response = await fetchWithTimeout("/api/conversation-messages", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              conversationId: selected.id,
+              media: {
+                filename: replyFile.name || "archivo",
+                mimeType: uploadFile.type || getClientAttachmentMimeType(replyFile),
+                size: uploadFile.size,
+                url: blob.url
+              },
+              text: replyText.trim() || undefined
+            })
+          });
+        } catch (uploadError) {
+          console.warn("Direct attachment upload failed; retrying through backend.", uploadError);
+          setReplyProgress("Reintentando envio...");
+          response = await fetchWithTimeout("/api/conversation-messages", {
+            method: "POST",
+            body: buildAttachmentFormData(selected.id, replyFile, replyText.trim())
+          });
+        }
       } else {
         const body =
           replyFile ?
-            (() => {
-              const formData = new FormData();
-              formData.append("conversationId", selected.id);
-              formData.append("file", replyFile);
-              if (replyText.trim()) {
-                formData.append("caption", replyText.trim());
-              }
-              return formData;
-            })()
+            buildAttachmentFormData(selected.id, replyFile, replyText.trim())
           : JSON.stringify({ conversationId: selected.id, text: replyText.trim() });
 
+        setReplyProgress("Enviando...");
         response = await fetchWithTimeout("/api/conversation-messages", {
           method: "POST",
           headers: replyFile ? undefined : { "content-type": "application/json" },
@@ -3804,6 +3810,7 @@ function InboxList({
       }
     } catch (error) {
       setSendingReply(false);
+      setReplyProgress("");
       setReplyError(error instanceof Error ? error.message : "No pudimos enviar el mensaje.");
       return;
     }
@@ -3811,6 +3818,7 @@ function InboxList({
     const payload = await readJsonResponse(response);
 
     setSendingReply(false);
+    setReplyProgress("");
 
     if (!response.ok) {
       setReplyError(getReplySendError(response, payload));
@@ -4773,7 +4781,7 @@ function InboxList({
                 </div>
                 <button className="primary" disabled={sendingReply || preparingRecording || (!replyText.trim() && !replyFile)} type="submit">
                   <SendHorizonal size={18} />
-                  {sendingReply ? "Enviando" : replyFile ? getAttachmentSendLabel(replyFile) : "Enviar"}
+                  {sendingReply ? (replyProgress || "Enviando") : replyFile ? getAttachmentSendLabel(replyFile) : "Enviar"}
                 </button>
               </div>
               {replyError ? <span className="warn">{replyError}</span> : null}
@@ -5129,6 +5137,18 @@ function isSupportedClientAttachment(file: File) {
 
 function shouldUseBlobUpload(file: File) {
   return getClientAttachmentMimeType(file).startsWith("audio/") || file.size > DIRECT_ATTACHMENT_UPLOAD_LIMIT_BYTES;
+}
+
+function buildAttachmentFormData(conversationId: string, file: File, caption?: string) {
+  const formData = new FormData();
+  formData.append("conversationId", conversationId);
+  formData.append("file", file);
+
+  if (caption) {
+    formData.append("caption", caption);
+  }
+
+  return formData;
 }
 
 function normalizeClientAttachmentFile(file: File) {

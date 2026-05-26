@@ -3897,17 +3897,20 @@ function InboxList({
     }
 
     try {
+      const usePcmRecorder = shouldUsePcmRecorderForDevice();
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           autoGainControl: true,
+          channelCount: usePcmRecorder ? { ideal: 1 } : undefined,
           echoCancellation: true,
-          noiseSuppression: true
+          noiseSuppression: true,
+          sampleRate: usePcmRecorder ? { ideal: 16000 } : undefined
         }
       });
       recordingStreamRef.current = stream;
       const mediaRecorderMimeType = getSupportedRecordingMimeType();
 
-      if (mediaRecorderMimeType && typeof MediaRecorder !== "undefined" && !shouldUsePcmRecorderForDevice()) {
+      if (mediaRecorderMimeType && typeof MediaRecorder !== "undefined" && !usePcmRecorder) {
         const recorder = new MediaRecorder(stream, { mimeType: mediaRecorderMimeType });
         mediaRecorderRef.current = recorder;
         mediaRecorderChunksRef.current = [];
@@ -3937,12 +3940,12 @@ function InboxList({
         return;
       }
 
-      const audioContext = new AudioContextConstructor();
+      const audioContext = usePcmRecorder ? new AudioContextConstructor({ sampleRate: 16000 }) : new AudioContextConstructor();
       if (audioContext.state === "suspended") {
         await audioContext.resume();
       }
       const source = audioContext.createMediaStreamSource(stream);
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      const processor = audioContext.createScriptProcessor(usePcmRecorder ? 16384 : 4096, 1, 1);
 
       recordingSamplesRef.current = [];
       recordingSampleRateRef.current = audioContext.sampleRate;

@@ -2918,6 +2918,7 @@ button:disabled {
 .dialog > .field,
 .template-destination,
 .template-modal-grid,
+.template-delivery-options,
 .template-preview,
 .template-warning,
 .quick-form-grid,
@@ -2945,6 +2946,37 @@ button:disabled {
   border-radius: 6px;
   color: #d7dce3;
   padding: 13px;
+}
+
+.template-delivery-options {
+  align-items: center;
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 13px;
+}
+
+.template-delivery-options legend {
+  color: #d9ecff;
+  font-weight: 700;
+  padding: 0 6px;
+}
+
+.template-delivery-options label {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+}
+
+.template-delivery-options input[type="datetime-local"] {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.template-delivery-options small {
+  color: #a9c8dd;
 }
 
 .template-warning {

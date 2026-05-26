@@ -71,6 +71,27 @@ export type MessageTemplate = {
   active: boolean;
 };
 
+export type ScheduledTemplateMessage = {
+  id: string;
+  conversation_id: string;
+  contact_id: string;
+  template_id: string;
+  template_label: string;
+  template_name: string;
+  template_language_code: string;
+  phone: string;
+  body_parameters: string[];
+  scheduled_at: string;
+  timezone: string;
+  status: "pending" | "processing" | "sent" | "failed" | "cancelled";
+  created_by: string | null;
+  created_by_name: string | null;
+  sent_message_id: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type QuickReply = {
   id: string;
   name: string;
@@ -1059,6 +1080,120 @@ export async function upsertMessageTemplates(
   }
 
   return saved;
+}
+
+export async function scheduleTemplateMessage(input: {
+  conversationId: string;
+  contactId: string;
+  templateId: string;
+  phone: string;
+  bodyParameters?: string[];
+  scheduledAt: Date;
+  timezone?: string;
+  createdBy: string;
+}) {
+  const sql = getSql();
+  const rows = (await sql`
+    insert into scheduled_template_messages (
+      conversation_id,
+      contact_id,
+      template_id,
+      phone,
+      body_parameters,
+      scheduled_at,
+      timezone,
+      created_by
+    )
+    values (
+      ${input.conversationId},
+      ${input.contactId},
+      ${input.templateId},
+      ${input.phone},
+      ${JSON.stringify(input.bodyParameters ?? [])}::jsonb,
+      ${input.scheduledAt.toISOString()},
+      ${input.timezone ?? "America/Argentina/Buenos_Aires"},
+      ${input.createdBy}
+    )
+    returning id::text
+  `) as Array<{ id: string }>;
+
+  await sql`
+    insert into platform_events (contact_id, phone, event, payload)
+    values (
+      ${input.contactId},
+      ${input.phone},
+      'template_scheduled',
+      ${JSON.stringify({
+        conversationId: input.conversationId,
+        templateId: input.templateId,
+        scheduledAt: input.scheduledAt.toISOString(),
+        timezone: input.timezone ?? "America/Argentina/Buenos_Aires",
+        createdBy: input.createdBy
+      })}::jsonb
+    )
+  `;
+
+  return rows[0]?.id ?? "";
+}
+
+export async function listDueScheduledTemplateMessages(limit = 20) {
+  const sql = getSql();
+  return (await sql`
+    update scheduled_template_messages s
+    set status = 'processing',
+        updated_at = now()
+    where s.id in (
+      select id
+      from scheduled_template_messages
+      where status = 'pending'
+        and scheduled_at <= now()
+      order by scheduled_at asc
+      limit ${limit}
+      for update skip locked
+    )
+    returning
+      s.id::text,
+      s.conversation_id::text,
+      s.contact_id::text,
+      s.template_id::text,
+      s.phone,
+      s.body_parameters,
+      s.scheduled_at::text,
+      s.timezone,
+      s.status,
+      s.created_by::text,
+      s.sent_message_id,
+      s.error,
+      s.created_at::text,
+      s.updated_at::text,
+      (select label from message_templates where id = s.template_id) as template_label,
+      (select name from message_templates where id = s.template_id) as template_name,
+      (select language_code from message_templates where id = s.template_id) as template_language_code,
+      (select full_name from app_users where id = s.created_by) as created_by_name
+  `) as ScheduledTemplateMessage[];
+}
+
+export async function markScheduledTemplateMessageSent(input: { id: string; waMessageId?: string | null }) {
+  const sql = getSql();
+  await sql`
+    update scheduled_template_messages
+    set status = 'sent',
+        sent_message_id = ${input.waMessageId ?? null},
+        error = null,
+        updated_at = now()
+    where id = ${input.id}
+  `;
+}
+
+export async function markScheduledTemplateMessageFailed(input: { id: string; error: string }) {
+  const sql = getSql();
+  await sql`
+    update scheduled_template_messages
+    set status = 'failed',
+        error = ${input.error},
+        updated_at = now()
+    where id = ${input.id}
+  `;
 }
 
 export async function listQuickReplies() {

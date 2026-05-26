@@ -300,6 +300,28 @@ create table if not exists message_templates (
   unique (name, language_code)
 );
 
+create table if not exists scheduled_template_messages (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references conversations(id) on delete cascade,
+  contact_id uuid not null references contacts(id) on delete cascade,
+  template_id uuid not null references message_templates(id) on delete restrict,
+  phone text not null,
+  body_parameters jsonb not null default '[]'::jsonb,
+  scheduled_at timestamptz not null,
+  timezone text not null default 'America/Argentina/Buenos_Aires',
+  status text not null default 'pending' check (status in ('pending', 'processing', 'sent', 'failed', 'cancelled')),
+  created_by uuid references app_users(id) on delete set null,
+  sent_message_id text,
+  error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists scheduled_template_messages_status_due_idx
+  on scheduled_template_messages(status, scheduled_at);
+create index if not exists scheduled_template_messages_conversation_idx
+  on scheduled_template_messages(conversation_id, scheduled_at desc);
+
 create table if not exists label_definitions (
   slug text primary key,
   name text not null,
@@ -434,6 +456,11 @@ for each row execute function set_updated_at();
 drop trigger if exists set_message_templates_updated_at on message_templates;
 create trigger set_message_templates_updated_at
 before update on message_templates
+for each row execute function set_updated_at();
+
+drop trigger if exists set_scheduled_template_messages_updated_at on scheduled_template_messages;
+create trigger set_scheduled_template_messages_updated_at
+before update on scheduled_template_messages
 for each row execute function set_updated_at();
 
 drop trigger if exists set_label_definitions_updated_at on label_definitions;

@@ -7,6 +7,7 @@ import {
   listConversationMessages,
   listConversations,
   recordManualOutboundMessage,
+  scheduleTemplateMessage,
   updateContact,
   upsertContactConversation
 } from "@/lib/crm";
@@ -16,7 +17,8 @@ const createContactSchema = z.object({
   phone: z.string().trim().min(6).max(30),
   displayName: z.string().trim().max(120).optional(),
   templateId: z.string().uuid().optional(),
-  parameters: z.array(z.string().trim().max(200)).optional()
+  parameters: z.array(z.string().trim().max(200)).optional(),
+  scheduledAt: z.string().datetime().optional()
 });
 
 const updateContactSchema = z.object({
@@ -70,6 +72,35 @@ export async function POST(request: NextRequest) {
 
     if (!template || !template.active) {
       return NextResponse.json({ error: "Plantilla no encontrada o inactiva." }, { status: 404 });
+    }
+
+    if (parsed.data.scheduledAt) {
+      const scheduledAt = new Date(parsed.data.scheduledAt);
+
+      if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
+        return NextResponse.json({ error: "Elegí una fecha y hora futura para programar la plantilla." }, { status: 400 });
+      }
+
+      await scheduleTemplateMessage({
+        conversationId: target.conversationId,
+        contactId: target.contactId,
+        templateId: template.id,
+        phone: target.phone,
+        bodyParameters: parsed.data.parameters,
+        scheduledAt,
+        timezone: "America/Argentina/Buenos_Aires",
+        createdBy: user.id
+      });
+
+      return NextResponse.json({
+        ok: true,
+        scheduled: true,
+        contactId: target.contactId,
+        conversationId: target.conversationId,
+        contacts: await listContacts({ limit: 300 }),
+        conversations: await listConversations({ limit: 300 }),
+        messages: await listConversationMessages(target.conversationId)
+      });
     }
 
     try {

@@ -2589,6 +2589,8 @@ function InboxList({
   const [chatName, setChatName] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateParameters, setTemplateParameters] = useState("");
+  const [templateDeliveryMode, setTemplateDeliveryMode] = useState<"now" | "scheduled">("now");
+  const [templateScheduledAt, setTemplateScheduledAt] = useState("");
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const [templateMessage, setTemplateMessage] = useState("");
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -3198,6 +3200,13 @@ function InboxList({
       return;
     }
 
+    const scheduledAtIso = templateDeliveryMode === "scheduled" ? getArgentinaScheduledIso(templateScheduledAt) : null;
+
+    if (templateDeliveryMode === "scheduled" && !scheduledAtIso) {
+      setTemplateMessage("Elegi una fecha y hora futura de Argentina.");
+      return;
+    }
+
     setTemplateMessage("");
     setSendingTemplate(true);
     const response = await fetch("/api/contacts", {
@@ -3210,7 +3219,8 @@ function InboxList({
         parameters: templateParameters
           .split(/\r?\n|,/)
           .map((value) => value.trim())
-          .filter(Boolean)
+          .filter(Boolean),
+        scheduledAt: scheduledAtIso ?? undefined
       })
     });
     const payload = await readJsonResponse(response);
@@ -3226,7 +3236,9 @@ function InboxList({
     setSelectedId(payload?.conversationId ?? selected.id);
     setMessages(payload?.messages ?? []);
     setTemplateParameters("");
-    setTemplateMessage("Plantilla enviada.");
+    setTemplateScheduledAt("");
+    setTemplateDeliveryMode("now");
+    setTemplateMessage(payload?.scheduled ? "Plantilla programada." : "Plantilla enviada.");
     await refreshConversations(filters, { silent: true });
   }
 
@@ -4262,13 +4274,44 @@ function InboxList({
                     Variables del body
                     <textarea placeholder="Esta plantilla no requiere variables de body." value={templateParameters} onChange={(event) => setTemplateParameters(event.target.value)} />
                   </label>
+                  <fieldset className="template-delivery-options">
+                    <legend>Entrega</legend>
+                    <label>
+                      <input
+                        checked={templateDeliveryMode === "now"}
+                        name="templateDeliveryMode"
+                        onChange={() => setTemplateDeliveryMode("now")}
+                        type="radio"
+                      />
+                      Enviar ahora
+                    </label>
+                    <label>
+                      <input
+                        checked={templateDeliveryMode === "scheduled"}
+                        name="templateDeliveryMode"
+                        onChange={() => setTemplateDeliveryMode("scheduled")}
+                        type="radio"
+                      />
+                      Programar
+                    </label>
+                    <input
+                      aria-label="Fecha y hora programada en Argentina"
+                      disabled={templateDeliveryMode !== "scheduled"}
+                      onChange={(event) => setTemplateScheduledAt(event.target.value)}
+                      type="datetime-local"
+                      value={templateScheduledAt}
+                    />
+                    <small>Hora Argentina</small>
+                  </fieldset>
                   <div className="template-preview">Selecciona una plantilla para ver el contenido.</div>
                   <div className="template-warning">Recorda: Marketing requiere opt-in del contacto y se contabiliza como business-initiated si pasaron 24 h.</div>
                   <footer>
                     <button className="secondary" onClick={() => setTemplateComposerOpen(false)} type="button">Cancelar</button>
-                    <button className="primary" disabled={sendingTemplate || !selectedTemplateId} type="submit">{sendingTemplate ? "Enviando" : "Enviar"}</button>
+                    <button className="primary" disabled={sendingTemplate || !selectedTemplateId} type="submit">
+                      {sendingTemplate ? "Guardando" : templateDeliveryMode === "scheduled" ? "Programar" : "Enviar"}
+                    </button>
                   </footer>
-                  {templateMessage ? <span className={templateMessage.includes("enviada") ? "ok inline" : "warn"}>{templateMessage}</span> : null}
+                  {templateMessage ? <span className={templateMessage.includes("enviada") || templateMessage.includes("programada") ? "ok inline" : "warn"}>{templateMessage}</span> : null}
                 </form>
               </div>
             ) : null}
@@ -4821,6 +4864,20 @@ function markLatestManualReply(messages: ConversationMessage[], currentUser: App
     created_by: message.created_by ?? currentUser.id,
     created_by_name: message.created_by_name ?? currentUser.full_name
   } : message);
+}
+
+function getArgentinaScheduledIso(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  const scheduledAt = new Date(`${value}:00-03:00`);
+
+  if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
+    return null;
+  }
+
+  return scheduledAt.toISOString();
 }
 
 function getAudioTranscript(body: string) {

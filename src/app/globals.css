@@ -3107,11 +3107,27 @@ select option:hover {
   justify-self: start;
 }
 
+.compact-panel-title {
+  gap: 7px;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.compact-panel-title span {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
 .settings-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   padding: 12px;
+}
+
+.compact-tabs {
+  gap: 6px;
+  padding: 8px 12px;
 }
 
 .settings-tabs button {
@@ -3125,6 +3141,18 @@ select option:hover {
   gap: 7px;
   min-height: 36px;
   padding: 0 12px;
+}
+
+.compact-tabs button {
+  border-radius: 7px;
+  font-size: 13px;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.compact-tabs button svg {
+  height: 14px;
+  width: 14px;
 }
 
 .settings-tabs button.active {
@@ -3160,7 +3188,9 @@ select option:hover {
 }
 
 .scheduled-template-list .template-row {
+  align-items: center;
   border-left: 4px solid #8ed5f5;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .scheduled-template-list .scheduled-sent {
@@ -3173,6 +3203,26 @@ select option:hover {
 
 .scheduled-template-list .scheduled-processing {
   border-left-color: #fbbf24;
+}
+
+.scheduled-template-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.scheduled-delete {
+  align-items: center;
+  border-radius: 6px;
+  display: inline-flex;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 9px;
+}
+
+.scheduled-delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .reply-composer {

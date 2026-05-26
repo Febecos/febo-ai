@@ -1241,6 +1241,22 @@ export async function markScheduledTemplateMessageFailed(input: { id: string; er
   `;
 }
 
+export async function cancelScheduledTemplateMessage(input: { id: string; user: AppUser }) {
+  const sql = getSql();
+  const rows = (await sql`
+    update scheduled_template_messages
+    set status = 'cancelled',
+        error = null,
+        updated_at = now()
+    where id = ${input.id}
+      and status in ('pending', 'failed')
+      and (${input.user.role === "admin"}::boolean = true or created_by = ${input.user.id}::uuid)
+    returning id::text
+  `) as Array<{ id: string }>;
+
+  return rows.length > 0;
+}
+
 export async function listQuickReplies() {
   if (!isDbConfigured()) {
     return [];

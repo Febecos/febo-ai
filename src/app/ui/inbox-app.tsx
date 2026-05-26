@@ -2283,14 +2283,30 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
     await loadScheduledTemplates();
   }
 
+  async function deleteScheduledTemplate(id: string) {
+    setMessage("");
+    const response = await fetch(`/api/scheduled-templates?id=${encodeURIComponent(id)}`, {
+      method: "DELETE"
+    });
+    const payload = await readJsonResponse(response);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos eliminar el envio programado.");
+      return;
+    }
+
+    setScheduledTemplates(payload?.scheduled ?? []);
+    setMessage("Envio programado eliminado.");
+  }
+
   return (
     <section className="admin-panel">
-      <div className="panel-title">
-        <MessageSquareText size={18} />
+      <div className="panel-title compact-panel-title">
+        <MessageSquareText size={16} />
         Plantillas de WhatsApp
         <span>{templates.length}</span>
       </div>
-      <div className="settings-tabs">
+      <div className="settings-tabs compact-tabs">
         <button className={activeTab === "scheduled" ? "active" : ""} onClick={() => setActiveTab("scheduled")} type="button">
           <Clock3 size={16} /> Env√≠os programados
         </button>
@@ -2371,9 +2387,26 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
           <div className="template-list scheduled-template-list">
             {scheduledTemplates.length ? scheduledTemplates.map((item) => (
               <div className={`template-row scheduled-${item.status}`} key={item.id}>
-                <strong>{item.template_label}</strong>
-                <span>{item.phone} - {formatMessageTime(item.scheduled_at)}</span>
-                <small>{getScheduledTemplateStatusLabel(item.status)} - {item.created_by_name ?? "Usuario"}{item.error ? ` - ${item.error}` : ""}</small>
+                <div className="scheduled-template-body">
+                  <strong>{item.template_label}</strong>
+                  <span>{item.phone} - {formatMessageTime(item.scheduled_at)}</span>
+                  <small>
+                    {getScheduledTemplateStatusLabel(item.status)} - {item.created_by_name ?? "Usuario"}
+                    {" ∑ "}{item.template_name} / {item.template_language_code}
+                    {item.body_parameters.length ? ` ∑ Variables: ${item.body_parameters.join(", ")}` : ""}
+                    {item.error ? ` ∑ ${item.error}` : ""}
+                  </small>
+                </div>
+                <button
+                  className="danger scheduled-delete"
+                  disabled={!['pending', 'failed'].includes(item.status)}
+                  onClick={() => void deleteScheduledTemplate(item.id)}
+                  title={['pending', 'failed'].includes(item.status) ? "Eliminar envio programado" : "No se puede eliminar un envio ya procesado"}
+                  type="button"
+                >
+                  <Trash2 size={15} />
+                  Eliminar
+                </button>
               </div>
             )) : <div className="empty-state">No hay plantillas programadas todav√≠a.</div>}
           </div>
@@ -5604,3 +5637,4 @@ function getReplySendError(response: Response, payload: { error?: string } | nul
 
   return `No pudimos enviar el mensaje (${response.status}).`;
 }
+

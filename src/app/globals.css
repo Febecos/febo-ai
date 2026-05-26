@@ -3107,6 +3107,32 @@ select option:hover {
   justify-self: start;
 }
 
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+}
+
+.settings-tabs button {
+  align-items: center;
+  background: rgba(12, 55, 91, 0.82);
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 8px;
+  color: #d9ecff;
+  display: inline-flex;
+  font-weight: 700;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.settings-tabs button.active {
+  background: linear-gradient(180deg, #8ed5f5, #69bfdf);
+  border-color: rgba(142, 213, 245, 0.92);
+  color: #05243b;
+}
+
 .template-list {
   display: grid;
   gap: 10px;
@@ -3131,6 +3157,22 @@ select option:hover {
 
 .template-row small {
   font-size: 12px;
+}
+
+.scheduled-template-list .template-row {
+  border-left: 4px solid #8ed5f5;
+}
+
+.scheduled-template-list .scheduled-sent {
+  border-left-color: #42c767;
+}
+
+.scheduled-template-list .scheduled-failed {
+  border-left-color: #f43f5e;
+}
+
+.scheduled-template-list .scheduled-processing {
+  border-left-color: #fbbf24;
 }
 
 .reply-composer {

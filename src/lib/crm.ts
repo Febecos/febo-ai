@@ -1173,6 +1173,51 @@ export async function listDueScheduledTemplateMessages(limit = 20) {
   `) as ScheduledTemplateMessage[];
 }
 
+export async function listScheduledTemplateMessages(input: {
+  createdBy?: string;
+  limit?: number;
+} = {}) {
+  const sql = getSql();
+  const createdBy = input.createdBy ?? null;
+  const limit = input.limit ?? 100;
+
+  return (await sql`
+    select
+      s.id::text,
+      s.conversation_id::text,
+      s.contact_id::text,
+      s.template_id::text,
+      t.label as template_label,
+      t.name as template_name,
+      t.language_code as template_language_code,
+      s.phone,
+      s.body_parameters,
+      s.scheduled_at::text,
+      s.timezone,
+      s.status,
+      s.created_by::text,
+      u.full_name as created_by_name,
+      s.sent_message_id,
+      s.error,
+      s.created_at::text,
+      s.updated_at::text
+    from scheduled_template_messages s
+    join message_templates t on t.id = s.template_id
+    left join app_users u on u.id = s.created_by
+    where (${createdBy}::uuid is null or s.created_by = ${createdBy}::uuid)
+    order by
+      case s.status
+        when 'pending' then 0
+        when 'processing' then 1
+        when 'failed' then 2
+        when 'sent' then 3
+        else 4
+      end,
+      s.scheduled_at asc
+    limit ${limit}
+  `) as ScheduledTemplateMessage[];
+}
+
 export async function markScheduledTemplateMessageSent(input: { id: string; waMessageId?: string | null }) {
   const sql = getSql();
   await sql`

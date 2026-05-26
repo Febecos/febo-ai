@@ -51,6 +51,7 @@ import type {
   LabelDefinition,
   MessageTemplate,
   QuickReply,
+  ScheduledTemplateMessage,
   UserAdminSummary
 } from "@/lib/crm";
 
@@ -394,16 +395,14 @@ function ToolWorkspace({
           <LayoutDashboard size={18} />
           Tablero CRM
         </button>
-        {isAdmin ? (
-          <button
-            className={activeTool === "templates" ? "active" : ""}
-            onClick={() => setActiveTool("templates")}
-            type="button"
-          >
-            <MessageSquareText size={18} />
-            Plantillas
-          </button>
-        ) : null}
+        <button
+          className={activeTool === "templates" ? "active" : ""}
+          onClick={() => setActiveTool("templates")}
+          type="button"
+        >
+          <MessageSquareText size={18} />
+          Plantillas
+        </button>
         <button
           className={activeTool === "labels" ? "active" : ""}
           onClick={() => setActiveTool("labels")}
@@ -466,7 +465,7 @@ function ToolWorkspace({
           />
         ) : null}
         {activeTool === "metrics" && isAdmin ? <MetricsPanel stats={stats} /> : null}
-        {activeTool === "templates" && isAdmin ? <TemplatesPanel /> : null}
+        {activeTool === "templates" ? <TemplatesPanel currentUser={currentUser} /> : null}
         {activeTool === "labels" ? (
           <LabelsPanel currentUser={currentUser} labels={labelDefinitions} onLabelsChange={setLabelDefinitions} />
         ) : null}
@@ -2096,8 +2095,22 @@ function normalizeTemplateSearchKey(value: string) {
     .toLowerCase();
 }
 
-function TemplatesPanel() {
+function getScheduledTemplateStatusLabel(status: ScheduledTemplateMessage["status"]) {
+  const labels: Record<ScheduledTemplateMessage["status"], string> = {
+    cancelled: "cancelada",
+    failed: "fallida",
+    pending: "pendiente",
+    processing: "procesando",
+    sent: "enviada"
+  };
+
+  return labels[status] ?? status;
+}
+
+function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [scheduledTemplates, setScheduledTemplates] = useState<ScheduledTemplateMessage[]>([]);
+  const [activeTab, setActiveTab] = useState<"list" | "edit" | "scheduled">("scheduled");
   const [form, setForm] = useState({
     label: "",
     name: "",
@@ -2106,13 +2119,23 @@ function TemplatesPanel() {
     body: "",
     active: true
   });
+  const [scheduleForm, setScheduleForm] = useState({
+    phone: "",
+    displayName: "",
+    templateId: "",
+    parameters: "",
+    scheduledAt: ""
+  });
   const [bulkTemplates, setBulkTemplates] = useState("");
   const [syncingTemplates, setSyncingTemplates] = useState(false);
   const [importingTemplates, setImportingTemplates] = useState(false);
+  const [schedulingTemplate, setSchedulingTemplate] = useState(false);
   const [message, setMessage] = useState("");
+  const isAdmin = currentUser.role === "admin";
 
   useEffect(() => {
     void loadTemplates();
+    void loadScheduledTemplates();
   }, []);
 
   async function loadTemplates() {
@@ -2121,11 +2144,29 @@ function TemplatesPanel() {
 
     if (response.ok) {
       setTemplates(payload?.templates ?? []);
+      setScheduleForm((current) => ({
+        ...current,
+        templateId: current.templateId || pickInitialTemplateId(payload?.templates ?? [])
+      }));
+    }
+  }
+
+  async function loadScheduledTemplates() {
+    const response = await fetch("/api/scheduled-templates");
+    const payload = await readJsonResponse(response);
+
+    if (response.ok) {
+      setScheduledTemplates(payload?.scheduled ?? []);
     }
   }
 
   async function saveTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isAdmin) {
+      setMessage("Solo administrador puede crear o editar plantillas.");
+      return;
+    }
+
     setMessage("");
     const response = await fetch("/api/templates", {
       method: "POST",
@@ -2145,6 +2186,11 @@ function TemplatesPanel() {
   }
 
   async function syncMetaTemplates() {
+    if (!isAdmin) {
+      setMessage("Solo administrador puede sincronizar Meta.");
+      return;
+    }
+
     setMessage("");
     setSyncingTemplates(true);
     const response = await fetch("/api/templates/sync", { method: "POST" });
@@ -2161,6 +2207,11 @@ function TemplatesPanel() {
   }
 
   async function importBulkTemplates() {
+    if (!isAdmin) {
+      setMessage("Solo administrador puede importar plantillas.");
+      return;
+    }
+
     setMessage("");
     const parsedTemplates = parseBulkTemplates(bulkTemplates);
 
@@ -2188,6 +2239,50 @@ function TemplatesPanel() {
     setMessage(`Importadas ${payload?.imported ?? parsedTemplates.length} plantillas.`);
   }
 
+  async function scheduleTemplateFromPanel(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const scheduledAtIso = getArgentinaScheduledIso(scheduleForm.scheduledAt);
+
+    if (!scheduleForm.phone.trim() || !scheduleForm.templateId || !scheduledAtIso) {
+      setMessage("Carga WhatsApp, plantilla y una fecha futura en hora Argentina.");
+      return;
+    }
+
+    setMessage("");
+    setSchedulingTemplate(true);
+    const response = await fetch("/api/contacts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        phone: scheduleForm.phone,
+        displayName: scheduleForm.displayName || undefined,
+        templateId: scheduleForm.templateId,
+        parameters: scheduleForm.parameters
+          .split(/\r?\n|,/)
+          .map((value) => value.trim())
+          .filter(Boolean),
+        scheduledAt: scheduledAtIso
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setSchedulingTemplate(false);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos programar la plantilla.");
+      return;
+    }
+
+    setScheduleForm({
+      phone: "",
+      displayName: "",
+      templateId: scheduleForm.templateId,
+      parameters: "",
+      scheduledAt: ""
+    });
+    setMessage("Plantilla programada.");
+    await loadScheduledTemplates();
+  }
+
   return (
     <section className="admin-panel">
       <div className="panel-title">
@@ -2195,66 +2290,163 @@ function TemplatesPanel() {
         Plantillas de WhatsApp
         <span>{templates.length}</span>
       </div>
-      <div className="template-sync">
-        <button className="secondary" disabled={syncingTemplates} onClick={syncMetaTemplates} type="button">
-          <RefreshCcw size={17} />
-          {syncingTemplates ? "Sincronizando" : "Sincronizar Meta"}
+      <div className="settings-tabs">
+        <button className={activeTab === "scheduled" ? "active" : ""} onClick={() => setActiveTab("scheduled")} type="button">
+          <Clock3 size={16} /> Envíos programados
         </button>
-        <textarea
-          onChange={(event) => setBulkTemplates(event.target.value)}
-          placeholder="Carga masiva: nombre_meta | idioma | nombre interno | categoria | texto"
-          value={bulkTemplates}
-        />
-        <button className="secondary" disabled={importingTemplates || !bulkTemplates.trim()} onClick={importBulkTemplates} type="button">
-          <Save size={17} />
-          {importingTemplates ? "Importando" : "Importar lote"}
+        <button className={activeTab === "list" ? "active" : ""} onClick={() => setActiveTab("list")} type="button">
+          <MessageSquareText size={16} /> Listado de plantillas
         </button>
+        {isAdmin ? (
+          <button className={activeTab === "edit" ? "active" : ""} onClick={() => setActiveTab("edit")} type="button">
+            <RefreshCcw size={16} /> Sincronizar / crear
+          </button>
+        ) : null}
       </div>
-      <form className="template-form" onSubmit={saveTemplate}>
-        <div className="form-grid">
-          <label className="field">
-            Nombre interno
-            <input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} required />
-          </label>
-          <label className="field">
-            Nombre Meta
-            <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
-          </label>
-          <label className="field">
-            Idioma
-            <input value={form.languageCode} onChange={(event) => setForm({ ...form, languageCode: event.target.value })} required />
-          </label>
-          <label className="field">
-            Categoria
-            <select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>
-              <option value="utility">Utility</option>
-              <option value="marketing">Marketing</option>
-              <option value="authentication">Authentication</option>
-            </select>
-          </label>
-        </div>
-        <label className="field">
-          Texto de referencia
-          <textarea value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} />
-        </label>
-        <label className="check-field">
-          <input checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} type="checkbox" />
-          Activa
-        </label>
-        <button className="primary" type="submit">
-          <Save size={18} />
-          Guardar plantilla
-        </button>
-      </form>
-      <div className="template-list">
-        {templates.map((template) => (
-          <div className="template-row" key={template.id}>
-            <strong>{template.label}</strong>
-            <span>{template.name} - {template.language_code}</span>
-            <small>{template.active ? "activa" : "inactiva"} - {template.body || "Sin texto local"}</small>
+
+      {activeTab === "scheduled" ? (
+        <>
+          <form className="template-form" onSubmit={scheduleTemplateFromPanel}>
+            <div className="form-grid">
+              <label className="field">
+                WhatsApp
+                <input
+                  placeholder="549..."
+                  value={scheduleForm.phone}
+                  onChange={(event) => setScheduleForm({ ...scheduleForm, phone: event.target.value })}
+                  required
+                />
+              </label>
+              <label className="field">
+                Nombre
+                <input
+                  placeholder="Nombre del contacto"
+                  value={scheduleForm.displayName}
+                  onChange={(event) => setScheduleForm({ ...scheduleForm, displayName: event.target.value })}
+                />
+              </label>
+              <label className="field">
+                Fecha y hora
+                <input
+                  type="datetime-local"
+                  value={scheduleForm.scheduledAt}
+                  onChange={(event) => setScheduleForm({ ...scheduleForm, scheduledAt: event.target.value })}
+                  required
+                />
+              </label>
+              <label className="field">
+                Plantilla
+                <select
+                  value={scheduleForm.templateId}
+                  onChange={(event) => setScheduleForm({ ...scheduleForm, templateId: event.target.value })}
+                  required
+                >
+                  <option value="">Seleccionar...</option>
+                  {templates.filter((template) => template.active).map((template) => (
+                    <option key={template.id} value={template.id}>{template.label} / {template.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="field">
+              Variables del body
+              <textarea
+                placeholder="Una variable por línea o separadas por coma"
+                value={scheduleForm.parameters}
+                onChange={(event) => setScheduleForm({ ...scheduleForm, parameters: event.target.value })}
+              />
+            </label>
+            <div className="template-actions">
+              <button className="primary" disabled={schedulingTemplate} type="submit">
+                <Calendar size={18} />
+                {schedulingTemplate ? "Programando" : "Programar envío"}
+              </button>
+              <button className="secondary" onClick={() => void loadScheduledTemplates()} type="button">
+                <RefreshCcw size={17} />
+                Actualizar listado
+              </button>
+              <small>Hora Argentina</small>
+            </div>
+          </form>
+          <div className="template-list scheduled-template-list">
+            {scheduledTemplates.length ? scheduledTemplates.map((item) => (
+              <div className={`template-row scheduled-${item.status}`} key={item.id}>
+                <strong>{item.template_label}</strong>
+                <span>{item.phone} - {formatMessageTime(item.scheduled_at)}</span>
+                <small>{getScheduledTemplateStatusLabel(item.status)} - {item.created_by_name ?? "Usuario"}{item.error ? ` - ${item.error}` : ""}</small>
+              </div>
+            )) : <div className="empty-state">No hay plantillas programadas todavía.</div>}
           </div>
-        ))}
-      </div>
+        </>
+      ) : null}
+
+      {activeTab === "list" ? (
+        <div className="template-list">
+          {templates.map((template) => (
+            <div className="template-row" key={template.id}>
+              <strong>{template.label}</strong>
+              <span>{template.name} - {template.language_code}</span>
+              <small>{template.active ? "activa" : "inactiva"} - {template.body || "Sin texto local"}</small>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {activeTab === "edit" && isAdmin ? (
+        <>
+          <div className="template-sync">
+            <button className="secondary" disabled={syncingTemplates} onClick={syncMetaTemplates} type="button">
+              <RefreshCcw size={17} />
+              {syncingTemplates ? "Sincronizando" : "Sincronizar Meta"}
+            </button>
+            <textarea
+              onChange={(event) => setBulkTemplates(event.target.value)}
+              placeholder="Carga masiva: nombre_meta | idioma | nombre interno | categoria | texto"
+              value={bulkTemplates}
+            />
+            <button className="secondary" disabled={importingTemplates || !bulkTemplates.trim()} onClick={importBulkTemplates} type="button">
+              <Save size={17} />
+              {importingTemplates ? "Importando" : "Importar lote"}
+            </button>
+          </div>
+          <form className="template-form" onSubmit={saveTemplate}>
+            <div className="form-grid">
+              <label className="field">
+                Nombre interno
+                <input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} required />
+              </label>
+              <label className="field">
+                Nombre Meta
+                <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+              </label>
+              <label className="field">
+                Idioma
+                <input value={form.languageCode} onChange={(event) => setForm({ ...form, languageCode: event.target.value })} required />
+              </label>
+              <label className="field">
+                Categoria
+                <select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>
+                  <option value="utility">Utility</option>
+                  <option value="marketing">Marketing</option>
+                  <option value="authentication">Authentication</option>
+                </select>
+              </label>
+            </div>
+            <label className="field">
+              Texto de referencia
+              <textarea value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} />
+            </label>
+            <label className="check-field">
+              <input checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} type="checkbox" />
+              Activa
+            </label>
+            <button className="primary" type="submit">
+              <Save size={18} />
+              Guardar plantilla
+            </button>
+          </form>
+        </>
+      ) : null}
       {message ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
     </section>
   );

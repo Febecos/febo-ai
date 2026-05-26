@@ -131,12 +131,22 @@ export async function POST(request: NextRequest) {
         waMessageId = getSentMessageId(sent);
       }
 
-      await recordManualOutboundMessage({
+      const messageId = await recordManualOutboundMessage({
         conversationId: parsed.data.conversationId,
         contactId: target.contact_id,
         userId: user.id,
         body: buildAttachmentBody({ name: parsed.data.media.filename, type: parsed.data.media.mimeType }, caption),
         waMessageId
+      });
+      await saveMessageMedia({
+        messageId,
+        waMediaId: null,
+        mimeType: parsed.data.media.mimeType,
+        filename: parsed.data.media.filename,
+        fileSize: parsed.data.media.size,
+        storageProvider: "vercel_blob",
+        mediaUrl: parsed.data.media.url,
+        dataBase64: null
       });
     } else if ("file" in parsed.data) {
       const file = parsed.data.file;

@@ -5128,7 +5128,7 @@ function isSupportedClientAttachment(file: File) {
 }
 
 function shouldUseBlobUpload(file: File) {
-  return file.size > DIRECT_ATTACHMENT_UPLOAD_LIMIT_BYTES;
+  return getClientAttachmentMimeType(file).startsWith("audio/") || file.size > DIRECT_ATTACHMENT_UPLOAD_LIMIT_BYTES;
 }
 
 function normalizeClientAttachmentFile(file: File) {

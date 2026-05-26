@@ -48,6 +48,7 @@ import type {
   ConversationNote,
   ConversationEvent,
   ConversationSummary,
+  DashboardStats,
   LabelDefinition,
   MessageTemplate,
   QuickReply,
@@ -55,12 +56,7 @@ import type {
   UserAdminSummary
 } from "@/lib/crm";
 
-type Stats = {
-  conversations: number;
-  contacts: number;
-  handoffs: number;
-  hot: number;
-};
+type Stats = DashboardStats;
 
 type AppSetting = {
   key: string;
@@ -257,10 +253,10 @@ function LoginScreen({ dbConfigured }: { dbConfigured: boolean }) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="metric-card">
-      <strong>{value.toLocaleString("es-AR")}</strong>
+      <strong>{typeof value === "number" ? value.toLocaleString("es-AR") : value}</strong>
       <span>{label}</span>
     </div>
   );
@@ -536,20 +532,151 @@ function WhatsAppMark() {
 }
 
 function MetricsPanel({ stats }: { stats: Stats }) {
+  const total7d = stats.inbound_7d + stats.outbound_7d;
+  const aiShare = stats.outbound_7d ? Math.round((stats.ai_7d / stats.outbound_7d) * 100) : 0;
+  const manualShare = stats.outbound_7d ? Math.round((stats.manual_7d / stats.outbound_7d) * 100) : 0;
+
   return (
     <section className="metrics-panel">
       <div className="metrics-head">
         <h2>M&eacute;tricas</h2>
-        <p>Resumen operativo de Febo AI</p>
+        <p>Resumen operativo de conversaciones, vendedores, etiquetas y actividad.</p>
       </div>
       <div className="metrics-grid">
         <Metric label="Contactos" value={stats.contacts} />
         <Metric label="Conversaciones" value={stats.conversations} />
-        <Metric label="Escaladas" value={stats.handoffs} />
+        <Metric label="Abiertas" value={stats.open} />
         <Metric label="Calientes" value={stats.hot} />
+        <Metric label="Escaladas" value={stats.handoffs} />
+        <Metric label="No le&iacute;das" value={stats.unread} />
+        <Metric label="IA activa" value={stats.ai_enabled} />
+        <Metric label="Mensajes" value={stats.messages_total} />
+      </div>
+      <div className="metrics-grid compact">
+        <Metric label="Entrantes 24h" value={stats.inbound_24h} />
+        <Metric label="Salientes 24h" value={stats.outbound_24h} />
+        <Metric label="Entrantes 7d" value={stats.inbound_7d} />
+        <Metric label="Salientes 7d" value={stats.outbound_7d} />
+        <Metric label="IA 7d" value={`${stats.ai_7d} (${aiShare}%)`} />
+        <Metric label="Humanos 7d" value={`${stats.manual_7d} (${manualShare}%)`} />
+        <Metric label="Resp. prom." value={stats.avg_first_response_minutes === null ? "-" : `${stats.avg_first_response_minutes} min`} />
+        <Metric label="Media 7d" value={stats.media_7d} />
+      </div>
+      <div className="metrics-grid compact">
+        <Metric label="Plantillas enviadas 7d" value={stats.templates_sent_7d} />
+        <Metric label="Plantillas pendientes" value={stats.templates_pending} />
+        <Metric label="Plantillas fallidas 7d" value={stats.templates_failed_7d} />
+        <Metric label="Seguimientos pendientes" value={stats.followups_pending} />
+        <Metric label="Notas internas 7d" value={stats.internal_notes_7d} />
+        <Metric label="Actividad 7d" value={total7d} />
+      </div>
+      <div className="metrics-two-columns">
+        <MetricBreakdown title="Por etiqueta" items={stats.by_consultype} />
+        <MetricBreakdown title="Por estado" items={stats.by_status} />
+      </div>
+      <div className="metrics-two-columns">
+        <MetricBreakdown title="Por canal" items={stats.by_channel} />
+        <SellerMetrics sellers={stats.by_seller} />
+      </div>
+      <DailyMetrics days={stats.daily} />
+    </section>
+  );
+}
+
+function MetricBreakdown({ title, items }: { title: string; items: Array<{ label: string; value: number }> }) {
+  const max = Math.max(...items.map((item) => item.value), 1);
+
+  return (
+    <section className="metric-section">
+      <h3>{title}</h3>
+      {items.length ? (
+        <div className="metric-bars">
+          {items.map((item) => (
+            <div className="metric-bar-row" key={item.label}>
+              <span>{formatMetricLabel(item.label)}</span>
+              <div className="metric-bar-track">
+                <i style={{ width: `${Math.max(5, Math.round((item.value / max) * 100))}%` }} />
+              </div>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">Sin datos todav&iacute;a.</div>
+      )}
+    </section>
+  );
+}
+
+function SellerMetrics({ sellers }: { sellers: Stats["by_seller"] }) {
+  return (
+    <section className="metric-section">
+      <h3>Por vendedor</h3>
+      {sellers.length ? (
+        <div className="metric-table">
+          <div className="metric-table-head">
+            <span>Vendedor</span>
+            <span>Asignados</span>
+            <span>Abiertas</span>
+            <span>Calientes</span>
+            <span>Salientes 7d</span>
+          </div>
+          {sellers.map((seller) => (
+            <div className="metric-table-row" key={seller.id ?? seller.name}>
+              <strong>{seller.name}</strong>
+              <span>{seller.assigned_contacts}</span>
+              <span>{seller.open_conversations}</span>
+              <span>{seller.hot_contacts}</span>
+              <span>{seller.outbound_7d}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">Sin vendedores activos.</div>
+      )}
+    </section>
+  );
+}
+
+function DailyMetrics({ days }: { days: Stats["daily"] }) {
+  const max = Math.max(...days.map((day) => day.inbound + day.outbound), 1);
+
+  return (
+    <section className="metric-section">
+      <h3>Actividad diaria</h3>
+      <div className="daily-chart">
+        {days.map((day) => {
+          const total = day.inbound + day.outbound;
+          return (
+            <div className="daily-bar" key={day.date} title={`${formatShortDate(day.date)} - ${total} mensajes`}>
+              <div className="daily-bar-stack" style={{ height: `${Math.max(4, Math.round((total / max) * 100))}%` }}>
+                <span className="daily-inbound" style={{ flex: day.inbound || 0.001 }} />
+                <span className="daily-outbound" style={{ flex: day.outbound || 0.001 }} />
+              </div>
+              <small>{formatShortDate(day.date)}</small>
+            </div>
+          );
+        })}
+      </div>
+      <div className="metric-legend">
+        <span><i className="inbound-dot" /> Entrantes</span>
+        <span><i className="outbound-dot" /> Salientes</span>
       </div>
     </section>
   );
+}
+
+function formatMetricLabel(value: string) {
+  return value
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Sin dato";
+}
+
+function formatShortDate(value: string) {
+  const [, month, day] = value.split("-");
+  return `${day}/${month}`;
 }
 
 function SettingsPanel({ users }: { users: AppUser[] }) {

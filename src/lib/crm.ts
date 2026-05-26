@@ -294,6 +294,88 @@ export type ConversationMemory = {
   updated_at: string;
 };
 
+export type DashboardMetricPoint = {
+  label: string;
+  value: number;
+};
+
+export type DashboardSellerMetric = {
+  id: string | null;
+  name: string;
+  assigned_contacts: number;
+  open_conversations: number;
+  hot_contacts: number;
+  outbound_7d: number;
+};
+
+export type DashboardDailyMetric = {
+  date: string;
+  inbound: number;
+  outbound: number;
+  ai: number;
+  manual: number;
+};
+
+export type DashboardStats = {
+  conversations: number;
+  contacts: number;
+  handoffs: number;
+  hot: number;
+  unread: number;
+  open: number;
+  ai_enabled: number;
+  messages_total: number;
+  inbound_24h: number;
+  outbound_24h: number;
+  inbound_7d: number;
+  outbound_7d: number;
+  ai_7d: number;
+  manual_7d: number;
+  internal_notes_7d: number;
+  templates_sent_7d: number;
+  templates_pending: number;
+  templates_failed_7d: number;
+  followups_pending: number;
+  media_7d: number;
+  avg_first_response_minutes: number | null;
+  by_status: DashboardMetricPoint[];
+  by_consultype: DashboardMetricPoint[];
+  by_channel: DashboardMetricPoint[];
+  by_seller: DashboardSellerMetric[];
+  daily: DashboardDailyMetric[];
+};
+
+export function getEmptyDashboardStats(): DashboardStats {
+  return {
+    conversations: 0,
+    contacts: 0,
+    handoffs: 0,
+    hot: 0,
+    unread: 0,
+    open: 0,
+    ai_enabled: 0,
+    messages_total: 0,
+    inbound_24h: 0,
+    outbound_24h: 0,
+    inbound_7d: 0,
+    outbound_7d: 0,
+    ai_7d: 0,
+    manual_7d: 0,
+    internal_notes_7d: 0,
+    templates_sent_7d: 0,
+    templates_pending: 0,
+    templates_failed_7d: 0,
+    followups_pending: 0,
+    media_7d: 0,
+    avg_first_response_minutes: null,
+    by_status: [],
+    by_consultype: [],
+    by_channel: [],
+    by_seller: [],
+    daily: []
+  };
+}
+
 export type SelectorCheckoutLead = {
   origen: "selector";
   evento: "checkout_abierto";
@@ -2529,12 +2611,7 @@ export async function getMessageMediaByMessageId(messageId: string) {
 
 export async function getDashboardStats() {
   if (!isDbConfigured()) {
-    return {
-      conversations: 0,
-      contacts: 0,
-      handoffs: 0,
-      hot: 0
-    };
+    return getEmptyDashboardStats();
   }
 
   const sql = getSql();
@@ -2543,12 +2620,146 @@ export async function getDashboardStats() {
       (select count(*)::int from conversations) as conversations,
       (select count(*)::int from contacts) as contacts,
       (select count(*)::int from conversations where assigned_to is not null) as handoffs,
-      (select count(*)::int from contacts where consultype = 'caliente') as hot
+      (select count(*)::int from contacts where consultype = 'caliente') as hot,
+      (select count(*)::int from conversations where unread = true) as unread,
+      (select count(*)::int from conversations where status in ('open', 'waiting', 'hot', 'handoff', 'quoted')) as open,
+      (select count(*)::int from conversations where ai_enabled = true) as ai_enabled,
+      (select count(*)::int from messages) as messages_total,
+      (select count(*)::int from messages where direction = 'inbound' and created_at >= now() - interval '24 hours') as inbound_24h,
+      (select count(*)::int from messages where direction = 'outbound' and created_at >= now() - interval '24 hours') as outbound_24h,
+      (select count(*)::int from messages where direction = 'inbound' and created_at >= now() - interval '7 days') as inbound_7d,
+      (select count(*)::int from messages where direction = 'outbound' and created_at >= now() - interval '7 days') as outbound_7d,
+      (select count(*)::int from messages where direction = 'outbound' and metadata->>'source' = 'febo_ai' and created_at >= now() - interval '7 days') as ai_7d,
+      (select count(*)::int from messages where direction = 'outbound' and coalesce(metadata->>'source', '') <> 'febo_ai' and created_by is not null and created_at >= now() - interval '7 days') as manual_7d,
+      (select count(*)::int from conversation_notes where created_at >= now() - interval '7 days') as internal_notes_7d,
+      (select count(*)::int from scheduled_template_messages where status = 'sent' and updated_at >= now() - interval '7 days') as templates_sent_7d,
+      (select count(*)::int from scheduled_template_messages where status in ('pending', 'processing')) as templates_pending,
+      (select count(*)::int from scheduled_template_messages where status = 'failed' and updated_at >= now() - interval '7 days') as templates_failed_7d,
+      (select count(*)::int from follow_ups where status in ('proposed', 'pending')) as followups_pending,
+      (select count(*)::int from message_media where created_at >= now() - interval '7 days') as media_7d,
+      (
+        select round(avg(extract(epoch from (first_out.created_at - first_in.created_at)) / 60))::int
+        from (
+          select conversation_id, min(created_at) as created_at
+          from messages
+          where direction = 'inbound'
+            and created_at >= now() - interval '30 days'
+          group by conversation_id
+        ) first_in
+        join lateral (
+          select min(m2.created_at) as created_at
+          from messages m2
+          where m2.conversation_id = first_in.conversation_id
+            and m2.direction = 'outbound'
+            and m2.created_at > first_in.created_at
+        ) first_out on first_out.created_at is not null
+      ) as avg_first_response_minutes,
+      coalesce((
+        select jsonb_agg(jsonb_build_object('label', status, 'value', total) order by total desc)
+        from (
+          select status, count(*)::int as total
+          from conversations
+          group by status
+        ) x
+      ), '[]'::jsonb) as by_status,
+      coalesce((
+        select jsonb_agg(jsonb_build_object('label', consultype, 'value', total) order by total desc)
+        from (
+          select consultype, count(*)::int as total
+          from contacts
+          group by consultype
+        ) x
+      ), '[]'::jsonb) as by_consultype,
+      coalesce((
+        select jsonb_agg(jsonb_build_object('label', channel, 'value', total) order by total desc)
+        from (
+          select channel, count(*)::int as total
+          from conversations
+          group by channel
+        ) x
+      ), '[]'::jsonb) as by_channel,
+      coalesce((
+        select jsonb_agg(
+          jsonb_build_object(
+            'id', seller_id,
+            'name', seller_name,
+            'assigned_contacts', assigned_contacts,
+            'open_conversations', open_conversations,
+            'hot_contacts', hot_contacts,
+            'outbound_7d', outbound_7d
+          )
+          order by assigned_contacts desc, open_conversations desc, seller_name
+        )
+        from (
+          select
+            u.id::text as seller_id,
+            u.full_name as seller_name,
+            count(distinct ct.id)::int as assigned_contacts,
+            count(distinct c.id) filter (where c.status in ('open', 'waiting', 'hot', 'handoff', 'quoted'))::int as open_conversations,
+            count(distinct ct.id) filter (where ct.consultype = 'caliente')::int as hot_contacts,
+            count(distinct m.id) filter (where m.direction = 'outbound' and m.created_at >= now() - interval '7 days')::int as outbound_7d
+          from app_users u
+          left join contacts ct on ct.assigned_to = u.id
+          left join conversations c on c.assigned_to = u.id
+          left join messages m on m.created_by = u.id
+          where u.active = true and (u.sales_group = true or u.role = 'vendedor')
+          group by u.id, u.full_name
+        ) x
+      ), '[]'::jsonb) as by_seller,
+      coalesce((
+        select jsonb_agg(
+          jsonb_build_object(
+            'date', to_char(day, 'YYYY-MM-DD'),
+            'inbound', inbound,
+            'outbound', outbound,
+            'ai', ai,
+            'manual', manual
+          )
+          order by day
+        )
+        from (
+          select
+            d.day,
+            count(m.id) filter (where m.direction = 'inbound')::int as inbound,
+            count(m.id) filter (where m.direction = 'outbound')::int as outbound,
+            count(m.id) filter (where m.direction = 'outbound' and m.metadata->>'source' = 'febo_ai')::int as ai,
+            count(m.id) filter (where m.direction = 'outbound' and coalesce(m.metadata->>'source', '') <> 'febo_ai' and m.created_by is not null)::int as manual
+          from generate_series(
+            date_trunc('day', now() - interval '13 days'),
+            date_trunc('day', now()),
+            interval '1 day'
+          ) d(day)
+          left join messages m on m.created_at >= d.day and m.created_at < d.day + interval '1 day'
+          group by d.day
+        ) x
+      ), '[]'::jsonb) as daily
   `) as Array<{
       conversations: number;
       contacts: number;
       handoffs: number;
       hot: number;
+      unread: number;
+      open: number;
+      ai_enabled: number;
+      messages_total: number;
+      inbound_24h: number;
+      outbound_24h: number;
+      inbound_7d: number;
+      outbound_7d: number;
+      ai_7d: number;
+      manual_7d: number;
+      internal_notes_7d: number;
+      templates_sent_7d: number;
+      templates_pending: number;
+      templates_failed_7d: number;
+      followups_pending: number;
+      media_7d: number;
+      avg_first_response_minutes: number | null;
+      by_status: DashboardMetricPoint[];
+      by_consultype: DashboardMetricPoint[];
+      by_channel: DashboardMetricPoint[];
+      by_seller: DashboardSellerMetric[];
+      daily: DashboardDailyMetric[];
     }>;
 
   return rows[0];

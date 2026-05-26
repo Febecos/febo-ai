@@ -1,5 +1,5 @@
 import { getCurrentUser } from "@/lib/auth";
-import { getAdminUsers, getDashboardStats, getUsers, listConversations } from "@/lib/crm";
+import { getAdminUsers, getDashboardStats, getEmptyDashboardStats, getUsers, listConversations } from "@/lib/crm";
 import { isDbConfigured } from "@/lib/db";
 import { InboxApp } from "./ui/inbox-app";
 
@@ -13,7 +13,7 @@ export default async function Home() {
         getDashboardStats(),
         user.role === "admin" ? getAdminUsers() : Promise.resolve([])
       ])
-    : [[], [], { conversations: 0, contacts: 0, handoffs: 0, hot: 0 }, []];
+    : [[], [], getEmptyDashboardStats(), []];
 
   return (
     <InboxApp

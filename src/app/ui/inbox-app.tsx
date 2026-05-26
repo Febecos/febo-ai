@@ -2160,6 +2160,21 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
     }
   }
 
+  async function deleteScheduledTemplate(id: string) {
+    const response = await fetch(`/api/scheduled-templates?id=${encodeURIComponent(id)}`, {
+      method: "DELETE"
+    });
+    const payload = await readJsonResponse(response);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos eliminar el envio programado.");
+      return;
+    }
+
+    setScheduledTemplates(payload?.scheduled ?? []);
+    setMessage("Envio programado eliminado.");
+  }
+
   async function saveTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!isAdmin) {
@@ -2283,22 +2298,6 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
     await loadScheduledTemplates();
   }
 
-  async function deleteScheduledTemplate(id: string) {
-    setMessage("");
-    const response = await fetch(`/api/scheduled-templates?id=${encodeURIComponent(id)}`, {
-      method: "DELETE"
-    });
-    const payload = await readJsonResponse(response);
-
-    if (!response.ok) {
-      setMessage(payload?.error ?? "No pudimos eliminar el envio programado.");
-      return;
-    }
-
-    setScheduledTemplates(payload?.scheduled ?? []);
-    setMessage("Envio programado eliminado.");
-  }
-
   return (
     <section className="admin-panel">
       <div className="panel-title compact-panel-title">
@@ -2392,16 +2391,16 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
                   <span>{item.phone} - {formatMessageTime(item.scheduled_at)}</span>
                   <small>
                     {getScheduledTemplateStatusLabel(item.status)} - {item.created_by_name ?? "Usuario"}
-                    {" · "}{item.template_name} / {item.template_language_code}
-                    {item.body_parameters.length ? ` · Variables: ${item.body_parameters.join(", ")}` : ""}
-                    {item.error ? ` · ${item.error}` : ""}
+                    {" - "}{item.template_name} / {item.template_language_code}
+                    {item.body_parameters.length ? ` - Variables: ${item.body_parameters.join(", ")}` : ""}
+                    {item.error ? ` - ${item.error}` : ""}
                   </small>
                 </div>
                 <button
                   className="danger scheduled-delete"
-                  disabled={!['pending', 'failed'].includes(item.status)}
+                  disabled={!["pending", "failed"].includes(item.status)}
                   onClick={() => void deleteScheduledTemplate(item.id)}
-                  title={['pending', 'failed'].includes(item.status) ? "Eliminar envio programado" : "No se puede eliminar un envio ya procesado"}
+                  title={["pending", "failed"].includes(item.status) ? "Eliminar envio programado" : "No se puede eliminar un envio ya procesado"}
                   type="button"
                 >
                   <Trash2 size={15} />
@@ -5637,4 +5636,3 @@ function getReplySendError(response: Response, payload: { error?: string } | nul
 
   return `No pudimos enviar el mensaje (${response.status}).`;
 }
-

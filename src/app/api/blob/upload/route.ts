@@ -15,6 +15,7 @@ const allowedContentTypes = [
   "audio/ogg",
   "audio/wav",
   "audio/x-wav",
+  "audio/webm",
   "application/pdf",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

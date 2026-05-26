@@ -147,6 +147,8 @@ const TAG_FILTERS = [
   "presupuesto-enviado"
 ];
 const DIRECT_ATTACHMENT_UPLOAD_LIMIT_BYTES = 3.8 * 1024 * 1024;
+const BACKEND_ATTACHMENT_UPLOAD_LIMIT_BYTES = 16 * 1024 * 1024;
+const CLIENT_DIRECT_UPLOAD_LIMIT_BYTES = 100 * 1024 * 1024;
 const MANUAL_REPLY_TIMEOUT_MS = 70000;
 const MANUAL_BLOB_UPLOAD_TIMEOUT_MS = 25000;
 const OUTGOING_WEBHOOK_EVENTS = [
@@ -3788,6 +3790,10 @@ function InboxList({
             })
           });
         } catch (uploadError) {
+          if (uploadFile.size > BACKEND_ATTACHMENT_UPLOAD_LIMIT_BYTES) {
+            throw uploadError;
+          }
+
           console.warn("Direct attachment upload failed; retrying through backend.", uploadError);
           setReplyProgress("Reintentando envio...");
           response = await fetchWithTimeout("/api/conversation-messages", {
@@ -3844,8 +3850,9 @@ function InboxList({
       return;
     }
 
-    if (file.size > 16 * 1024 * 1024) {
-      setReplyError("El archivo supera 16 MB.");
+    const maxBytes = getClientAttachmentMaxBytes(file);
+    if (file.size > maxBytes) {
+      setReplyError(`El archivo supera ${formatMegabytes(maxBytes)} MB.`);
       return;
     }
 
@@ -4671,7 +4678,7 @@ function InboxList({
               onSubmit={sendManualReply}
             >
               <input
-                accept="image/png,image/jpeg,image/webp,video/mp4,video/3gpp,audio/aac,audio/mp4,audio/mpeg,audio/ogg,audio/wav,.mp4,.3gp,.m4a,.aac,.mp3,.ogg,.wav,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                accept="image/png,image/jpeg,image/webp,video/mp4,video/3gpp,audio/aac,audio/mp4,audio/mpeg,audio/ogg,audio/wav,audio/webm,.mp4,.3gp,.m4a,.aac,.mp3,.ogg,.wav,.webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
                 hidden
                 onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
                 ref={attachmentInputRef}
@@ -5139,6 +5146,20 @@ function shouldUseBlobUpload(file: File) {
   return getClientAttachmentMimeType(file).startsWith("audio/") || file.size > DIRECT_ATTACHMENT_UPLOAD_LIMIT_BYTES;
 }
 
+function getClientAttachmentMaxBytes(file: File) {
+  const mimeType = getClientAttachmentMimeType(file);
+
+  if (mimeType.startsWith("audio/") || mimeType.startsWith("video/")) {
+    return CLIENT_DIRECT_UPLOAD_LIMIT_BYTES;
+  }
+
+  return BACKEND_ATTACHMENT_UPLOAD_LIMIT_BYTES;
+}
+
+function formatMegabytes(bytes: number) {
+  return Math.floor(bytes / (1024 * 1024));
+}
+
 function buildAttachmentFormData(conversationId: string, file: File, caption?: string) {
   const formData = new FormData();
   formData.append("conversationId", conversationId);
@@ -5237,7 +5258,7 @@ function isSupportedClientAudio(mimeType: string) {
     return false;
   }
 
-  return ["audio/aac", "audio/amr", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/wav", "audio/x-wav"].includes(normalized);
+  return ["audio/aac", "audio/amr", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/wav", "audio/x-wav", "audio/webm"].includes(normalized);
 }
 
 function getSupportedRecordingMimeType() {
@@ -5248,6 +5269,9 @@ function getSupportedRecordingMimeType() {
   const candidates = [
     "audio/ogg;codecs=opus",
     "audio/ogg",
+    "audio/mp4",
+    "audio/webm;codecs=opus",
+    "audio/webm",
     "audio/aac"
   ];
 
@@ -5261,6 +5285,10 @@ function getRecordingExtension(mimeType: string) {
 
   if (mimeType === "audio/aac") {
     return "aac";
+  }
+
+  if (mimeType === "audio/webm") {
+    return "webm";
   }
 
   return "m4a";

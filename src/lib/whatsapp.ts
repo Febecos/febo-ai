@@ -812,7 +812,7 @@ async function getWhatsAppErrorMessage(response: Response, action: string) {
     metaError = null;
   }
 
-  if (response.status === 401 || metaError?.code === 190 || metaError?.type === "OAuthException") {
+  if (response.status === 401 || metaError?.code === 190) {
     return "Token de WhatsApp vencido o invalido. Actualiza WHATSAPP_ACCESS_TOKEN en Vercel con un token vigente de Meta y redeploya.";
   }
 

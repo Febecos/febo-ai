@@ -539,30 +539,31 @@ function MetricsPanel({ stats }: { stats: Stats }) {
   return (
     <section className="metrics-panel">
       <div className="metrics-head">
-        <h2>M&eacute;tricas</h2>
-        <p>Resumen operativo de conversaciones, vendedores, etiquetas y actividad.</p>
+        <p className="eyebrow">Panel de rendimiento</p>
+        <h2>M&eacute;tricas avanzadas</h2>
+        <p>Una vista unificada para seguir conversaciones, conversiones, fuentes de llegada y actividad comercial.</p>
       </div>
       <div className="metrics-grid">
-        <Metric label="Contactos" value={stats.contacts} />
         <Metric label="Conversaciones" value={stats.conversations} />
-        <Metric label="Abiertas" value={stats.open} />
-        <Metric label="Calientes" value={stats.hot} />
+        <Metric label="Contactos" value={stats.contacts} />
+        <Metric label="Prospectos" value={stats.prospects} />
+        <Metric label="Clientes" value={stats.clients} />
+        <Metric label="Conversi&oacute;n" value={`${stats.conversion_rate}%`} />
         <Metric label="Escaladas" value={stats.handoffs} />
+        <Metric label="Calientes" value={stats.hot} />
         <Metric label="No le&iacute;das" value={stats.unread} />
-        <Metric label="IA activa" value={stats.ai_enabled} />
-        <Metric label="Mensajes" value={stats.messages_total} />
+      </div>
+      <div className="metrics-two-columns wide-left">
+        <AcquisitionChart days={stats.acquisition_daily} />
+        <SourceMetrics sources={stats.by_source} total={stats.contacts} />
       </div>
       <div className="metrics-grid compact">
         <Metric label="Entrantes 24h" value={stats.inbound_24h} />
         <Metric label="Salientes 24h" value={stats.outbound_24h} />
-        <Metric label="Entrantes 7d" value={stats.inbound_7d} />
-        <Metric label="Salientes 7d" value={stats.outbound_7d} />
-        <Metric label="IA 7d" value={`${stats.ai_7d} (${aiShare}%)`} />
-        <Metric label="Humanos 7d" value={`${stats.manual_7d} (${manualShare}%)`} />
+        <Metric label="IA activa" value={stats.ai_enabled} />
+        <Metric label="Mensajes total" value={stats.messages_total} />
         <Metric label="Resp. prom." value={stats.avg_first_response_minutes === null ? "-" : `${stats.avg_first_response_minutes} min`} />
         <Metric label="Media 7d" value={stats.media_7d} />
-      </div>
-      <div className="metrics-grid compact">
         <Metric label="Plantillas enviadas 7d" value={stats.templates_sent_7d} />
         <Metric label="Plantillas pendientes" value={stats.templates_pending} />
         <Metric label="Plantillas fallidas 7d" value={stats.templates_failed_7d} />
@@ -570,15 +571,93 @@ function MetricsPanel({ stats }: { stats: Stats }) {
         <Metric label="Notas internas 7d" value={stats.internal_notes_7d} />
         <Metric label="Actividad 7d" value={total7d} />
       </div>
-      <div className="metrics-two-columns">
-        <MetricBreakdown title="Por etiqueta" items={stats.by_consultype} />
-        <MetricBreakdown title="Por estado" items={stats.by_status} />
+      <section className="metrics-section-title">
+        <h3>Conversaci&oacute;n y operaci&oacute;n</h3>
+        <p>Volumen reciente, mezcla IA/humanos, etiquetas y carga por vendedor.</p>
+      </section>
+      <div className="metrics-grid compact">
+        <Metric label="Entrantes 7d" value={stats.inbound_7d} />
+        <Metric label="Salientes 7d" value={stats.outbound_7d} />
+        <Metric label="IA 7d" value={`${stats.ai_7d} (${aiShare}%)`} />
+        <Metric label="Humanos 7d" value={`${stats.manual_7d} (${manualShare}%)`} />
+        <Metric label="Reactivadas" value={`${stats.conversion.followups_reactivated} (${stats.conversion.followups_reactivation_rate}%)`} />
+        <Metric label="Tiempo conv." value={stats.conversion.avg_conversion_days === null ? "-" : `${stats.conversion.avg_conversion_days} d&iacute;as`} />
       </div>
       <div className="metrics-two-columns">
+        <MetricBreakdown title="Por etiqueta" items={stats.by_consultype} />
+        <MetricBreakdown title="Por sentimiento" items={stats.by_sentiment} />
+      </div>
+      <div className="metrics-two-columns">
+        <MetricBreakdown title="Por estado" items={stats.by_status} />
         <MetricBreakdown title="Por canal" items={stats.by_channel} />
+      </div>
+      <div className="metrics-two-columns">
+        <MetricBreakdown title="Por plataforma" items={stats.by_platform} />
         <SellerMetrics sellers={stats.by_seller} />
       </div>
       <DailyMetrics days={stats.daily} />
+    </section>
+  );
+}
+
+function AcquisitionChart({ days }: { days: Stats["acquisition_daily"] }) {
+  const max = Math.max(...days.map((day) => day.selector + day.whatsapp + day.manual + day.other), 1);
+
+  return (
+    <section className="metric-section">
+      <div className="metric-section-head">
+        <h3>Adquisici&oacute;n y atribuci&oacute;n</h3>
+        <span>{days.reduce((sum, day) => sum + day.selector + day.whatsapp + day.manual + day.other, 0).toLocaleString("es-AR")} primeros contactos</span>
+      </div>
+      <div className="acquisition-chart">
+        {days.map((day) => {
+          const total = day.selector + day.whatsapp + day.manual + day.other;
+          return (
+            <div className="acquisition-day" key={day.date} title={`${formatShortDate(day.date)} - ${total} contactos`}>
+              <div className="acquisition-stack" style={{ height: `${Math.max(3, Math.round((total / max) * 100))}%` }}>
+                <span className="source-selector" style={{ flex: day.selector || 0.001 }} />
+                <span className="source-whatsapp" style={{ flex: day.whatsapp || 0.001 }} />
+                <span className="source-manual" style={{ flex: day.manual || 0.001 }} />
+                <span className="source-other" style={{ flex: day.other || 0.001 }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="metric-legend">
+        <span><i className="source-selector" /> Selector</span>
+        <span><i className="source-whatsapp" /> WhatsApp</span>
+        <span><i className="source-manual" /> Manual/importado</span>
+        <span><i className="source-other" /> Otro</span>
+      </div>
+      <p className="metric-footnote">Se cuenta el primer contacto registrado. Si una fuente no trae tracking suficiente, queda como WhatsApp u otro origen.</p>
+    </section>
+  );
+}
+
+function SourceMetrics({ sources, total }: { sources: Stats["by_source"]; total: number }) {
+  return (
+    <section className="metric-section">
+      <div className="metric-section-head">
+        <h3>Canales de llegada</h3>
+        <span>{sources.length} fuentes</span>
+      </div>
+      <div className="source-list">
+        {sources.length ? sources.slice(0, 8).map((source) => (
+          <article className="source-card" key={source.label}>
+            <strong>{formatMetricLabel(source.label)}</strong>
+            <b>{source.total.toLocaleString("es-AR")}</b>
+            <div>
+              <span>{source.hot} calientes</span>
+              <span>{source.assigned} asignados</span>
+              <span>{source.client} clientes</span>
+              <span>{total ? Math.round((source.total / total) * 100) : 0}% base</span>
+            </div>
+          </article>
+        )) : (
+          <div className="empty-state">Sin fuentes registradas.</div>
+        )}
+      </div>
     </section>
   );
 }

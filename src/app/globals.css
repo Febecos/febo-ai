@@ -214,6 +214,26 @@ button:disabled {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.metrics-two-columns.wide-left {
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
+}
+
+.metrics-section-title {
+  display: grid;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.metrics-section-title h3 {
+  font-size: 20px;
+  margin: 0;
+}
+
+.metrics-section-title p {
+  color: var(--muted);
+  margin: 0;
+}
+
 .metric-section {
   background: linear-gradient(180deg, rgba(45, 100, 143, 0.86), rgba(16, 71, 110, 0.86));
   border: 1px solid rgba(125, 199, 234, 0.32);
@@ -227,6 +247,23 @@ button:disabled {
 .metric-section h3 {
   font-size: 15px;
   margin: 0;
+}
+
+.metric-section-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.metric-section-head span {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  padding: 4px 9px;
+  white-space: nowrap;
 }
 
 .metric-bars {
@@ -354,6 +391,94 @@ button:disabled {
 
 .outbound-dot {
   background: #8dc63f;
+}
+
+.acquisition-chart {
+  align-items: end;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(30, minmax(5px, 1fr));
+  min-height: 210px;
+  padding-top: 12px;
+}
+
+.acquisition-day {
+  align-items: end;
+  display: flex;
+  height: 100%;
+  min-width: 0;
+}
+
+.acquisition-stack {
+  background: rgba(8, 32, 55, 0.38);
+  border-radius: 4px 4px 0 0;
+  display: flex;
+  flex-direction: column-reverse;
+  min-height: 3px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.source-selector {
+  background: #8dc63f;
+}
+
+.source-whatsapp {
+  background: #79d1f2;
+}
+
+.source-manual {
+  background: #facc15;
+}
+
+.source-other {
+  background: #c084fc;
+}
+
+.metric-footnote {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  margin: 0;
+}
+
+.source-list {
+  display: grid;
+  gap: 10px;
+}
+
+.source-card {
+  background: rgba(8, 32, 55, 0.34);
+  border: 1px solid rgba(125, 199, 234, 0.18);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.source-card strong {
+  font-size: 14px;
+}
+
+.source-card b {
+  font-size: 20px;
+}
+
+.source-card div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  grid-column: 1 / -1;
+}
+
+.source-card span {
+  background: rgba(255, 255, 255, 0.11);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 11px;
+  padding: 3px 7px;
 }
 
 .crm-panel {
@@ -3767,8 +3892,33 @@ select option:hover {
   .stat-grid,
   .detail-grid,
   .form-grid,
-  .user-grid {
+  .user-grid,
+  .metrics-grid,
+  .metrics-grid.compact,
+  .metrics-two-columns,
+  .metrics-two-columns.wide-left {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metrics-panel {
+    padding: 10px;
+  }
+
+  .metric-table-head,
+  .metric-table-row {
+    grid-template-columns: minmax(120px, 1fr) repeat(2, minmax(58px, 0.45fr));
+  }
+
+  .metric-table-head span:nth-child(4),
+  .metric-table-head span:nth-child(5),
+  .metric-table-row span:nth-child(4),
+  .metric-table-row span:nth-child(5) {
+    display: none;
+  }
+
+  .acquisition-chart {
+    grid-template-columns: repeat(30, minmax(4px, 1fr));
+    min-height: 150px;
   }
 
   .workspace-grid {
@@ -4288,8 +4438,20 @@ select option:hover {
   .detail-grid,
   .form-grid,
   .user-grid,
-  .contacts-manager {
+  .contacts-manager,
+  .metrics-grid,
+  .metrics-grid.compact,
+  .metrics-two-columns,
+  .metrics-two-columns.wide-left {
     grid-template-columns: 1fr;
+  }
+
+  .metric-bar-row {
+    grid-template-columns: minmax(92px, 0.8fr) minmax(70px, 1fr) 36px;
+  }
+
+  .metric-legend {
+    flex-wrap: wrap;
   }
 
   .tool-sidebar {

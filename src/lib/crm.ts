@@ -316,11 +316,40 @@ export type DashboardDailyMetric = {
   manual: number;
 };
 
+export type DashboardAcquisitionDay = {
+  date: string;
+  selector: number;
+  whatsapp: number;
+  manual: number;
+  other: number;
+};
+
+export type DashboardSourceMetric = {
+  label: string;
+  total: number;
+  hot: number;
+  assigned: number;
+  client: number;
+};
+
+export type DashboardConversionStats = {
+  prospects: number;
+  clients: number;
+  conversion_rate: number;
+  avg_conversion_days: number | null;
+  followups_total: number;
+  followups_reactivated: number;
+  followups_reactivation_rate: number;
+};
+
 export type DashboardStats = {
   conversations: number;
   contacts: number;
   handoffs: number;
   hot: number;
+  clients: number;
+  prospects: number;
+  conversion_rate: number;
   unread: number;
   open: number;
   ai_enabled: number;
@@ -338,11 +367,16 @@ export type DashboardStats = {
   followups_pending: number;
   media_7d: number;
   avg_first_response_minutes: number | null;
+  acquisition_daily: DashboardAcquisitionDay[];
+  by_source: DashboardSourceMetric[];
   by_status: DashboardMetricPoint[];
   by_consultype: DashboardMetricPoint[];
+  by_sentiment: DashboardMetricPoint[];
   by_channel: DashboardMetricPoint[];
+  by_platform: DashboardMetricPoint[];
   by_seller: DashboardSellerMetric[];
   daily: DashboardDailyMetric[];
+  conversion: DashboardConversionStats;
 };
 
 export function getEmptyDashboardStats(): DashboardStats {
@@ -351,6 +385,9 @@ export function getEmptyDashboardStats(): DashboardStats {
     contacts: 0,
     handoffs: 0,
     hot: 0,
+    clients: 0,
+    prospects: 0,
+    conversion_rate: 0,
     unread: 0,
     open: 0,
     ai_enabled: 0,
@@ -368,11 +405,24 @@ export function getEmptyDashboardStats(): DashboardStats {
     followups_pending: 0,
     media_7d: 0,
     avg_first_response_minutes: null,
+    acquisition_daily: [],
+    by_source: [],
     by_status: [],
     by_consultype: [],
+    by_sentiment: [],
     by_channel: [],
+    by_platform: [],
     by_seller: [],
-    daily: []
+    daily: [],
+    conversion: {
+      prospects: 0,
+      clients: 0,
+      conversion_rate: 0,
+      avg_conversion_days: null,
+      followups_total: 0,
+      followups_reactivated: 0,
+      followups_reactivation_rate: 0
+    }
   };
 }
 
@@ -2621,6 +2671,17 @@ export async function getDashboardStats() {
       (select count(*)::int from contacts) as contacts,
       (select count(*)::int from conversations where assigned_to is not null) as handoffs,
       (select count(*)::int from contacts where consultype = 'caliente') as hot,
+      (select count(*)::int from contacts where consultype = 'cliente' or contact_type = 'cliente') as clients,
+      (select count(*)::int from contacts where coalesce(consultype, '') <> 'cliente' and coalesce(contact_type, '') <> 'cliente') as prospects,
+      (
+        select coalesce(round(
+          (count(*) filter (where consultype = 'cliente' or contact_type = 'cliente'))::numeric
+          * 100
+          / nullif(count(*), 0),
+          1
+        ), 0)::float
+        from contacts
+      ) as conversion_rate,
       (select count(*)::int from conversations where unread = true) as unread,
       (select count(*)::int from conversations where status in ('open', 'waiting', 'hot', 'handoff', 'quoted')) as open,
       (select count(*)::int from conversations where ai_enabled = true) as ai_enabled,
@@ -2655,6 +2716,58 @@ export async function getDashboardStats() {
         ) first_out on first_out.created_at is not null
       ) as avg_first_response_minutes,
       coalesce((
+        select jsonb_agg(
+          jsonb_build_object(
+            'date', to_char(day, 'YYYY-MM-DD'),
+            'selector', selector,
+            'whatsapp', whatsapp,
+            'manual', manual,
+            'other', other
+          )
+          order by day
+        )
+        from (
+          select
+            d.day,
+            count(ct.id) filter (where coalesce(ct.source, '') = 'selector')::int as selector,
+            count(ct.id) filter (where coalesce(ct.platform, '') = 'whatsapp' and coalesce(ct.source, '') <> 'selector')::int as whatsapp,
+            count(ct.id) filter (where coalesce(ct.source, '') in ('manual', 'imported'))::int as manual,
+            count(ct.id) filter (
+              where coalesce(ct.source, '') not in ('selector', 'manual', 'imported')
+                and coalesce(ct.platform, '') <> 'whatsapp'
+            )::int as other
+          from generate_series(
+            date_trunc('day', now() - interval '29 days'),
+            date_trunc('day', now()),
+            interval '1 day'
+          ) d(day)
+          left join contacts ct on ct.created_at >= d.day and ct.created_at < d.day + interval '1 day'
+          group by d.day
+        ) x
+      ), '[]'::jsonb) as acquisition_daily,
+      coalesce((
+        select jsonb_agg(
+          jsonb_build_object(
+            'label', source_label,
+            'total', total,
+            'hot', hot,
+            'assigned', assigned,
+            'client', client
+          )
+          order by total desc, source_label
+        )
+        from (
+          select
+            coalesce(nullif(ct.source, ''), nullif(ct.platform, ''), 'sin-origen') as source_label,
+            count(*)::int as total,
+            count(*) filter (where ct.consultype = 'caliente')::int as hot,
+            count(*) filter (where ct.assigned_to is not null)::int as assigned,
+            count(*) filter (where ct.consultype = 'cliente' or ct.contact_type = 'cliente')::int as client
+          from contacts ct
+          group by coalesce(nullif(ct.source, ''), nullif(ct.platform, ''), 'sin-origen')
+        ) x
+      ), '[]'::jsonb) as by_source,
+      coalesce((
         select jsonb_agg(jsonb_build_object('label', status, 'value', total) order by total desc)
         from (
           select status, count(*)::int as total
@@ -2671,6 +2784,14 @@ export async function getDashboardStats() {
         ) x
       ), '[]'::jsonb) as by_consultype,
       coalesce((
+        select jsonb_agg(jsonb_build_object('label', sentiment, 'value', total) order by total desc)
+        from (
+          select sentiment, count(*)::int as total
+          from contacts
+          group by sentiment
+        ) x
+      ), '[]'::jsonb) as by_sentiment,
+      coalesce((
         select jsonb_agg(jsonb_build_object('label', channel, 'value', total) order by total desc)
         from (
           select channel, count(*)::int as total
@@ -2678,6 +2799,14 @@ export async function getDashboardStats() {
           group by channel
         ) x
       ), '[]'::jsonb) as by_channel,
+      coalesce((
+        select jsonb_agg(jsonb_build_object('label', platform, 'value', total) order by total desc)
+        from (
+          select platform, count(*)::int as total
+          from contacts
+          group by platform
+        ) x
+      ), '[]'::jsonb) as by_platform,
       coalesce((
         select jsonb_agg(
           jsonb_build_object(
@@ -2732,12 +2861,71 @@ export async function getDashboardStats() {
           left join messages m on m.created_at >= d.day and m.created_at < d.day + interval '1 day'
           group by d.day
         ) x
-      ), '[]'::jsonb) as daily
+      ), '[]'::jsonb) as daily,
+      (
+        select jsonb_build_object(
+          'prospects', prospects,
+          'clients', clients,
+          'conversion_rate', conversion_rate,
+          'avg_conversion_days', avg_conversion_days,
+          'followups_total', followups_total,
+          'followups_reactivated', followups_reactivated,
+          'followups_reactivation_rate', followups_reactivation_rate
+        )
+        from (
+          select
+            (select count(*)::int from contacts where coalesce(consultype, '') <> 'cliente' and coalesce(contact_type, '') <> 'cliente') as prospects,
+            (select count(*)::int from contacts where consultype = 'cliente' or contact_type = 'cliente') as clients,
+            (
+              select coalesce(round(
+                (count(*) filter (where consultype = 'cliente' or contact_type = 'cliente'))::numeric
+                * 100
+                / nullif(count(*), 0),
+                1
+              ), 0)::float
+              from contacts
+            ) as conversion_rate,
+            (
+              select round(avg(extract(epoch from (last_seen_at - created_at)) / 86400), 1)::float
+              from contacts
+              where (consultype = 'cliente' or contact_type = 'cliente')
+                and last_seen_at is not null
+                and created_at is not null
+                and last_seen_at >= created_at
+            ) as avg_conversion_days,
+            (select count(*)::int from follow_ups) as followups_total,
+            (
+              select count(distinct f.id)::int
+              from follow_ups f
+              join messages m on m.conversation_id = f.conversation_id
+                and m.direction = 'inbound'
+                and m.created_at > f.due_at
+                and m.created_at <= f.due_at + interval '7 days'
+            ) as followups_reactivated,
+            (
+              select coalesce(round(
+                (
+                  select count(distinct f.id)
+                  from follow_ups f
+                  join messages m on m.conversation_id = f.conversation_id
+                    and m.direction = 'inbound'
+                    and m.created_at > f.due_at
+                    and m.created_at <= f.due_at + interval '7 days'
+                )::numeric * 100 / nullif(count(*), 0),
+                1
+              ), 0)::float
+              from follow_ups
+            ) as followups_reactivation_rate
+        ) x
+      ) as conversion
   `) as Array<{
       conversations: number;
       contacts: number;
       handoffs: number;
       hot: number;
+      clients: number;
+      prospects: number;
+      conversion_rate: number;
       unread: number;
       open: number;
       ai_enabled: number;
@@ -2755,11 +2943,16 @@ export async function getDashboardStats() {
       followups_pending: number;
       media_7d: number;
       avg_first_response_minutes: number | null;
+      acquisition_daily: DashboardAcquisitionDay[];
+      by_source: DashboardSourceMetric[];
       by_status: DashboardMetricPoint[];
       by_consultype: DashboardMetricPoint[];
+      by_sentiment: DashboardMetricPoint[];
       by_channel: DashboardMetricPoint[];
+      by_platform: DashboardMetricPoint[];
       by_seller: DashboardSellerMetric[];
       daily: DashboardDailyMetric[];
+      conversion: DashboardConversionStats;
     }>;
 
   return rows[0];

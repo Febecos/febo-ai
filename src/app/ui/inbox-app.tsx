@@ -3897,11 +3897,17 @@ function InboxList({
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          autoGainControl: true,
+          echoCancellation: true,
+          noiseSuppression: true
+        }
+      });
       recordingStreamRef.current = stream;
       const mediaRecorderMimeType = getSupportedRecordingMimeType();
 
-      if (mediaRecorderMimeType && typeof MediaRecorder !== "undefined") {
+      if (mediaRecorderMimeType && typeof MediaRecorder !== "undefined" && !shouldUsePcmRecorderForDevice()) {
         const recorder = new MediaRecorder(stream, { mimeType: mediaRecorderMimeType });
         mediaRecorderRef.current = recorder;
         mediaRecorderChunksRef.current = [];
@@ -5277,6 +5283,18 @@ function getSupportedRecordingMimeType() {
   ];
 
   return candidates.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? "";
+}
+
+function shouldUsePcmRecorderForDevice() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  const userAgent = navigator.userAgent.toLowerCase();
+  const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform?.toLowerCase() ?? "";
+  const deviceText = `${userAgent} ${platform}`;
+
+  return /\b(huawei|honor|emui|harmonyos|lya-|kirin)\b/i.test(deviceText);
 }
 
 function getRecordingExtension(mimeType: string) {

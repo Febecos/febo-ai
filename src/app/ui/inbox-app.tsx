@@ -3083,7 +3083,7 @@ function InboxList({
 
     const intervalId = window.setInterval(() => {
       void refreshVisibleInbox();
-    }, 5000);
+    }, 30000);
 
     window.addEventListener("focus", refreshVisibleInbox);
     document.addEventListener("visibilitychange", refreshVisibleInbox);

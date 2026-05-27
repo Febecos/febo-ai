@@ -10,7 +10,7 @@ export default async function Home() {
     ? await Promise.all([
         getUsers(),
         listConversations(),
-        getDashboardStats(),
+        getSafeDashboardStats(),
         user.role === "admin" ? getAdminUsers() : Promise.resolve([])
       ])
     : [[], [], getEmptyDashboardStats(), []];
@@ -25,4 +25,13 @@ export default async function Home() {
       adminUsers={adminUsers}
     />
   );
+}
+
+async function getSafeDashboardStats() {
+  try {
+    return await getDashboardStats();
+  } catch (error) {
+    console.error("No pudimos cargar metricas iniciales.", error);
+    return getEmptyDashboardStats();
+  }
 }

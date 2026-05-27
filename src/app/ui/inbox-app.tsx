@@ -616,6 +616,23 @@ function MetricsPanel({ stats }: { stats: Stats }) {
     window.location.href = `/api/metrics?${params.toString()}`;
   }
 
+  async function copyMetricsApiLink() {
+    const params = new URLSearchParams({
+      groupBy,
+      startDate,
+      endDate
+    });
+    const apiPath = `/api/metrics?${params.toString()}`;
+    const url = `${window.location.origin}${apiPath}`;
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setNotice("Link JSON de metricas copiado.");
+    } catch {
+      setNotice(`Link JSON: ${url}`);
+    }
+  }
+
   return (
     <section className="metrics-panel">
       <div className="metrics-head">
@@ -652,6 +669,9 @@ function MetricsPanel({ stats }: { stats: Stats }) {
         </button>
         <button type="button" onClick={exportMetricsExcel}>
           Exportar Excel
+        </button>
+        <button type="button" onClick={copyMetricsApiLink}>
+          Copiar link API
         </button>
         <div className="metrics-quick-ranges">
           <button type="button" onClick={() => applyQuickRange(7)}>7 d&iacute;as</button>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { DashboardGranularity, DashboardStats, getDashboardStats } from "@/lib/crm";
+import { getSql, isDbConfigured } from "@/lib/db";
 import * as XLSX from "xlsx";
 
 const allowedGroups = new Set<DashboardGranularity>(["day", "week", "month"]);
@@ -22,11 +23,15 @@ export async function GET(request: NextRequest) {
   });
 
   if (search.get("format") === "xlsx") {
-    const workbook = buildMetricsWorkbook(stats, {
+    const range = {
       startDate: search.get("startDate"),
       endDate: search.get("endDate"),
       groupBy: safeGroupBy
-    });
+    };
+    const workbook = buildMetricsWorkbook(stats, range);
+    const details = await getMetricsExportDetails(range.startDate, range.endDate);
+    appendSheet(workbook, "Contactos detalle", details.contacts);
+    appendSheet(workbook, "Conversaciones detalle", details.conversations);
     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
     const body = new Uint8Array(buffer);
     const filename = `febo-metricas-${search.get("startDate") ?? "inicio"}-${search.get("endDate") ?? "hoy"}.xlsx`;
@@ -90,4 +95,95 @@ function buildMetricsWorkbook(
 function appendSheet(workbook: XLSX.WorkBook, name: string, rows: Array<Record<string, unknown>>) {
   const sheet = XLSX.utils.json_to_sheet(rows.length ? rows : [{ sin_datos: "" }]);
   XLSX.utils.book_append_sheet(workbook, sheet, name);
+}
+
+function getMetricsDateRange(startDate: string | null, endDate: string | null) {
+  const now = new Date();
+  const defaultStart = new Date(now);
+  defaultStart.setDate(defaultStart.getDate() - 29);
+  const start = startDate ? new Date(`${startDate}T00:00:00-03:00`) : defaultStart;
+  const end = endDate ? new Date(`${endDate}T00:00:00-03:00`) : now;
+  const safeStart = Number.isNaN(start.getTime()) ? defaultStart : start;
+  const safeEnd = Number.isNaN(end.getTime()) ? now : end;
+
+  if (safeStart > safeEnd) {
+    return { start: safeEnd, end: safeStart };
+  }
+
+  return { start: safeStart, end: safeEnd };
+}
+
+async function getMetricsExportDetails(startDate: string | null, endDate: string | null) {
+  if (!isDbConfigured()) {
+    return { contacts: [], conversations: [] };
+  }
+
+  const sql = getSql();
+  const range = getMetricsDateRange(startDate, endDate);
+  const contacts = (await sql`
+    with params as (
+      select ${range.start.toISOString()}::timestamptz as start_at, (${range.end.toISOString()}::timestamptz + interval '1 day') as end_at
+    )
+    select
+      ct.created_at::text as fecha_alta,
+      ct.last_seen_at::text as ultimo_contacto,
+      ct.phone as telefono,
+      ct.display_name as nombre,
+      ct.platform as plataforma,
+      ct.source as origen,
+      ct.imported_from as importado_desde,
+      ct.consultype as etiqueta,
+      ct.sentiment as sentimiento,
+      ct.contact_type as tipo_contacto,
+      coalesce(u.full_name, '') as vendedor,
+      c.status as estado_conversacion,
+      c.last_message_at::text as ultimo_mensaje
+    from contacts ct
+    left join app_users u on u.id = ct.assigned_to
+    left join lateral (
+      select status, last_message_at
+      from conversations
+      where contact_id = ct.id
+      order by last_message_at desc nulls last
+      limit 1
+    ) c on true
+    cross join params p
+    where ct.created_at >= p.start_at and ct.created_at < p.end_at
+    order by ct.created_at desc
+    limit 5000
+  `) as Array<Record<string, unknown>>;
+
+  const conversations = (await sql`
+    with params as (
+      select ${range.start.toISOString()}::timestamptz as start_at, (${range.end.toISOString()}::timestamptz + interval '1 day') as end_at
+    )
+    select
+      c.last_message_at::text as ultimo_mensaje,
+      ct.phone as telefono,
+      ct.display_name as nombre,
+      coalesce(nullif(c.channel, ''), ct.platform) as canal,
+      c.status as estado,
+      case when c.ai_enabled then 'si' else 'no' end as ia_activa,
+      case when c.unread then 'si' else 'no' end as no_leida,
+      ct.consultype as etiqueta,
+      ct.sentiment as sentimiento,
+      coalesce(u.full_name, '') as vendedor,
+      count(m.id)::int as mensajes_total,
+      count(m.id) filter (where m.direction = 'inbound')::int as mensajes_entrantes,
+      count(m.id) filter (where m.direction = 'outbound')::int as mensajes_salientes,
+      count(m.id) filter (where m.direction = 'outbound' and m.metadata->>'source' = 'febo_ai')::int as respuestas_ia,
+      count(m.id) filter (where m.direction = 'outbound' and coalesce(m.metadata->>'source', '') <> 'febo_ai' and m.created_by is not null)::int as respuestas_humanas
+    from conversations c
+    join contacts ct on ct.id = c.contact_id
+    left join app_users u on u.id = c.assigned_to
+    left join messages m on m.conversation_id = c.id
+    cross join params p
+    where c.last_message_at >= p.start_at and c.last_message_at < p.end_at
+      and c.status not in ('blocked', 'deleted')
+    group by c.id, c.last_message_at, ct.phone, ct.display_name, canal, c.status, c.ai_enabled, c.unread, ct.consultype, ct.sentiment, u.full_name
+    order by c.last_message_at desc
+    limit 5000
+  `) as Array<Record<string, unknown>>;
+
+  return { contacts, conversations };
 }

@@ -2769,7 +2769,8 @@ export async function getDashboardStats(options: DashboardStatsOptions = {}) {
     ),
     period_messages as (
       select m.*
-      from messages m, params p
+      from messages m
+      cross join params p
       left join conversations c on c.id = m.conversation_id
       where m.created_at >= p.start_at and m.created_at < p.end_at
         and (p.assigned_to_filter is null or c.assigned_to = p.assigned_to_filter)

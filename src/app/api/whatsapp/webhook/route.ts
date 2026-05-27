@@ -2,6 +2,7 @@ import { after, NextRequest, NextResponse } from "next/server";
 import { refreshConversationMemory, runFebecosAgent, transcribeAudio } from "@/lib/agent";
 import { config } from "@/lib/config";
 import {
+  deliverOutgoingWebhooks,
   getAutomaticReplyCandidate,
   getSettingValue,
   recordAgentReply,
@@ -75,6 +76,16 @@ export async function POST(request: NextRequest) {
     if (stored.duplicate) {
       continue;
     }
+
+    // Disparar webhook saliente 'mensaje_entrante' — incluye conversation_id
+    // para que el admin externo (Febecos) pueda actualizar febo_inicio_at y
+    // almacenar el conversationId para deep-link y sync de notas.
+    deliverOutgoingWebhooks("mensaje_entrante", {
+      conversation_id: stored.threadId,
+      contact_id:      stored.contactId,
+      phone:           message.from,
+      message_id:      stored.messageId,
+    }).catch((e) => console.error("outgoing webhook mensaje_entrante failed", e));
 
     if (isText && message.flowResponse && stored.messageId) {
       agentMessage = await buildSelectorFlowAgentMessage(agentMessage, message.flowResponse);

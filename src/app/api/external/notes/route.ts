@@ -34,18 +34,19 @@ function validateToken(request: NextRequest): boolean {
 }
 
 // ── Buscar conversación abierta por teléfono ──────────────────────────────────
-async function findOpenConversationByPhone(phone: string): Promise<string | null> {
+async function findConversationByPhone(phone: string): Promise<string | null> {
   if (!isDbConfigured()) return null;
   const sql = getSql();
   const normalized = normalizeWhatsAppRecipient(phone);
 
+  // Busca la conversación más reciente de ese contacto, sin filtrar por status
+  // (queremos poder agregar notas aunque la conversación esté cerrada)
   const rows = (await sql`
     select c.id::text as conversation_id
     from conversations c
     join contacts ct on ct.id = c.contact_id
     where ct.phone = ${normalized}
-      and c.status in ('open', 'waiting', 'quoted', 'hot', 'handoff')
-    order by c.last_message_at desc
+    order by c.last_message_at desc nulls last
     limit 1
   `) as Array<{ conversation_id: string }>;
 
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
   // Resolver conversationId
   let conversationId = rawConvId ?? null;
   if (!conversationId && phone) {
-    conversationId = await findOpenConversationByPhone(phone);
+    conversationId = await findConversationByPhone(phone);
   }
 
   if (!conversationId) {

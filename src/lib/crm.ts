@@ -2296,11 +2296,23 @@ export async function createConversationNote(input: {
 
   // Disparar webhook saliente 'nota_interna' — excepto si viene del selector-admin (anti-eco)
   if (input.source !== "selector-admin") {
+    // Incluir teléfono del contacto para que el selector pueda buscar el lead por phone como fallback
+    const phoneRows = await sql`
+      select ct.phone
+      from conversations c
+      join contacts ct on ct.id = c.contact_id
+      where c.id::text = ${input.conversationId}
+      limit 1
+    `.catch(() => []) as Array<{ phone: string }>;
+    const contactPhone = phoneRows[0]?.phone ?? null;
+    console.log("[nota_interna webhook] conv:", input.conversationId, "phone:", contactPhone, "source:", input.source);
+
     deliverOutgoingWebhooks("nota_interna", {
       conversation_id: input.conversationId,
       body:            input.body,
       autor:           input.userName ?? input.userId ?? "Febo",
       source:          input.source ?? "febo",
+      phone:           contactPhone,
     }).catch((e) => console.error("outgoing webhook nota_interna failed", e));
   }
 }

@@ -2850,6 +2850,20 @@ button:disabled {
   padding: 12px;
 }
 
+.webhook-history {
+  max-height: min(34vh, 320px);
+  min-height: 132px;
+  overflow: hidden;
+}
+
+.webhook-history-list {
+  display: grid;
+  gap: 8px;
+  max-height: 100%;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
 .webhook-events {
   display: grid;
   gap: 8px;
@@ -2913,11 +2927,6 @@ button:disabled {
 .webhook-actions button {
   min-height: 30px;
   padding: 0 9px;
-}
-
-.webhook-history-list {
-  display: grid;
-  gap: 8px;
 }
 
 .webhook-history-item {

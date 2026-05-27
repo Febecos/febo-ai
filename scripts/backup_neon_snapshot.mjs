@@ -10,13 +10,13 @@ if (!process.env.DATABASE_URL) {
 }
 
 const BACKUP_ROOT = path.join(process.cwd(), "backups", "neon");
+// Tablas livianas — se respaldan siempre
 const TABLES = [
   "app_users",
   "channel_accounts",
   "contacts",
   "conversations",
   "messages",
-  "message_media",
   "conversation_memory",
   "conversation_notes",
   "quick_replies",
@@ -28,6 +28,14 @@ const TABLES = [
   "label_definitions",
   "app_settings"
 ];
+
+// Tablas pesadas (base64 media) — solo con flag --full
+const HEAVY_TABLES = [
+  "message_media",
+];
+
+const isFullBackup = process.argv.includes("--full");
+const tablesToBackup = isFullBackup ? [...TABLES, ...HEAVY_TABLES] : TABLES;
 
 function stampDate(date = new Date()) {
   return date.toISOString().replace(/[:.]/g, "-");
@@ -52,12 +60,14 @@ const manifest = {
   notes: [
     "Snapshot JSON creado antes/despues de cambios de FEBO.",
     "No incluye secretos de entorno.",
-    "message_media puede incluir data_base64 legacy hasta completar migracion a R2."
+    isFullBackup
+      ? "Backup COMPLETO: incluye message_media (base64 pesado)."
+      : "Backup liviano: message_media excluida. Usar --full para incluirla."
   ]
 };
 
 try {
-  for (const table of TABLES) {
+  for (const table of tablesToBackup) {
     const exists = await client.query(
       "select to_regclass($1) as table_name",
       [`public.${table}`]

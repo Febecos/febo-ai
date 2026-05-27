@@ -155,6 +155,7 @@ const OUTGOING_WEBHOOK_EVENTS = [
   { value: "chat_escalado", label: "Chat escalado" },
   { value: "mensaje_entrante", label: "Mensaje entrante" },
   { value: "mensaje_saliente", label: "Mensaje saliente" },
+  { value: "nota_interna",    label: "Nota interna" },
   { value: "follow_up_proposed", label: "Seguimiento propuesto" },
   { value: "presupuesto_enviado", label: "Presupuesto enviado" },
   { value: "venta_cerrada", label: "Venta cerrada" },

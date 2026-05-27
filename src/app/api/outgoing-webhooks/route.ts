@@ -16,6 +16,7 @@ const events = [
   "chat_escalado",
   "mensaje_entrante",
   "mensaje_saliente",
+  "nota_interna",
   "follow_up_proposed",
   "presupuesto_enviado",
   "venta_cerrada",

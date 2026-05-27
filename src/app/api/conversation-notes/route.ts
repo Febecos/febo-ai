@@ -46,8 +46,10 @@ export async function POST(request: NextRequest) {
 
   await createConversationNote({
     conversationId: parsed.data.conversationId,
-    userId: user.id,
-    body: parsed.data.body
+    userId:   user.id,
+    body:     parsed.data.body,
+    userName: user.full_name ?? user.email ?? null,
+    source:   "febo",
   });
 
   return NextResponse.json({

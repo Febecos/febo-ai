@@ -2279,8 +2279,10 @@ export async function listConversationEvents(conversationId: string, limit = 80)
 
 export async function createConversationNote(input: {
   conversationId: string;
-  userId: string;
+  userId: string | null;
   body: string;
+  userName?: string | null;
+  source?: string | null;
 }) {
   if (!isDbConfigured()) {
     return;
@@ -2289,8 +2291,18 @@ export async function createConversationNote(input: {
   const sql = getSql();
   await sql`
     insert into conversation_notes (conversation_id, created_by, body)
-    values (${input.conversationId}, ${input.userId}, ${input.body})
+    values (${input.conversationId}, ${input.userId ?? null}, ${input.body})
   `;
+
+  // Disparar webhook saliente 'nota_interna' — excepto si viene del selector-admin (anti-eco)
+  if (input.source !== "selector-admin") {
+    deliverOutgoingWebhooks("nota_interna", {
+      conversation_id: input.conversationId,
+      body:            input.body,
+      autor:           input.userName ?? input.userId ?? "Febo",
+      source:          input.source ?? "febo",
+    }).catch((e) => console.error("outgoing webhook nota_interna failed", e));
+  }
 }
 
 export async function listAgentConversationContext(conversationId: string | null | undefined, limit = 30) {

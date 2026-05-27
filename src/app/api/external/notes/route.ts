@@ -94,27 +94,18 @@ export async function POST(request: NextRequest) {
   const sql = getSql();
 
   // Insertar nota con created_by = null (nota de sistema externo) y source marcado
-  const rows = (await sql`
-    insert into conversation_notes (conversation_id, created_by, body, source)
-    values (${conversationId}, null, ${body}, ${source})
-    on conflict do nothing
-    returning id::text
-  `) as Array<{ id: string }>;
+  // Insertar nota — created_by = null (sistema externo), source marcado para anti-eco
+  // Usamos createConversationNote con source='selector-admin' para no disparar webhook de vuelta
+  const { createConversationNote } = await import("@/lib/crm");
+  await createConversationNote({
+    conversationId,
+    userId:   null,
+    body,
+    userName: "Admin Febecos",
+    source,   // 'selector-admin' → no dispara webhook de nota_interna
+  });
 
-  // Fallback si la columna source no existe aún (migration no corrida)
-  const noteId = rows[0]?.id ?? null;
-  if (!noteId) {
-    // Intentar sin columna source
-    const rows2 = (await sql`
-      insert into conversation_notes (conversation_id, created_by, body)
-      values (${conversationId}, null, ${body})
-      returning id::text
-    `) as Array<{ id: string }>;
-    const fallbackId = rows2[0]?.id ?? null;
-    return NextResponse.json({ ok: true, conversationId, noteId: fallbackId });
-  }
-
-  return NextResponse.json({ ok: true, conversationId, noteId });
+  return NextResponse.json({ ok: true, conversationId, noteId: null });
 }
 
 // ── GET — listar notas de una conversación ────────────────────────────────────

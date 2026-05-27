@@ -281,6 +281,67 @@ button:disabled {
   font-size: 18px;
 }
 
+.metrics-insights {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metrics-insight {
+  background: rgba(8, 32, 55, 0.48);
+  border: 1px solid rgba(125, 199, 234, 0.3);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 12px;
+  position: relative;
+}
+
+.metrics-insight div {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+}
+
+.metrics-insight strong {
+  color: #ffffff;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.metrics-insight span,
+.metrics-insight p {
+  color: rgba(235, 248, 255, 0.82);
+  font-size: 12px;
+  margin: 0;
+}
+
+.metrics-insight > i {
+  background: #79d1f2;
+  border-radius: 999px;
+  display: block;
+  height: 5px;
+  max-width: 100%;
+}
+
+.metrics-insight.tone-hot > i {
+  background: #ff5d72;
+}
+
+.metrics-insight.tone-handoff > i {
+  background: #ffc928;
+}
+
+.metrics-insight.tone-ai > i {
+  background: #49c7f4;
+}
+
+.metrics-insight.tone-client > i {
+  background: #8dc63f;
+}
+
 .metrics-two-columns {
   display: grid;
   gap: 14px;
@@ -4128,6 +4189,7 @@ select option:hover {
   .user-grid,
   .metrics-grid,
   .metrics-grid.compact,
+  .metrics-insights,
   .metrics-two-columns,
   .metrics-two-columns.wide-left {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4678,6 +4740,7 @@ select option:hover {
   .contacts-manager,
   .metrics-grid,
   .metrics-grid.compact,
+  .metrics-insights,
   .metrics-two-columns,
   .metrics-two-columns.wide-left {
     grid-template-columns: 1fr;

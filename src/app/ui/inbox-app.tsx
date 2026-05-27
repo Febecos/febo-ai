@@ -718,6 +718,7 @@ function MetricsPanel({ stats, users }: { stats: Stats; users: AppUser[] }) {
         <Metric label="Calientes" value={currentStats.hot} />
         <Metric label="No le&iacute;das" value={currentStats.unread} />
       </div>
+      <MetricInsightStrip stats={currentStats} />
       <div className="metrics-two-columns wide-left">
         <AcquisitionChart days={currentStats.acquisition_daily} groupBy={groupBy} />
         <SourceMetrics sources={currentStats.by_source} total={currentStats.contacts} />
@@ -763,6 +764,54 @@ function MetricsPanel({ stats, users }: { stats: Stats; users: AppUser[] }) {
       <DailyMetrics days={currentStats.daily} groupBy={groupBy} />
     </section>
   );
+}
+
+function MetricInsightStrip({ stats }: { stats: Stats }) {
+  const insights = [
+    {
+      label: "Calientes/contactos",
+      value: percentage(stats.hot, stats.contacts),
+      detail: `${stats.hot.toLocaleString("es-AR")} de ${stats.contacts.toLocaleString("es-AR")}`,
+      tone: "hot"
+    },
+    {
+      label: "Escaladas/convers.",
+      value: percentage(stats.handoffs, stats.conversations),
+      detail: `${stats.handoffs.toLocaleString("es-AR")} de ${stats.conversations.toLocaleString("es-AR")}`,
+      tone: "handoff"
+    },
+    {
+      label: "IA/salientes",
+      value: percentage(stats.ai_7d, stats.outbound_7d),
+      detail: `${stats.ai_7d.toLocaleString("es-AR")} de ${stats.outbound_7d.toLocaleString("es-AR")}`,
+      tone: "ai"
+    },
+    {
+      label: "Clientes/prospectos",
+      value: percentage(stats.clients, stats.prospects + stats.clients),
+      detail: `${stats.clients.toLocaleString("es-AR")} clientes`,
+      tone: "client"
+    }
+  ];
+
+  return (
+    <section className="metrics-insights" aria-label="Lectura rapida de metricas">
+      {insights.map((insight) => (
+        <article className={`metrics-insight tone-${insight.tone}`} key={insight.label}>
+          <div>
+            <strong>{insight.value}%</strong>
+            <span>{insight.label}</span>
+          </div>
+          <p>{insight.detail}</p>
+          <i style={{ width: `${Math.max(4, insight.value)}%` }} />
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function percentage(value: number, total: number) {
+  return total > 0 ? Math.round((value / total) * 100) : 0;
 }
 
 function AcquisitionChart({ days, groupBy }: { days: Stats["acquisition_daily"]; groupBy: "day" | "week" | "month" }) {

@@ -297,6 +297,20 @@ function ToolWorkspace({
     return () => window.clearTimeout(timeoutId);
   }, [actionNotice]);
 
+  // Deep-link: ?conv=UUID abre esa conversación directamente (desde admin externo)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const convId = params.get("conv");
+    if (convId) {
+      setActiveTool("conversations");
+      setFocusedConversation({ id: convId, signal: Date.now() });
+      // Limpiar el param de la URL sin recargar
+      const clean = window.location.pathname;
+      window.history.replaceState({}, "", clean);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     setFavoritesLoaded(false);
     const storedFavorites =

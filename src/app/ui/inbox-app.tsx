@@ -8,6 +8,7 @@ import {
   Bot,
   Check,
   CheckCheck,
+  ChevronDown,
   ChevronLeft,
   CircleUserRound,
   Clock3,
@@ -297,16 +298,33 @@ function ToolWorkspace({
     return () => window.clearTimeout(timeoutId);
   }, [actionNotice]);
 
-  // Deep-link: ?conv=UUID abre esa conversación directamente (desde admin externo)
+  // Deep-link: ?conv=UUID o ?phone=NUMERO abre la conversación (desde admin externo)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const convId = params.get("conv");
+    const phone  = params.get("phone");
+
     if (convId) {
+      // Tenemos UUID directo → abrir esa conversación
       setActiveTool("conversations");
       setFocusedConversation({ id: convId, signal: Date.now() });
-      // Limpiar el param de la URL sin recargar
-      const clean = window.location.pathname;
-      window.history.replaceState({}, "", clean);
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (phone) {
+      // Solo teléfono → buscar la conversación en la lista cargada
+      setActiveTool("conversations");
+      const digits = phone.replace(/\D/g, "");
+      // Buscar en workspaceConversations por sufijo de teléfono
+      const found = workspaceConversations.find(c =>
+        c.phone && c.phone.replace(/\D/g, "").endsWith(digits.slice(-8))
+      );
+      if (found) {
+        setFocusedConversation({ id: found.id, signal: Date.now() });
+      } else {
+        // No está cargada aún — abrir búsqueda con el número
+        const searchEl = document.querySelector<HTMLInputElement>(".inbox-search");
+        if (searchEl) { searchEl.value = digits.slice(-10); searchEl.dispatchEvent(new Event("input")); }
+      }
+      window.history.replaceState({}, "", window.location.pathname);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -875,6 +893,7 @@ function getMetricColor(label: string) {
 
 function SettingsPanel({ users }: { users: AppUser[] }) {
   const [settings, setSettings] = useState<AppSetting[]>([]);
+  const [openSettingsSection, setOpenSettingsSection] = useState("delay");
   const [webhooks, setWebhooks] = useState<OutgoingWebhook[]>([]);
   const [webhookDeliveries, setWebhookDeliveries] = useState<OutgoingWebhookDelivery[]>([]);
   const [webhookForm, setWebhookForm] = useState({
@@ -931,11 +950,12 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
 
     if (!response.ok) {
       setMessage(payload?.error ?? "No pudimos guardar la configuracion.");
-      return;
+      return false;
     }
 
     setSettings(payload?.settings ?? []);
     setMessage("Configuracion guardada.");
+    return true;
   }
 
   async function saveSettingsBatch(items: Array<{ key: SettingKey; value: string | number | null }>, savingId: string) {
@@ -955,7 +975,7 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
       if (!response.ok) {
         setSavingKey("");
         setMessage(payload?.error ?? "No pudimos guardar la configuracion.");
-        return;
+        return false;
       }
 
       latestSettings = payload?.settings ?? latestSettings;
@@ -966,9 +986,11 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
       setSettings(latestSettings);
     }
     setMessage("Configuracion guardada.");
+    return true;
   }
 
   function editWebhook(webhook: OutgoingWebhook) {
+    setOpenSettingsSection("webhooks");
     setWebhookForm({
       id: webhook.id,
       name: webhook.name,
@@ -1013,13 +1035,14 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
 
     if (!response.ok) {
       setMessage(payload?.error ?? "No pudimos guardar el webhook.");
-      return;
+      return false;
     }
 
     setWebhooks(payload?.webhooks ?? []);
     setWebhookDeliveries(payload?.deliveries ?? []);
     setWebhookForm((current) => ({ ...current, id: "", secret: "", keepSecret: false }));
     setMessage("Webhook guardado.");
+    return true;
   }
 
   async function testWebhook(id: string) {
@@ -1091,12 +1114,21 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
         {message ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
       </div>
 
-      <div className="settings-grid">
-        <article className="settings-card">
-          <div>
-            <h3>Demora de respuesta IA</h3>
-            <p>Tiempo que FEBO espera antes de responder automaticamente. Sirve para juntar mensajes seguidos.</p>
-          </div>
+      <div className="settings-stack">
+        <article className={`settings-card settings-accordion ${openSettingsSection === "delay" ? "is-open" : ""}`}>
+          <button
+            className="settings-card-header"
+            onClick={() => setOpenSettingsSection((current) => (current === "delay" ? "" : "delay"))}
+            type="button"
+          >
+            <span>
+              <h3>Demora de respuesta IA</h3>
+              <p>Espera antes de responder para juntar mensajes seguidos.</p>
+            </span>
+            <span className="settings-card-meta">{delayValue}s</span>
+            <ChevronDown size={18} />
+          </button>
+          {openSettingsSection === "delay" ? <div className="settings-card-body">
           <label className="field">
             <FieldHelpLabel
               help="Cuantos segundos espera FEBO antes de responder. Ayuda a juntar varios mensajes seguidos y evitar respuestas repetidas."
@@ -1116,18 +1148,32 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
           <button
             className="primary"
             disabled={savingKey === "auto_reply_delay_seconds"}
-            onClick={() => void saveSetting("auto_reply_delay_seconds", delayValue)}
+            onClick={() => void saveSetting("auto_reply_delay_seconds", delayValue).then((ok) => {
+              if (ok) setOpenSettingsSection("");
+            })}
             type="button"
           >
             {savingKey === "auto_reply_delay_seconds" ? "Guardando" : "Guardar demora"}
           </button>
+          </div> : null}
         </article>
 
-        <article className="settings-card">
-          <div>
-            <h3>Vendedor por defecto de calientes</h3>
-            <p>Si FEBO detecta un caliente y no hay regla de etiqueta mas especifica, lo asigna a este vendedor.</p>
-          </div>
+        <article className={`settings-card settings-accordion ${openSettingsSection === "hotLead" ? "is-open" : ""}`}>
+          <button
+            className="settings-card-header"
+            onClick={() => setOpenSettingsSection((current) => (current === "hotLead" ? "" : "hotLead"))}
+            type="button"
+          >
+            <span>
+              <h3>Vendedor por defecto de calientes</h3>
+              <p>Destino automatico cuando no hay regla mas especifica.</p>
+            </span>
+            <span className="settings-card-meta">
+              {users.find((user) => user.id === hotLeadAssignee)?.full_name ?? "Automatico"}
+            </span>
+            <ChevronDown size={18} />
+          </button>
+          {openSettingsSection === "hotLead" ? <div className="settings-card-body">
           <label className="field">
             <FieldHelpLabel
               help="Vendedor que recibe los leads calientes cuando no hay otra regla mas especifica. No cambia conversaciones ya asignadas."
@@ -1148,18 +1194,30 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
           <button
             className="primary"
             disabled={savingKey === "hot_lead_default_assignee_id"}
-            onClick={() => void saveSetting("hot_lead_default_assignee_id", hotLeadAssignee || null)}
+            onClick={() => void saveSetting("hot_lead_default_assignee_id", hotLeadAssignee || null).then((ok) => {
+              if (ok) setOpenSettingsSection("");
+            })}
             type="button"
           >
             {savingKey === "hot_lead_default_assignee_id" ? "Guardando" : "Guardar vendedor"}
           </button>
+          </div> : null}
         </article>
 
-        <article className="settings-card settings-card-wide">
-          <div>
-            <h3>Mensaje para abrir Flow publicado</h3>
-            <p>Configura como FEBO envia por WhatsApp el selector ya publicado en Meta. No edita los campos internos del Flow.</p>
-          </div>
+        <article className={`settings-card settings-accordion ${openSettingsSection === "flow" ? "is-open" : ""}`}>
+          <button
+            className="settings-card-header"
+            onClick={() => setOpenSettingsSection((current) => (current === "flow" ? "" : "flow"))}
+            type="button"
+          >
+            <span>
+              <h3>Mensaje para abrir Flow publicado</h3>
+              <p>Configura el mensaje que abre el Flow ya publicado en Meta.</p>
+            </span>
+            <span className="settings-card-meta">{selectorFlowId ? `Flow ${selectorFlowId}` : "Sin Flow"}</span>
+            <ChevronDown size={18} />
+          </button>
+          {openSettingsSection === "flow" ? <div className="settings-card-body settings-card-body-grid">
           <label className="field">
             <FieldHelpLabel
               help="ID del Flow ya publicado en Meta. Cambiarlo aca no edita Meta; solo le dice a FEBO que Flow debe enviar."
@@ -1237,20 +1295,32 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
                     { key: "whatsapp_selector_flow_cta", value: selectorFlowCta }
                   ],
                   "selector-flow"
-                )
+                ).then((ok) => {
+                  if (ok) setOpenSettingsSection("");
+                })
               }
               type="button"
             >
               {savingKey === "selector-flow" ? "Guardando" : "Guardar configuracion del Flow"}
             </button>
           </div>
+          </div> : null}
         </article>
 
-        <article className="settings-card settings-card-wide webhook-settings-card">
-          <div>
-            <h3>Webhooks salientes</h3>
-            <p>Envia eventos de FEBO a la pagina, selector u otro sistema. El destino debe responder 200.</p>
-          </div>
+        <article className={`settings-card settings-accordion webhook-settings-card ${openSettingsSection === "webhooks" ? "is-open" : ""}`}>
+          <button
+            className="settings-card-header"
+            onClick={() => setOpenSettingsSection((current) => (current === "webhooks" ? "" : "webhooks"))}
+            type="button"
+          >
+            <span>
+              <h3>Webhooks salientes</h3>
+              <p>Envia eventos de FEBO a pagina, selector u otro sistema.</p>
+            </span>
+            <span className="settings-card-meta">{webhooks.length} destinos</span>
+            <ChevronDown size={18} />
+          </button>
+          {openSettingsSection === "webhooks" ? <div className="settings-card-body">
 
           <div className="webhook-layout">
             <div className="webhook-form">
@@ -1319,7 +1389,9 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
                 <button
                   className="primary"
                   disabled={savingKey === "outgoing-webhook"}
-                  onClick={() => void saveOutgoingWebhook()}
+                  onClick={() => void saveOutgoingWebhook().then((ok) => {
+                    if (ok) setOpenSettingsSection("");
+                  })}
                   type="button"
                 >
                   {savingKey === "outgoing-webhook" ? "Guardando" : webhookForm.id ? "Guardar cambios" : "Crear webhook"}
@@ -1394,6 +1466,7 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
               </div>
             ) : <p>Aun no hay envios registrados.</p>}
           </div>
+          </div> : null}
         </article>
       </div>
     </section>

@@ -1116,6 +1116,7 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
       </div>
 
       <div className="settings-stack">
+        <div className="settings-tile-grid">
         <article className={`settings-card settings-accordion ${openSettingsSection === "delay" ? "is-open" : ""}`}>
           <button
             className="settings-card-header"
@@ -1129,34 +1130,6 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
             <span className="settings-card-meta">{delayValue}s</span>
             <ChevronDown size={18} />
           </button>
-          {openSettingsSection === "delay" ? <div className="settings-card-body">
-          <label className="field">
-            <FieldHelpLabel
-              help="Cuantos segundos espera FEBO antes de responder. Ayuda a juntar varios mensajes seguidos y evitar respuestas repetidas."
-              label="Segundos"
-            />
-            <input
-              max={900}
-              min={0}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                setSettings((current) => upsertLocalSetting(current, "auto_reply_delay_seconds", value));
-              }}
-              type="number"
-              value={delayValue}
-            />
-          </label>
-          <button
-            className="primary"
-            disabled={savingKey === "auto_reply_delay_seconds"}
-            onClick={() => void saveSetting("auto_reply_delay_seconds", delayValue).then((ok) => {
-              if (ok) setOpenSettingsSection("");
-            })}
-            type="button"
-          >
-            {savingKey === "auto_reply_delay_seconds" ? "Guardando" : "Guardar demora"}
-          </button>
-          </div> : null}
         </article>
 
         <article className={`settings-card settings-accordion ${openSettingsSection === "hotLead" ? "is-open" : ""}`}>
@@ -1174,35 +1147,6 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
             </span>
             <ChevronDown size={18} />
           </button>
-          {openSettingsSection === "hotLead" ? <div className="settings-card-body">
-          <label className="field">
-            <FieldHelpLabel
-              help="Vendedor que recibe los leads calientes cuando no hay otra regla mas especifica. No cambia conversaciones ya asignadas."
-              label="Usuario"
-            />
-            <select
-              onChange={(event) => {
-                setSettings((current) => upsertLocalSetting(current, "hot_lead_default_assignee_id", event.target.value || null));
-              }}
-              value={hotLeadAssignee}
-            >
-              <option value="">Automatico por prioridad</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>{user.full_name}</option>
-              ))}
-            </select>
-          </label>
-          <button
-            className="primary"
-            disabled={savingKey === "hot_lead_default_assignee_id"}
-            onClick={() => void saveSetting("hot_lead_default_assignee_id", hotLeadAssignee || null).then((ok) => {
-              if (ok) setOpenSettingsSection("");
-            })}
-            type="button"
-          >
-            {savingKey === "hot_lead_default_assignee_id" ? "Guardando" : "Guardar vendedor"}
-          </button>
-          </div> : null}
         </article>
 
         <article className={`settings-card settings-accordion ${openSettingsSection === "flow" ? "is-open" : ""}`}>
@@ -1218,94 +1162,6 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
             <span className="settings-card-meta">{selectorFlowId ? `Flow ${selectorFlowId}` : "Sin Flow"}</span>
             <ChevronDown size={18} />
           </button>
-          {openSettingsSection === "flow" ? <div className="settings-card-body settings-card-body-grid">
-          <label className="field">
-            <FieldHelpLabel
-              help="ID del Flow ya publicado en Meta. Cambiarlo aca no edita Meta; solo le dice a FEBO que Flow debe enviar."
-              label="Flow ID publicado"
-            />
-            <input
-              placeholder="Ej: 890862800687247"
-              onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_id", event.target.value))}
-              value={selectorFlowId}
-            />
-          </label>
-          <label className="field">
-            <FieldHelpLabel
-              help="Nombre tecnico de la pantalla inicial del Flow. Tiene que existir dentro del Flow publicado en Meta."
-              label="Pantalla inicial"
-            />
-            <input
-              onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_screen", event.target.value))}
-              value={selectorFlowScreen}
-            />
-          </label>
-          <label className="field">
-            <FieldHelpLabel
-              help="Titulo del mensaje interactivo que FEBO envia por WhatsApp antes de abrir el Flow."
-              label="Titulo"
-            />
-            <input
-              onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_header", event.target.value))}
-              value={selectorFlowHeader}
-            />
-          </label>
-          <label className="field">
-            <FieldHelpLabel
-              help="Texto que acompana el boton. Esto no cambia los campos del Flow, solo el mensaje que ve el cliente."
-              label="Texto"
-            />
-            <textarea
-              onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_body", event.target.value))}
-              value={selectorFlowBody}
-            />
-          </label>
-          <label className="field">
-            <FieldHelpLabel
-              help="Linea chica al pie del mensaje interactivo de WhatsApp. Sirve para marca o aclaracion breve."
-              label="Pie"
-            />
-            <input
-              onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_footer", event.target.value))}
-              value={selectorFlowFooter}
-            />
-          </label>
-          <label className="field">
-            <FieldHelpLabel
-              help="Texto del boton que abre el Flow en WhatsApp. Meta permite hasta 20 caracteres."
-              label="Boton"
-            />
-            <input
-              maxLength={20}
-              onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_cta", event.target.value))}
-              value={selectorFlowCta}
-            />
-          </label>
-          <div className="settings-actions-row">
-            <button
-              className="primary"
-              disabled={savingKey === "selector-flow"}
-              onClick={() =>
-                void saveSettingsBatch(
-                  [
-                    { key: "whatsapp_selector_flow_id", value: selectorFlowId },
-                    { key: "whatsapp_selector_flow_screen", value: selectorFlowScreen },
-                    { key: "whatsapp_selector_flow_header", value: selectorFlowHeader },
-                    { key: "whatsapp_selector_flow_body", value: selectorFlowBody },
-                    { key: "whatsapp_selector_flow_footer", value: selectorFlowFooter },
-                    { key: "whatsapp_selector_flow_cta", value: selectorFlowCta }
-                  ],
-                  "selector-flow"
-                ).then((ok) => {
-                  if (ok) setOpenSettingsSection("");
-                })
-              }
-              type="button"
-            >
-              {savingKey === "selector-flow" ? "Guardando" : "Guardar configuracion del Flow"}
-            </button>
-          </div>
-          </div> : null}
         </article>
 
         <article className={`settings-card settings-accordion webhook-settings-card ${openSettingsSection === "webhooks" ? "is-open" : ""}`}>
@@ -1321,7 +1177,167 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
             <span className="settings-card-meta">{webhooks.length} destinos</span>
             <ChevronDown size={18} />
           </button>
-          {openSettingsSection === "webhooks" ? <div className="settings-card-body">
+        </article>
+        </div>
+
+        {openSettingsSection ? (
+          <section className="settings-detail-panel">
+            {openSettingsSection === "delay" ? (
+              <div className="settings-card-body">
+                <label className="field">
+                  <FieldHelpLabel
+                    help="Cuantos segundos espera FEBO antes de responder. Ayuda a juntar varios mensajes seguidos y evitar respuestas repetidas."
+                    label="Segundos"
+                  />
+                  <input
+                    max={900}
+                    min={0}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      setSettings((current) => upsertLocalSetting(current, "auto_reply_delay_seconds", value));
+                    }}
+                    type="number"
+                    value={delayValue}
+                  />
+                </label>
+                <button
+                  className="primary"
+                  disabled={savingKey === "auto_reply_delay_seconds"}
+                  onClick={() => void saveSetting("auto_reply_delay_seconds", delayValue).then((ok) => {
+                    if (ok) setOpenSettingsSection("");
+                  })}
+                  type="button"
+                >
+                  {savingKey === "auto_reply_delay_seconds" ? "Guardando" : "Guardar demora"}
+                </button>
+              </div>
+            ) : null}
+
+            {openSettingsSection === "hotLead" ? (
+              <div className="settings-card-body">
+                <label className="field">
+                  <FieldHelpLabel
+                    help="Vendedor que recibe los leads calientes cuando no hay otra regla mas especifica. No cambia conversaciones ya asignadas."
+                    label="Usuario"
+                  />
+                  <select
+                    onChange={(event) => {
+                      setSettings((current) => upsertLocalSetting(current, "hot_lead_default_assignee_id", event.target.value || null));
+                    }}
+                    value={hotLeadAssignee}
+                  >
+                    <option value="">Automatico por prioridad</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>{user.full_name}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="primary"
+                  disabled={savingKey === "hot_lead_default_assignee_id"}
+                  onClick={() => void saveSetting("hot_lead_default_assignee_id", hotLeadAssignee || null).then((ok) => {
+                    if (ok) setOpenSettingsSection("");
+                  })}
+                  type="button"
+                >
+                  {savingKey === "hot_lead_default_assignee_id" ? "Guardando" : "Guardar vendedor"}
+                </button>
+              </div>
+            ) : null}
+
+            {openSettingsSection === "flow" ? (
+              <div className="settings-card-body settings-card-body-grid">
+                <label className="field">
+                  <FieldHelpLabel
+                    help="ID del Flow ya publicado en Meta. Cambiarlo aca no edita Meta; solo le dice a FEBO que Flow debe enviar."
+                    label="Flow ID publicado"
+                  />
+                  <input
+                    placeholder="Ej: 890862800687247"
+                    onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_id", event.target.value))}
+                    value={selectorFlowId}
+                  />
+                </label>
+                <label className="field">
+                  <FieldHelpLabel
+                    help="Nombre tecnico de la pantalla inicial del Flow. Tiene que existir dentro del Flow publicado en Meta."
+                    label="Pantalla inicial"
+                  />
+                  <input
+                    onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_screen", event.target.value))}
+                    value={selectorFlowScreen}
+                  />
+                </label>
+                <label className="field">
+                  <FieldHelpLabel
+                    help="Titulo del mensaje interactivo que FEBO envia por WhatsApp antes de abrir el Flow."
+                    label="Titulo"
+                  />
+                  <input
+                    onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_header", event.target.value))}
+                    value={selectorFlowHeader}
+                  />
+                </label>
+                <label className="field">
+                  <FieldHelpLabel
+                    help="Texto que acompana el boton. Esto no cambia los campos del Flow, solo el mensaje que ve el cliente."
+                    label="Texto"
+                  />
+                  <textarea
+                    onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_body", event.target.value))}
+                    value={selectorFlowBody}
+                  />
+                </label>
+                <label className="field">
+                  <FieldHelpLabel
+                    help="Linea chica al pie del mensaje interactivo de WhatsApp. Sirve para marca o aclaracion breve."
+                    label="Pie"
+                  />
+                  <input
+                    onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_footer", event.target.value))}
+                    value={selectorFlowFooter}
+                  />
+                </label>
+                <label className="field">
+                  <FieldHelpLabel
+                    help="Texto del boton que abre el Flow en WhatsApp. Meta permite hasta 20 caracteres."
+                    label="Boton"
+                  />
+                  <input
+                    maxLength={20}
+                    onChange={(event) => setSettings((current) => upsertLocalSetting(current, "whatsapp_selector_flow_cta", event.target.value))}
+                    value={selectorFlowCta}
+                  />
+                </label>
+                <div className="settings-actions-row">
+                  <button
+                    className="primary"
+                    disabled={savingKey === "selector-flow"}
+                    onClick={() =>
+                      void saveSettingsBatch(
+                        [
+                          { key: "whatsapp_selector_flow_id", value: selectorFlowId },
+                          { key: "whatsapp_selector_flow_screen", value: selectorFlowScreen },
+                          { key: "whatsapp_selector_flow_header", value: selectorFlowHeader },
+                          { key: "whatsapp_selector_flow_body", value: selectorFlowBody },
+                          { key: "whatsapp_selector_flow_footer", value: selectorFlowFooter },
+                          { key: "whatsapp_selector_flow_cta", value: selectorFlowCta }
+                        ],
+                        "selector-flow"
+                      ).then((ok) => {
+                        if (ok) setOpenSettingsSection("");
+                      })
+                    }
+                    type="button"
+                  >
+                    {savingKey === "selector-flow" ? "Guardando" : "Guardar configuracion del Flow"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {openSettingsSection === "webhooks" ? (
+              <div className="settings-card-body">
 
           <div className="webhook-layout">
             <div className="webhook-form">
@@ -1467,8 +1483,10 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
               </div>
             ) : <p>Aun no hay envios registrados.</p>}
           </div>
-          </div> : null}
-        </article>
+          </div>
+            ) : null}
+          </section>
+        ) : null}
       </div>
     </section>
   );

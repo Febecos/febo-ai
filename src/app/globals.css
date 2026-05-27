@@ -2671,6 +2671,12 @@ button:disabled {
 }
 
 .settings-stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-tile-grid {
+  display: grid;
+  gap: 12px;
   grid-template-columns: repeat(auto-fill, minmax(210px, 250px));
 }
 
@@ -2690,10 +2696,6 @@ button:disabled {
   padding: 0;
 }
 
-.settings-accordion.is-open {
-  grid-column: 1 / -1;
-}
-
 .settings-card-header {
   align-items: center;
   background: linear-gradient(135deg, rgba(18, 70, 112, 0.86), rgba(12, 55, 92, 0.86));
@@ -2710,38 +2712,38 @@ button:disabled {
   width: 100%;
 }
 
-.settings-accordion:not(.is-open) .settings-card-header {
+.settings-accordion .settings-card-header {
   aspect-ratio: 1.08;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: minmax(0, 1fr) auto;
   min-height: 174px;
 }
 
-.settings-accordion:not(.is-open) .settings-card-header > span:first-child {
+.settings-accordion .settings-card-header > span:first-child {
   align-self: start;
 }
 
-.settings-accordion:not(.is-open) .settings-card-header > svg {
+.settings-accordion .settings-card-header > svg {
   align-self: end;
   grid-column: 2;
   grid-row: 2;
 }
 
-.settings-accordion:not(.is-open) .settings-card-meta {
+.settings-accordion .settings-card-meta {
   align-self: end;
   grid-column: 1;
   grid-row: 2;
   max-width: 100%;
 }
 
-.settings-accordion:not(.is-open) .settings-card h3,
-.settings-accordion:not(.is-open) .settings-card-header h3 {
+.settings-accordion .settings-card h3,
+.settings-accordion .settings-card-header h3 {
   font-size: 15px;
   line-height: 1.15;
 }
 
-.settings-accordion:not(.is-open) .settings-card p,
-.settings-accordion:not(.is-open) .settings-card-header p {
+.settings-accordion .settings-card p,
+.settings-accordion .settings-card-header p {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   display: -webkit-box;
@@ -2760,8 +2762,8 @@ button:disabled {
 }
 
 .settings-accordion.is-open .settings-card-header {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
+  border-color: rgba(151, 213, 62, 0.62);
+  box-shadow: 0 0 0 1px rgba(151, 213, 62, 0.28), 0 12px 30px rgba(0, 0, 0, 0.18);
 }
 
 .settings-accordion.is-open .settings-card-header > svg {
@@ -2774,6 +2776,13 @@ button:disabled {
   display: grid;
   gap: 12px;
   padding: 14px;
+}
+
+.settings-detail-panel {
+  background: rgba(14, 47, 80, 0.62);
+  border: 1px solid rgba(142, 213, 245, 0.24);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .settings-card-body-grid {
@@ -4004,7 +4013,7 @@ select option:hover {
 }
 
 @media (max-width: 1040px) {
-  .settings-stack {
+  .settings-tile-grid {
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   }
 
@@ -4054,11 +4063,11 @@ select option:hover {
 }
 
 @media (max-width: 720px) {
-  .settings-stack {
+  .settings-tile-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .settings-accordion:not(.is-open) .settings-card-header {
+  .settings-accordion .settings-card-header {
     aspect-ratio: auto;
     min-height: 132px;
     padding: 10px;

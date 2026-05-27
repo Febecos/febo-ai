@@ -163,7 +163,8 @@ button:disabled {
 }
 
 .metric-card {
-  background: linear-gradient(180deg, #35404a 0%, #2d3741 100%);
+  background: linear-gradient(180deg, rgba(47, 106, 151, 0.95), rgba(20, 75, 119, 0.95));
+  border-color: rgba(125, 199, 234, 0.34);
   display: grid;
   gap: 2px;
   min-height: 62px;
@@ -171,7 +172,12 @@ button:disabled {
 }
 
 .metric-card strong {
+  color: #ffffff;
   font-size: 22px;
+}
+
+.metric-card span {
+  color: rgba(235, 248, 255, 0.82);
 }
 
 .metrics-panel {
@@ -198,6 +204,73 @@ button:disabled {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metrics-controls {
+  align-items: end;
+  background: linear-gradient(180deg, rgba(45, 100, 143, 0.88), rgba(16, 71, 110, 0.9));
+  border: 1px solid rgba(125, 199, 234, 0.34);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(160px, 0.7fr) minmax(160px, 0.7fr) minmax(180px, 0.8fr);
+  padding: 14px;
+}
+
+.metrics-controls label {
+  color: #ffffff;
+  display: grid;
+  font-size: 13px;
+  gap: 7px;
+}
+
+.metrics-controls input,
+.metrics-controls select {
+  background: rgba(8, 32, 55, 0.72);
+  border: 1px solid rgba(125, 199, 234, 0.35);
+  border-radius: 6px;
+  color: #ffffff;
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.metrics-controls button {
+  background: linear-gradient(180deg, #79d1f2, #56aedc);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 6px;
+  color: #092843;
+  font-weight: 700;
+  min-height: 36px;
+}
+
+.metrics-quick-ranges {
+  display: flex;
+  gap: 6px;
+  grid-column: 1 / -1;
+}
+
+.metrics-quick-ranges button {
+  background: rgba(8, 32, 55, 0.44);
+  color: #ffffff;
+  font-size: 12px;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.metrics-alert {
+  background: rgba(141, 198, 63, 0.2);
+  border: 1px solid rgba(141, 198, 63, 0.38);
+  border-radius: 8px;
+  color: #dff5c8;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.metrics-alert.error {
+  background: rgba(255, 107, 107, 0.18);
+  border-color: rgba(255, 107, 107, 0.36);
+  color: #ffd7d7;
 }
 
 .metrics-grid.compact {
@@ -398,13 +471,13 @@ button:disabled {
   border-bottom: 1px solid rgba(255, 255, 255, 0.18);
   display: grid;
   gap: 4px;
-  grid-template-columns: repeat(30, minmax(5px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(8px, 1fr));
   min-height: 210px;
   padding-top: 12px;
 }
 
 .acquisition-day {
-  align-items: end;
+  align-items: flex-end;
   display: flex;
   height: 100%;
   min-width: 0;
@@ -3904,6 +3977,10 @@ select option:hover {
     padding: 10px;
   }
 
+  .metrics-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .metric-table-head,
   .metric-table-row {
     grid-template-columns: minmax(120px, 1fr) repeat(2, minmax(58px, 0.45fr));
@@ -4452,6 +4529,10 @@ select option:hover {
 
   .metric-legend {
     flex-wrap: wrap;
+  }
+
+  .metrics-controls {
+    grid-template-columns: 1fr;
   }
 
   .tool-sidebar {

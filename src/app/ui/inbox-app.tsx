@@ -532,9 +532,46 @@ function WhatsAppMark() {
 }
 
 function MetricsPanel({ stats }: { stats: Stats }) {
-  const total7d = stats.inbound_7d + stats.outbound_7d;
-  const aiShare = stats.outbound_7d ? Math.round((stats.ai_7d / stats.outbound_7d) * 100) : 0;
-  const manualShare = stats.outbound_7d ? Math.round((stats.manual_7d / stats.outbound_7d) * 100) : 0;
+  const [currentStats, setCurrentStats] = useState(stats);
+  const [groupBy, setGroupBy] = useState<"day" | "week" | "month">("day");
+  const [startDate, setStartDate] = useState(() => toDateInputDaysAgo(29));
+  const [endDate, setEndDate] = useState(() => toDateInputDaysAgo(0));
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState("");
+  const totalPeriod = currentStats.inbound_7d + currentStats.outbound_7d;
+  const aiShare = currentStats.outbound_7d ? Math.round((currentStats.ai_7d / currentStats.outbound_7d) * 100) : 0;
+  const manualShare = currentStats.outbound_7d ? Math.round((currentStats.manual_7d / currentStats.outbound_7d) * 100) : 0;
+
+  async function refreshMetrics(nextGroup = groupBy, nextStart = startDate, nextEnd = endDate) {
+    setLoading(true);
+    setNotice("");
+    try {
+      const params = new URLSearchParams({
+        groupBy: nextGroup,
+        startDate: nextStart,
+        endDate: nextEnd
+      });
+      const response = await fetch(`/api/metrics?${params.toString()}`);
+      const data = (await response.json()) as { stats?: Stats; error?: string };
+      if (!response.ok || !data.stats) {
+        throw new Error(data.error ?? "No pudimos actualizar las metricas.");
+      }
+      setCurrentStats(data.stats);
+      setNotice("Metricas actualizadas correctamente.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "No pudimos actualizar las metricas.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function applyQuickRange(days: number) {
+    const nextStart = toDateInputDaysAgo(days - 1);
+    const nextEnd = toDateInputDaysAgo(0);
+    setStartDate(nextStart);
+    setEndDate(nextEnd);
+    void refreshMetrics(groupBy, nextStart, nextEnd);
+  }
 
   return (
     <section className="metrics-panel">
@@ -543,64 +580,98 @@ function MetricsPanel({ stats }: { stats: Stats }) {
         <h2>M&eacute;tricas avanzadas</h2>
         <p>Una vista unificada para seguir conversaciones, conversiones, fuentes de llegada y actividad comercial.</p>
       </div>
+      <section className="metrics-controls">
+        <label>
+          Agrupar por
+          <select
+            value={groupBy}
+            onChange={(event) => {
+              const next = event.target.value as "day" | "week" | "month";
+              setGroupBy(next);
+              void refreshMetrics(next, startDate, endDate);
+            }}
+          >
+            <option value="day">Por d&iacute;a</option>
+            <option value="week">Por semana</option>
+            <option value="month">Por mes</option>
+          </select>
+        </label>
+        <label>
+          Fecha inicio
+          <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+        </label>
+        <label>
+          Fecha fin
+          <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+        </label>
+        <button type="button" onClick={() => refreshMetrics()} disabled={loading}>
+          {loading ? "Actualizando..." : "Actualizar panel"}
+        </button>
+        <div className="metrics-quick-ranges">
+          <button type="button" onClick={() => applyQuickRange(7)}>7 d&iacute;as</button>
+          <button type="button" onClick={() => applyQuickRange(30)}>30 d&iacute;as</button>
+          <button type="button" onClick={() => applyQuickRange(90)}>90 d&iacute;as</button>
+        </div>
+        <p className={notice.includes("No pudimos") ? "metrics-alert error" : "metrics-alert"}>{notice || "Las metricas de adquisicion cuentan el primer contacto detectado dentro del rango."}</p>
+      </section>
       <div className="metrics-grid">
-        <Metric label="Conversaciones" value={stats.conversations} />
-        <Metric label="Contactos" value={stats.contacts} />
-        <Metric label="Prospectos" value={stats.prospects} />
-        <Metric label="Clientes" value={stats.clients} />
-        <Metric label="Conversi&oacute;n" value={`${stats.conversion_rate}%`} />
-        <Metric label="Escaladas" value={stats.handoffs} />
-        <Metric label="Calientes" value={stats.hot} />
-        <Metric label="No le&iacute;das" value={stats.unread} />
+        <Metric label="Conversaciones" value={currentStats.conversations} />
+        <Metric label="Contactos" value={currentStats.contacts} />
+        <Metric label="Prospectos" value={currentStats.prospects} />
+        <Metric label="Clientes" value={currentStats.clients} />
+        <Metric label="Conversi&oacute;n" value={`${currentStats.conversion_rate}%`} />
+        <Metric label="Escaladas" value={currentStats.handoffs} />
+        <Metric label="Calientes" value={currentStats.hot} />
+        <Metric label="No le&iacute;das" value={currentStats.unread} />
       </div>
       <div className="metrics-two-columns wide-left">
-        <AcquisitionChart days={stats.acquisition_daily} />
-        <SourceMetrics sources={stats.by_source} total={stats.contacts} />
+        <AcquisitionChart days={currentStats.acquisition_daily} groupBy={groupBy} />
+        <SourceMetrics sources={currentStats.by_source} total={currentStats.contacts} />
       </div>
       <div className="metrics-grid compact">
-        <Metric label="Entrantes 24h" value={stats.inbound_24h} />
-        <Metric label="Salientes 24h" value={stats.outbound_24h} />
-        <Metric label="IA activa" value={stats.ai_enabled} />
-        <Metric label="Mensajes total" value={stats.messages_total} />
-        <Metric label="Resp. prom." value={stats.avg_first_response_minutes === null ? "-" : `${stats.avg_first_response_minutes} min`} />
-        <Metric label="Media 7d" value={stats.media_7d} />
-        <Metric label="Plantillas enviadas 7d" value={stats.templates_sent_7d} />
-        <Metric label="Plantillas pendientes" value={stats.templates_pending} />
-        <Metric label="Plantillas fallidas 7d" value={stats.templates_failed_7d} />
-        <Metric label="Seguimientos pendientes" value={stats.followups_pending} />
-        <Metric label="Notas internas 7d" value={stats.internal_notes_7d} />
-        <Metric label="Actividad 7d" value={total7d} />
+        <Metric label="Entrantes 24h" value={currentStats.inbound_24h} />
+        <Metric label="Salientes 24h" value={currentStats.outbound_24h} />
+        <Metric label="IA activa" value={currentStats.ai_enabled} />
+        <Metric label="Mensajes periodo" value={currentStats.messages_total} />
+        <Metric label="Resp. prom." value={currentStats.avg_first_response_minutes === null ? "-" : `${currentStats.avg_first_response_minutes} min`} />
+        <Metric label="Media periodo" value={currentStats.media_7d} />
+        <Metric label="Plantillas enviadas" value={currentStats.templates_sent_7d} />
+        <Metric label="Plantillas pendientes" value={currentStats.templates_pending} />
+        <Metric label="Plantillas fallidas" value={currentStats.templates_failed_7d} />
+        <Metric label="Seguimientos pendientes" value={currentStats.followups_pending} />
+        <Metric label="Notas internas" value={currentStats.internal_notes_7d} />
+        <Metric label="Actividad periodo" value={totalPeriod} />
       </div>
       <section className="metrics-section-title">
         <h3>Conversaci&oacute;n y operaci&oacute;n</h3>
         <p>Volumen reciente, mezcla IA/humanos, etiquetas y carga por vendedor.</p>
       </section>
       <div className="metrics-grid compact">
-        <Metric label="Entrantes 7d" value={stats.inbound_7d} />
-        <Metric label="Salientes 7d" value={stats.outbound_7d} />
-        <Metric label="IA 7d" value={`${stats.ai_7d} (${aiShare}%)`} />
-        <Metric label="Humanos 7d" value={`${stats.manual_7d} (${manualShare}%)`} />
-        <Metric label="Reactivadas" value={`${stats.conversion.followups_reactivated} (${stats.conversion.followups_reactivation_rate}%)`} />
-        <Metric label="Tiempo conv." value={stats.conversion.avg_conversion_days === null ? "-" : `${stats.conversion.avg_conversion_days} d&iacute;as`} />
+        <Metric label="Entrantes periodo" value={currentStats.inbound_7d} />
+        <Metric label="Salientes periodo" value={currentStats.outbound_7d} />
+        <Metric label="IA periodo" value={`${currentStats.ai_7d} (${aiShare}%)`} />
+        <Metric label="Humanos periodo" value={`${currentStats.manual_7d} (${manualShare}%)`} />
+        <Metric label="Reactivadas" value={`${currentStats.conversion.followups_reactivated} (${currentStats.conversion.followups_reactivation_rate}%)`} />
+        <Metric label="Tiempo conv." value={currentStats.conversion.avg_conversion_days === null ? "-" : `${currentStats.conversion.avg_conversion_days} d&iacute;as`} />
       </div>
       <div className="metrics-two-columns">
-        <MetricBreakdown title="Por etiqueta" items={stats.by_consultype} />
-        <MetricBreakdown title="Por sentimiento" items={stats.by_sentiment} />
+        <MetricBreakdown title="Por etiqueta" items={currentStats.by_consultype} tone="multi" />
+        <MetricBreakdown title="Por sentimiento" items={currentStats.by_sentiment} tone="sentiment" />
       </div>
       <div className="metrics-two-columns">
-        <MetricBreakdown title="Por estado" items={stats.by_status} />
-        <MetricBreakdown title="Por canal" items={stats.by_channel} />
+        <MetricBreakdown title="Por estado" items={currentStats.by_status} tone="status" />
+        <MetricBreakdown title="Por canal" items={currentStats.by_channel} tone="channel" />
       </div>
       <div className="metrics-two-columns">
-        <MetricBreakdown title="Por plataforma" items={stats.by_platform} />
-        <SellerMetrics sellers={stats.by_seller} />
+        <MetricBreakdown title="Por plataforma" items={currentStats.by_platform} tone="channel" />
+        <SellerMetrics sellers={currentStats.by_seller} />
       </div>
-      <DailyMetrics days={stats.daily} />
+      <DailyMetrics days={currentStats.daily} groupBy={groupBy} />
     </section>
   );
 }
 
-function AcquisitionChart({ days }: { days: Stats["acquisition_daily"] }) {
+function AcquisitionChart({ days, groupBy }: { days: Stats["acquisition_daily"]; groupBy: "day" | "week" | "month" }) {
   const max = Math.max(...days.map((day) => day.selector + day.whatsapp + day.manual + day.other), 1);
 
   return (
@@ -613,7 +684,7 @@ function AcquisitionChart({ days }: { days: Stats["acquisition_daily"] }) {
         {days.map((day) => {
           const total = day.selector + day.whatsapp + day.manual + day.other;
           return (
-            <div className="acquisition-day" key={day.date} title={`${formatShortDate(day.date)} - ${total} contactos`}>
+            <div className="acquisition-day" key={day.date} title={`${formatMetricDate(day.date, groupBy)} - ${total} contactos`}>
               <div className="acquisition-stack" style={{ height: `${Math.max(3, Math.round((total / max) * 100))}%` }}>
                 <span className="source-selector" style={{ flex: day.selector || 0.001 }} />
                 <span className="source-whatsapp" style={{ flex: day.whatsapp || 0.001 }} />
@@ -662,7 +733,7 @@ function SourceMetrics({ sources, total }: { sources: Stats["by_source"]; total:
   );
 }
 
-function MetricBreakdown({ title, items }: { title: string; items: Array<{ label: string; value: number }> }) {
+function MetricBreakdown({ title, items, tone = "default" }: { title: string; items: Array<{ label: string; value: number }>; tone?: string }) {
   const max = Math.max(...items.map((item) => item.value), 1);
 
   return (
@@ -671,10 +742,10 @@ function MetricBreakdown({ title, items }: { title: string; items: Array<{ label
       {items.length ? (
         <div className="metric-bars">
           {items.map((item) => (
-            <div className="metric-bar-row" key={item.label}>
+            <div className={`metric-bar-row tone-${tone}`} key={item.label}>
               <span>{formatMetricLabel(item.label)}</span>
               <div className="metric-bar-track">
-                <i style={{ width: `${Math.max(5, Math.round((item.value / max) * 100))}%` }} />
+                <i style={{ width: `${Math.max(5, Math.round((item.value / max) * 100))}%`, background: getMetricColor(item.label) }} />
               </div>
               <strong>{item.value}</strong>
             </div>
@@ -717,7 +788,7 @@ function SellerMetrics({ sellers }: { sellers: Stats["by_seller"] }) {
   );
 }
 
-function DailyMetrics({ days }: { days: Stats["daily"] }) {
+function DailyMetrics({ days, groupBy }: { days: Stats["daily"]; groupBy: "day" | "week" | "month" }) {
   const max = Math.max(...days.map((day) => day.inbound + day.outbound), 1);
 
   return (
@@ -727,12 +798,12 @@ function DailyMetrics({ days }: { days: Stats["daily"] }) {
         {days.map((day) => {
           const total = day.inbound + day.outbound;
           return (
-            <div className="daily-bar" key={day.date} title={`${formatShortDate(day.date)} - ${total} mensajes`}>
+            <div className="daily-bar" key={day.date} title={`${formatMetricDate(day.date, groupBy)} - ${total} mensajes`}>
               <div className="daily-bar-stack" style={{ height: `${Math.max(4, Math.round((total / max) * 100))}%` }}>
                 <span className="daily-inbound" style={{ flex: day.inbound || 0.001 }} />
                 <span className="daily-outbound" style={{ flex: day.outbound || 0.001 }} />
               </div>
-              <small>{formatShortDate(day.date)}</small>
+              <small>{formatMetricDate(day.date, groupBy)}</small>
             </div>
           );
         })}
@@ -756,6 +827,36 @@ function formatMetricLabel(value: string) {
 function formatShortDate(value: string) {
   const [, month, day] = value.split("-");
   return `${day}/${month}`;
+}
+
+function formatMetricDate(value: string, groupBy: "day" | "week" | "month") {
+  const [year, month, day] = value.split("-");
+  if (groupBy === "month") {
+    return `${month}/${year.slice(2)}`;
+  }
+  if (groupBy === "week") {
+    return `Sem. ${day}/${month}`;
+  }
+  return `${day}/${month}`;
+}
+
+function toDateInputDaysAgo(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+function getMetricColor(label: string) {
+  const key = label.toLowerCase();
+  if (key.includes("caliente") || key.includes("hot")) return "#f43f5e";
+  if (key.includes("cliente") || key.includes("positivo") || key.includes("sent")) return "#42c767";
+  if (key.includes("comparador") || key.includes("quoted") || key.includes("cotizado")) return "#fbbf24";
+  if (key.includes("handoff") || key.includes("escal")) return "#f97316";
+  if (key.includes("whatsapp")) return "#25d366";
+  if (key.includes("selector")) return "#8dc63f";
+  if (key.includes("neutral")) return "#9ca3af";
+  if (key.includes("molesto") || key.includes("preocupado") || key.includes("negativo")) return "#ff6b6b";
+  return "#79d1f2";
 }
 
 function SettingsPanel({ users }: { users: AppUser[] }) {

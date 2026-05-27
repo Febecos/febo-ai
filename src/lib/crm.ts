@@ -342,6 +342,14 @@ export type DashboardConversionStats = {
   followups_reactivation_rate: number;
 };
 
+export type DashboardGranularity = "day" | "week" | "month";
+
+export type DashboardStatsOptions = {
+  startDate?: string | null;
+  endDate?: string | null;
+  groupBy?: DashboardGranularity | null;
+};
+
 export type DashboardStats = {
   conversations: number;
   contacts: number;
@@ -378,6 +386,24 @@ export type DashboardStats = {
   daily: DashboardDailyMetric[];
   conversion: DashboardConversionStats;
 };
+
+function getDashboardRange(options: DashboardStatsOptions = {}) {
+  const now = new Date();
+  const defaultStart = new Date(now);
+  defaultStart.setDate(defaultStart.getDate() - 29);
+
+  const start = options.startDate ? new Date(`${options.startDate}T00:00:00-03:00`) : defaultStart;
+  const end = options.endDate ? new Date(`${options.endDate}T00:00:00-03:00`) : now;
+  const safeStart = Number.isNaN(start.getTime()) ? defaultStart : start;
+  const safeEnd = Number.isNaN(end.getTime()) ? now : end;
+  const groupBy = options.groupBy === "week" || options.groupBy === "month" ? options.groupBy : "day";
+
+  if (safeStart > safeEnd) {
+    return { start: safeEnd, end: safeStart, groupBy };
+  }
+
+  return { start: safeStart, end: safeEnd, groupBy };
+}
 
 export function getEmptyDashboardStats(): DashboardStats {
   return {
@@ -2659,20 +2685,61 @@ export async function getMessageMediaByMessageId(messageId: string) {
   return rows[0] ?? null;
 }
 
-export async function getDashboardStats() {
+export async function getDashboardStats(options: DashboardStatsOptions = {}) {
   if (!isDbConfigured()) {
     return getEmptyDashboardStats();
   }
 
   const sql = getSql();
+  const range = getDashboardRange(options);
   const rows = (await sql`
+    with params as (
+      select
+        ${range.start.toISOString()}::timestamptz as start_at,
+        (${range.end.toISOString()}::timestamptz + interval '1 day') as end_at,
+        ${range.groupBy}::text as grain
+    ),
+    buckets as (
+      select
+        gs.bucket,
+        case
+          when (select grain from params) = 'month' then gs.bucket + interval '1 month'
+          when (select grain from params) = 'week' then gs.bucket + interval '1 week'
+          else gs.bucket + interval '1 day'
+        end as next_bucket
+      from params p
+      cross join lateral generate_series(
+        date_trunc(p.grain, p.start_at),
+        date_trunc(p.grain, p.end_at - interval '1 millisecond'),
+        case
+          when p.grain = 'month' then interval '1 month'
+          when p.grain = 'week' then interval '1 week'
+          else interval '1 day'
+        end
+      ) gs(bucket)
+    ),
+    period_contacts as (
+      select ct.*
+      from contacts ct, params p
+      where ct.created_at >= p.start_at and ct.created_at < p.end_at
+    ),
+    period_conversations as (
+      select c.*
+      from conversations c, params p
+      where c.last_message_at >= p.start_at and c.last_message_at < p.end_at
+    ),
+    period_messages as (
+      select m.*
+      from messages m, params p
+      where m.created_at >= p.start_at and m.created_at < p.end_at
+    )
     select
-      (select count(*)::int from conversations) as conversations,
-      (select count(*)::int from contacts) as contacts,
-      (select count(*)::int from conversations where assigned_to is not null) as handoffs,
-      (select count(*)::int from contacts where consultype = 'caliente') as hot,
-      (select count(*)::int from contacts where consultype = 'cliente' or contact_type = 'cliente') as clients,
-      (select count(*)::int from contacts where coalesce(consultype, '') <> 'cliente' and coalesce(contact_type, '') <> 'cliente') as prospects,
+      (select count(*)::int from period_conversations) as conversations,
+      (select count(*)::int from period_contacts) as contacts,
+      (select count(*)::int from period_conversations where assigned_to is not null) as handoffs,
+      (select count(*)::int from period_contacts where consultype = 'caliente') as hot,
+      (select count(*)::int from period_contacts where consultype = 'cliente' or contact_type = 'cliente') as clients,
+      (select count(*)::int from period_contacts where coalesce(consultype, '') <> 'cliente' and coalesce(contact_type, '') <> 'cliente') as prospects,
       (
         select coalesce(round(
           (count(*) filter (where consultype = 'cliente' or contact_type = 'cliente'))::numeric
@@ -2680,36 +2747,35 @@ export async function getDashboardStats() {
           / nullif(count(*), 0),
           1
         ), 0)::float
-        from contacts
+        from period_contacts
       ) as conversion_rate,
-      (select count(*)::int from conversations where unread = true) as unread,
-      (select count(*)::int from conversations where status in ('open', 'waiting', 'hot', 'handoff', 'quoted')) as open,
+      (select count(*)::int from period_conversations where unread = true) as unread,
+      (select count(*)::int from period_conversations where status in ('open', 'waiting', 'hot', 'handoff', 'quoted')) as open,
       (select count(*)::int from conversations where ai_enabled = true) as ai_enabled,
-      (select count(*)::int from messages) as messages_total,
+      (select count(*)::int from period_messages) as messages_total,
       (select count(*)::int from messages where direction = 'inbound' and created_at >= now() - interval '24 hours') as inbound_24h,
       (select count(*)::int from messages where direction = 'outbound' and created_at >= now() - interval '24 hours') as outbound_24h,
-      (select count(*)::int from messages where direction = 'inbound' and created_at >= now() - interval '7 days') as inbound_7d,
-      (select count(*)::int from messages where direction = 'outbound' and created_at >= now() - interval '7 days') as outbound_7d,
-      (select count(*)::int from messages where direction = 'outbound' and metadata->>'source' = 'febo_ai' and created_at >= now() - interval '7 days') as ai_7d,
-      (select count(*)::int from messages where direction = 'outbound' and coalesce(metadata->>'source', '') <> 'febo_ai' and created_by is not null and created_at >= now() - interval '7 days') as manual_7d,
-      (select count(*)::int from conversation_notes where created_at >= now() - interval '7 days') as internal_notes_7d,
-      (select count(*)::int from scheduled_template_messages where status = 'sent' and updated_at >= now() - interval '7 days') as templates_sent_7d,
+      (select count(*)::int from period_messages where direction = 'inbound') as inbound_7d,
+      (select count(*)::int from period_messages where direction = 'outbound') as outbound_7d,
+      (select count(*)::int from period_messages where direction = 'outbound' and metadata->>'source' = 'febo_ai') as ai_7d,
+      (select count(*)::int from period_messages where direction = 'outbound' and coalesce(metadata->>'source', '') <> 'febo_ai' and created_by is not null) as manual_7d,
+      (select count(*)::int from conversation_notes n, params p where n.created_at >= p.start_at and n.created_at < p.end_at) as internal_notes_7d,
+      (select count(*)::int from scheduled_template_messages s, params p where s.status = 'sent' and s.updated_at >= p.start_at and s.updated_at < p.end_at) as templates_sent_7d,
       (select count(*)::int from scheduled_template_messages where status in ('pending', 'processing')) as templates_pending,
-      (select count(*)::int from scheduled_template_messages where status = 'failed' and updated_at >= now() - interval '7 days') as templates_failed_7d,
+      (select count(*)::int from scheduled_template_messages s, params p where s.status = 'failed' and s.updated_at >= p.start_at and s.updated_at < p.end_at) as templates_failed_7d,
       (select count(*)::int from follow_ups where status in ('proposed', 'pending')) as followups_pending,
-      (select count(*)::int from message_media where created_at >= now() - interval '7 days') as media_7d,
+      (select count(*)::int from message_media mm, params p where mm.created_at >= p.start_at and mm.created_at < p.end_at) as media_7d,
       (
         select round(avg(extract(epoch from (first_out.created_at - first_in.created_at)) / 60))::int
         from (
           select conversation_id, min(created_at) as created_at
-          from messages
+          from period_messages
           where direction = 'inbound'
-            and created_at >= now() - interval '30 days'
           group by conversation_id
         ) first_in
         join lateral (
           select min(m2.created_at) as created_at
-          from messages m2
+          from period_messages m2
           where m2.conversation_id = first_in.conversation_id
             and m2.direction = 'outbound'
             and m2.created_at > first_in.created_at
@@ -2728,7 +2794,7 @@ export async function getDashboardStats() {
         )
         from (
           select
-            d.day,
+            b.bucket as day,
             count(ct.id) filter (where coalesce(ct.source, '') = 'selector')::int as selector,
             count(ct.id) filter (where coalesce(ct.platform, '') = 'whatsapp' and coalesce(ct.source, '') <> 'selector')::int as whatsapp,
             count(ct.id) filter (where coalesce(ct.source, '') in ('manual', 'imported'))::int as manual,
@@ -2736,13 +2802,9 @@ export async function getDashboardStats() {
               where coalesce(ct.source, '') not in ('selector', 'manual', 'imported')
                 and coalesce(ct.platform, '') <> 'whatsapp'
             )::int as other
-          from generate_series(
-            date_trunc('day', now() - interval '29 days'),
-            date_trunc('day', now()),
-            interval '1 day'
-          ) d(day)
-          left join contacts ct on ct.created_at >= d.day and ct.created_at < d.day + interval '1 day'
-          group by d.day
+          from buckets b
+          left join period_contacts ct on ct.created_at >= b.bucket and ct.created_at < b.next_bucket
+          group by b.bucket
         ) x
       ), '[]'::jsonb) as acquisition_daily,
       coalesce((
@@ -2763,7 +2825,7 @@ export async function getDashboardStats() {
             count(*) filter (where ct.consultype = 'caliente')::int as hot,
             count(*) filter (where ct.assigned_to is not null)::int as assigned,
             count(*) filter (where ct.consultype = 'cliente' or ct.contact_type = 'cliente')::int as client
-          from contacts ct
+          from period_contacts ct
           group by coalesce(nullif(ct.source, ''), nullif(ct.platform, ''), 'sin-origen')
         ) x
       ), '[]'::jsonb) as by_source,
@@ -2771,7 +2833,7 @@ export async function getDashboardStats() {
         select jsonb_agg(jsonb_build_object('label', status, 'value', total) order by total desc)
         from (
           select status, count(*)::int as total
-          from conversations
+          from period_conversations
           group by status
         ) x
       ), '[]'::jsonb) as by_status,
@@ -2779,7 +2841,7 @@ export async function getDashboardStats() {
         select jsonb_agg(jsonb_build_object('label', consultype, 'value', total) order by total desc)
         from (
           select consultype, count(*)::int as total
-          from contacts
+          from period_contacts
           group by consultype
         ) x
       ), '[]'::jsonb) as by_consultype,
@@ -2787,7 +2849,7 @@ export async function getDashboardStats() {
         select jsonb_agg(jsonb_build_object('label', sentiment, 'value', total) order by total desc)
         from (
           select sentiment, count(*)::int as total
-          from contacts
+          from period_contacts
           group by sentiment
         ) x
       ), '[]'::jsonb) as by_sentiment,
@@ -2795,7 +2857,7 @@ export async function getDashboardStats() {
         select jsonb_agg(jsonb_build_object('label', channel, 'value', total) order by total desc)
         from (
           select channel, count(*)::int as total
-          from conversations
+          from period_conversations
           group by channel
         ) x
       ), '[]'::jsonb) as by_channel,
@@ -2803,7 +2865,7 @@ export async function getDashboardStats() {
         select jsonb_agg(jsonb_build_object('label', platform, 'value', total) order by total desc)
         from (
           select platform, count(*)::int as total
-          from contacts
+          from period_contacts
           group by platform
         ) x
       ), '[]'::jsonb) as by_platform,
@@ -2826,11 +2888,11 @@ export async function getDashboardStats() {
             count(distinct ct.id)::int as assigned_contacts,
             count(distinct c.id) filter (where c.status in ('open', 'waiting', 'hot', 'handoff', 'quoted'))::int as open_conversations,
             count(distinct ct.id) filter (where ct.consultype = 'caliente')::int as hot_contacts,
-            count(distinct m.id) filter (where m.direction = 'outbound' and m.created_at >= now() - interval '7 days')::int as outbound_7d
+            count(distinct m.id) filter (where m.direction = 'outbound')::int as outbound_7d
           from app_users u
-          left join contacts ct on ct.assigned_to = u.id
-          left join conversations c on c.assigned_to = u.id
-          left join messages m on m.created_by = u.id
+          left join period_contacts ct on ct.assigned_to = u.id
+          left join period_conversations c on c.assigned_to = u.id
+          left join period_messages m on m.created_by = u.id
           where u.active = true and (u.sales_group = true or u.role = 'vendedor')
           group by u.id, u.full_name
         ) x
@@ -2848,18 +2910,14 @@ export async function getDashboardStats() {
         )
         from (
           select
-            d.day,
+            b.bucket as day,
             count(m.id) filter (where m.direction = 'inbound')::int as inbound,
             count(m.id) filter (where m.direction = 'outbound')::int as outbound,
             count(m.id) filter (where m.direction = 'outbound' and m.metadata->>'source' = 'febo_ai')::int as ai,
             count(m.id) filter (where m.direction = 'outbound' and coalesce(m.metadata->>'source', '') <> 'febo_ai' and m.created_by is not null)::int as manual
-          from generate_series(
-            date_trunc('day', now() - interval '13 days'),
-            date_trunc('day', now()),
-            interval '1 day'
-          ) d(day)
-          left join messages m on m.created_at >= d.day and m.created_at < d.day + interval '1 day'
-          group by d.day
+          from buckets b
+          left join period_messages m on m.created_at >= b.bucket and m.created_at < b.next_bucket
+          group by b.bucket
         ) x
       ), '[]'::jsonb) as daily,
       (
@@ -2874,8 +2932,8 @@ export async function getDashboardStats() {
         )
         from (
           select
-            (select count(*)::int from contacts where coalesce(consultype, '') <> 'cliente' and coalesce(contact_type, '') <> 'cliente') as prospects,
-            (select count(*)::int from contacts where consultype = 'cliente' or contact_type = 'cliente') as clients,
+            (select count(*)::int from period_contacts where coalesce(consultype, '') <> 'cliente' and coalesce(contact_type, '') <> 'cliente') as prospects,
+            (select count(*)::int from period_contacts where consultype = 'cliente' or contact_type = 'cliente') as clients,
             (
               select coalesce(round(
                 (count(*) filter (where consultype = 'cliente' or contact_type = 'cliente'))::numeric
@@ -2883,17 +2941,17 @@ export async function getDashboardStats() {
                 / nullif(count(*), 0),
                 1
               ), 0)::float
-              from contacts
+              from period_contacts
             ) as conversion_rate,
             (
               select round(avg(extract(epoch from (last_seen_at - created_at)) / 86400), 1)::float
-              from contacts
+              from period_contacts
               where (consultype = 'cliente' or contact_type = 'cliente')
                 and last_seen_at is not null
                 and created_at is not null
                 and last_seen_at >= created_at
             ) as avg_conversion_days,
-            (select count(*)::int from follow_ups) as followups_total,
+            (select count(*)::int from follow_ups f, params p where f.created_at >= p.start_at and f.created_at < p.end_at) as followups_total,
             (
               select count(distinct f.id)::int
               from follow_ups f
@@ -2901,6 +2959,8 @@ export async function getDashboardStats() {
                 and m.direction = 'inbound'
                 and m.created_at > f.due_at
                 and m.created_at <= f.due_at + interval '7 days'
+              cross join params p
+              where f.created_at >= p.start_at and f.created_at < p.end_at
             ) as followups_reactivated,
             (
               select coalesce(round(
@@ -2911,10 +2971,13 @@ export async function getDashboardStats() {
                     and m.direction = 'inbound'
                     and m.created_at > f.due_at
                     and m.created_at <= f.due_at + interval '7 days'
+                  cross join params p2
+                  where f.created_at >= p2.start_at and f.created_at < p2.end_at
                 )::numeric * 100 / nullif(count(*), 0),
                 1
               ), 0)::float
-              from follow_ups
+              from follow_ups f, params p
+              where f.created_at >= p.start_at and f.created_at < p.end_at
             ) as followups_reactivation_rate
         ) x
       ) as conversion

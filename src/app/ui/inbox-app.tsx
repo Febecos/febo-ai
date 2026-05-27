@@ -606,6 +606,16 @@ function MetricsPanel({ stats }: { stats: Stats }) {
     void refreshMetrics(groupBy, nextStart, nextEnd);
   }
 
+  function exportMetricsExcel() {
+    const params = new URLSearchParams({
+      groupBy,
+      startDate,
+      endDate,
+      format: "xlsx"
+    });
+    window.location.href = `/api/metrics?${params.toString()}`;
+  }
+
   return (
     <section className="metrics-panel">
       <div className="metrics-head">
@@ -639,6 +649,9 @@ function MetricsPanel({ stats }: { stats: Stats }) {
         </label>
         <button type="button" onClick={() => refreshMetrics()} disabled={loading}>
           {loading ? "Actualizando..." : "Actualizar panel"}
+        </button>
+        <button type="button" onClick={exportMetricsExcel}>
+          Exportar Excel
         </button>
         <div className="metrics-quick-ranges">
           <button type="button" onClick={() => applyQuickRange(7)}>7 d&iacute;as</button>

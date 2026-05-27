@@ -362,10 +362,18 @@ async function sendAutomaticReply(input: {
   stored: StoredIncomingMessage;
 }) {
   const { message, interactiveId, agentMessage, stored } = input;
+  const quietSeconds = await getAutomaticReplyDelaySeconds();
   const candidate = await getAutomaticReplyCandidate({
     conversationId: stored.threadId,
-    messageId: stored.messageId
+    messageId: stored.messageId,
+    minQuietSeconds: quietSeconds
   });
+
+  if (candidate.retryAfterMs > 0) {
+    await sleep(Math.min(candidate.retryAfterMs + 500, quietSeconds * 1000));
+    await sendAutomaticReply(input);
+    return;
+  }
 
   if (!candidate.shouldReply) {
     return;
@@ -524,10 +532,14 @@ async function refreshMemorySafely(conversationId: string | null | undefined) {
 }
 
 async function waitBeforeAutomaticReply() {
+  const safeDelaySeconds = await getAutomaticReplyDelaySeconds();
+  await sleep(safeDelaySeconds * 1000);
+}
+
+async function getAutomaticReplyDelaySeconds() {
   const configuredDelay = await getSettingValue("auto_reply_delay_seconds", Number(process.env.FEBO_AUTO_REPLY_DELAY_SECONDS ?? DEFAULT_AUTO_REPLY_DELAY_SECONDS));
   const delaySeconds = Number(configuredDelay);
-  const safeDelaySeconds = Number.isFinite(delaySeconds) && delaySeconds >= 0 ? delaySeconds : DEFAULT_AUTO_REPLY_DELAY_SECONDS;
-  await sleep(safeDelaySeconds * 1000);
+  return Number.isFinite(delaySeconds) && delaySeconds >= 0 ? delaySeconds : DEFAULT_AUTO_REPLY_DELAY_SECONDS;
 }
 
 function inferDeferredFollowUpDueAt(message: string) {

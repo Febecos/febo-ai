@@ -2416,9 +2416,10 @@ export async function upsertConversationMemory(input: {
 export async function getAutomaticReplyCandidate(input: {
   conversationId?: string | null;
   messageId?: string | null;
+  minQuietSeconds?: number;
 }) {
   if (!isDbConfigured() || !input.conversationId || !input.messageId) {
-    return { shouldReply: true, combinedMessage: null as string | null };
+    return { shouldReply: true, combinedMessage: null as string | null, retryAfterMs: 0 };
   }
 
   const sql = getSql();
@@ -2432,7 +2433,7 @@ export async function getAutomaticReplyCandidate(input: {
       limit 1
     ),
     latest_inbound as (
-      select id
+      select id, created_at
       from messages
       where conversation_id = ${input.conversationId}
         and direction = 'inbound'
@@ -2467,6 +2468,7 @@ export async function getAutomaticReplyCandidate(input: {
       exists(select 1 from target_message) as target_exists,
       (select id::text from latest_inbound) = ${input.messageId} as is_latest_inbound,
       (select direction from latest_message) = 'inbound' as latest_is_inbound,
+      greatest(0, extract(epoch from (now() - (select created_at from latest_inbound))))::float as latest_inbound_age_seconds,
       c.ai_enabled,
       (
         select string_agg(body, E'\n' order by created_at asc)
@@ -2479,6 +2481,7 @@ export async function getAutomaticReplyCandidate(input: {
     target_exists: boolean;
     is_latest_inbound: boolean;
     latest_is_inbound: boolean;
+    latest_inbound_age_seconds: number | null;
     ai_enabled: boolean;
     combined_message: string | null;
   }>;
@@ -2486,12 +2489,19 @@ export async function getAutomaticReplyCandidate(input: {
   const row = rows[0];
 
   if (!row) {
-    return { shouldReply: false, combinedMessage: null };
+    return { shouldReply: false, combinedMessage: null, retryAfterMs: 0 };
   }
 
+  const minQuietSeconds = Math.max(0, Number(input.minQuietSeconds ?? 0));
+  const latestInboundAgeSeconds = Number(row.latest_inbound_age_seconds ?? 0);
+  const retryAfterMs = minQuietSeconds > 0 && latestInboundAgeSeconds < minQuietSeconds
+    ? Math.ceil((minQuietSeconds - latestInboundAgeSeconds) * 1000)
+    : 0;
+
   return {
-    shouldReply: row.target_exists && row.is_latest_inbound && row.latest_is_inbound && row.ai_enabled,
-    combinedMessage: row.combined_message
+    shouldReply: row.target_exists && row.is_latest_inbound && row.latest_is_inbound && row.ai_enabled && retryAfterMs === 0,
+    combinedMessage: row.combined_message,
+    retryAfterMs
   };
 }
 

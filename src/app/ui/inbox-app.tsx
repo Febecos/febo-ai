@@ -496,7 +496,7 @@ function ToolWorkspace({
             users={users}
           />
         ) : null}
-        {activeTool === "metrics" && isAdmin ? <MetricsPanel stats={stats} /> : null}
+        {activeTool === "metrics" && isAdmin ? <MetricsPanel stats={stats} users={users} /> : null}
         {activeTool === "templates" ? <TemplatesPanel currentUser={currentUser} /> : null}
         {activeTool === "labels" ? (
           <LabelsPanel currentUser={currentUser} labels={labelDefinitions} onLabelsChange={setLabelDefinitions} />
@@ -564,25 +564,27 @@ function WhatsAppMark() {
   );
 }
 
-function MetricsPanel({ stats }: { stats: Stats }) {
+function MetricsPanel({ stats, users }: { stats: Stats; users: AppUser[] }) {
   const [currentStats, setCurrentStats] = useState(stats);
   const [groupBy, setGroupBy] = useState<"day" | "week" | "month">("day");
   const [startDate, setStartDate] = useState(() => toDateInputDaysAgo(29));
   const [endDate, setEndDate] = useState(() => toDateInputDaysAgo(0));
+  const [assignedTo, setAssignedTo] = useState("all");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const totalPeriod = currentStats.inbound_7d + currentStats.outbound_7d;
   const aiShare = currentStats.outbound_7d ? Math.round((currentStats.ai_7d / currentStats.outbound_7d) * 100) : 0;
   const manualShare = currentStats.outbound_7d ? Math.round((currentStats.manual_7d / currentStats.outbound_7d) * 100) : 0;
 
-  async function refreshMetrics(nextGroup = groupBy, nextStart = startDate, nextEnd = endDate) {
+  async function refreshMetrics(nextGroup = groupBy, nextStart = startDate, nextEnd = endDate, nextAssignedTo = assignedTo) {
     setLoading(true);
     setNotice("");
     try {
       const params = new URLSearchParams({
         groupBy: nextGroup,
         startDate: nextStart,
-        endDate: nextEnd
+        endDate: nextEnd,
+        assignedTo: nextAssignedTo
       });
       const response = await fetch(`/api/metrics?${params.toString()}`);
       const data = (await response.json()) as { stats?: Stats; error?: string };
@@ -613,6 +615,9 @@ function MetricsPanel({ stats }: { stats: Stats }) {
       endDate,
       format: "xlsx"
     });
+    if (assignedTo !== "all") {
+      params.set("assignedTo", assignedTo);
+    }
     window.location.href = `/api/metrics?${params.toString()}`;
   }
 
@@ -622,6 +627,9 @@ function MetricsPanel({ stats }: { stats: Stats }) {
       startDate,
       endDate
     });
+    if (assignedTo !== "all") {
+      params.set("assignedTo", assignedTo);
+    }
     const apiPath = `/api/metrics?${params.toString()}`;
     const url = `${window.location.origin}${apiPath}`;
 
@@ -663,6 +671,26 @@ function MetricsPanel({ stats }: { stats: Stats }) {
         <label>
           Fecha fin
           <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+        </label>
+        <label>
+          Vendedor
+          <select
+            value={assignedTo}
+            onChange={(event) => {
+              const next = event.target.value;
+              setAssignedTo(next);
+              void refreshMetrics(groupBy, startDate, endDate, next);
+            }}
+          >
+            <option value="all">Todos</option>
+            {users
+              .filter((user) => user.role === "vendedor" || user.sales_group)
+              .map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.full_name}
+                </option>
+              ))}
+          </select>
         </label>
         <button type="button" onClick={() => refreshMetrics()} disabled={loading}>
           {loading ? "Actualizando..." : "Actualizar panel"}

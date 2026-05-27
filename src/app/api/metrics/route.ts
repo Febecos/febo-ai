@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
   const stats = await getDashboardStats({
     startDate: search.get("startDate"),
     endDate: search.get("endDate"),
-    groupBy: safeGroupBy
+    groupBy: safeGroupBy,
+    assignedTo: search.get("assignedTo")
   });
 
   if (search.get("format") === "xlsx") {
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
       groupBy: safeGroupBy
     };
     const workbook = buildMetricsWorkbook(stats, range);
-    const details = await getMetricsExportDetails(range.startDate, range.endDate);
+    const details = await getMetricsExportDetails(range.startDate, range.endDate, search.get("assignedTo"));
     appendSheet(workbook, "Contactos detalle", details.contacts);
     appendSheet(workbook, "Conversaciones detalle", details.conversations);
     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
@@ -113,16 +114,20 @@ function getMetricsDateRange(startDate: string | null, endDate: string | null) {
   return { start: safeStart, end: safeEnd };
 }
 
-async function getMetricsExportDetails(startDate: string | null, endDate: string | null) {
+async function getMetricsExportDetails(startDate: string | null, endDate: string | null, assignedTo: string | null) {
   if (!isDbConfigured()) {
     return { contacts: [], conversations: [] };
   }
 
   const sql = getSql();
   const range = getMetricsDateRange(startDate, endDate);
+  const assignedToFilter = assignedTo && assignedTo !== "all" ? assignedTo : null;
   const contacts = (await sql`
     with params as (
-      select ${range.start.toISOString()}::timestamptz as start_at, (${range.end.toISOString()}::timestamptz + interval '1 day') as end_at
+      select
+        ${range.start.toISOString()}::timestamptz as start_at,
+        (${range.end.toISOString()}::timestamptz + interval '1 day') as end_at,
+        ${assignedToFilter}::uuid as assigned_to_filter
     )
     select
       ct.created_at::text as fecha_alta,
@@ -149,13 +154,17 @@ async function getMetricsExportDetails(startDate: string | null, endDate: string
     ) c on true
     cross join params p
     where ct.created_at >= p.start_at and ct.created_at < p.end_at
+      and (p.assigned_to_filter is null or ct.assigned_to = p.assigned_to_filter)
     order by ct.created_at desc
     limit 5000
   `) as Array<Record<string, unknown>>;
 
   const conversations = (await sql`
     with params as (
-      select ${range.start.toISOString()}::timestamptz as start_at, (${range.end.toISOString()}::timestamptz + interval '1 day') as end_at
+      select
+        ${range.start.toISOString()}::timestamptz as start_at,
+        (${range.end.toISOString()}::timestamptz + interval '1 day') as end_at,
+        ${assignedToFilter}::uuid as assigned_to_filter
     )
     select
       c.last_message_at::text as ultimo_mensaje,
@@ -180,6 +189,7 @@ async function getMetricsExportDetails(startDate: string | null, endDate: string
     cross join params p
     where c.last_message_at >= p.start_at and c.last_message_at < p.end_at
       and c.status not in ('blocked', 'deleted')
+      and (p.assigned_to_filter is null or c.assigned_to = p.assigned_to_filter)
     group by c.id, c.last_message_at, ct.phone, ct.display_name, canal, c.status, c.ai_enabled, c.unread, ct.consultype, ct.sentiment, u.full_name
     order by c.last_message_at desc
     limit 5000

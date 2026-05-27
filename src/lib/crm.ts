@@ -348,6 +348,7 @@ export type DashboardStatsOptions = {
   startDate?: string | null;
   endDate?: string | null;
   groupBy?: DashboardGranularity | null;
+  assignedTo?: string | null;
 };
 
 export type DashboardStats = {
@@ -2726,12 +2727,14 @@ export async function getDashboardStats(options: DashboardStatsOptions = {}) {
 
   const sql = getSql();
   const range = getDashboardRange(options);
+  const assignedTo = options.assignedTo && options.assignedTo !== "all" ? options.assignedTo : null;
   const rows = (await sql`
     with params as (
       select
         ${range.start.toISOString()}::timestamptz as start_at,
         (${range.end.toISOString()}::timestamptz + interval '1 day') as end_at,
-        ${range.groupBy}::text as grain
+        ${range.groupBy}::text as grain,
+        ${assignedTo}::uuid as assigned_to_filter
     ),
     buckets as (
       select
@@ -2756,16 +2759,20 @@ export async function getDashboardStats(options: DashboardStatsOptions = {}) {
       select ct.*
       from contacts ct, params p
       where ct.created_at >= p.start_at and ct.created_at < p.end_at
+        and (p.assigned_to_filter is null or ct.assigned_to = p.assigned_to_filter)
     ),
     period_conversations as (
       select c.*
       from conversations c, params p
       where c.last_message_at >= p.start_at and c.last_message_at < p.end_at
+        and (p.assigned_to_filter is null or c.assigned_to = p.assigned_to_filter)
     ),
     period_messages as (
       select m.*
       from messages m, params p
+      left join conversations c on c.id = m.conversation_id
       where m.created_at >= p.start_at and m.created_at < p.end_at
+        and (p.assigned_to_filter is null or c.assigned_to = p.assigned_to_filter)
     )
     select
       (select count(*)::int from period_conversations) as conversations,
@@ -2785,10 +2792,26 @@ export async function getDashboardStats(options: DashboardStatsOptions = {}) {
       ) as conversion_rate,
       (select count(*)::int from period_conversations where unread = true) as unread,
       (select count(*)::int from period_conversations where status in ('open', 'waiting', 'hot', 'handoff', 'quoted')) as open,
-      (select count(*)::int from conversations where ai_enabled = true) as ai_enabled,
+      (select count(*)::int from conversations c, params p where c.ai_enabled = true and (p.assigned_to_filter is null or c.assigned_to = p.assigned_to_filter)) as ai_enabled,
       (select count(*)::int from period_messages) as messages_total,
-      (select count(*)::int from messages where direction = 'inbound' and created_at >= now() - interval '24 hours') as inbound_24h,
-      (select count(*)::int from messages where direction = 'outbound' and created_at >= now() - interval '24 hours') as outbound_24h,
+      (
+        select count(*)::int
+        from messages m
+        left join conversations c on c.id = m.conversation_id
+        cross join params p
+        where m.direction = 'inbound'
+          and m.created_at >= now() - interval '24 hours'
+          and (p.assigned_to_filter is null or c.assigned_to = p.assigned_to_filter)
+      ) as inbound_24h,
+      (
+        select count(*)::int
+        from messages m
+        left join conversations c on c.id = m.conversation_id
+        cross join params p
+        where m.direction = 'outbound'
+          and m.created_at >= now() - interval '24 hours'
+          and (p.assigned_to_filter is null or c.assigned_to = p.assigned_to_filter)
+      ) as outbound_24h,
       (select count(*)::int from period_messages where direction = 'inbound') as inbound_7d,
       (select count(*)::int from period_messages where direction = 'outbound') as outbound_7d,
       (select count(*)::int from period_messages where direction = 'outbound' and metadata->>'source' = 'febo_ai') as ai_7d,

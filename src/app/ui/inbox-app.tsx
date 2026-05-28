@@ -5768,6 +5768,10 @@ function getConversationEventTitle(event: ConversationEvent) {
     return "Checkout desde selector";
   }
 
+  if (event.event === "selector_whatsapp_click") {
+    return "Click a WhatsApp desde selector";
+  }
+
   return humanizeTemplateName(event.event);
 }
 
@@ -5815,6 +5819,12 @@ function getConversationEventDescription(event: ConversationEvent) {
 
   if (event.event === "selector_checkout_abierto") {
     return "El cliente abrio o envio datos desde el selector de Febecos.";
+  }
+
+  if (event.event === "selector_whatsapp_click") {
+    const click = payload.whatsapp_click as Record<string, unknown> | undefined;
+    const zone = typeof click?.zona === "string" && click.zona ? ` Zona: ${click.zona}.` : "";
+    return `El cliente toco el boton de WhatsApp del selector, pero todavia puede no haber enviado mensaje.${zone}`;
   }
 
   return JSON.stringify(payload);

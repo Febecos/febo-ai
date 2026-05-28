@@ -512,6 +512,19 @@ export type SelectorCheckoutLead = {
   _es_test?: boolean;
 };
 
+export type SelectorWhatsAppClick = {
+  origen: "selector";
+  evento: "whatsapp_click" | "wa_click" | "whatsapp_abierto";
+  whatsapp_cliente: string;
+  nombre?: string | null;
+  zona?: string | null;
+  lead_id?: string | null;
+  consulta_id?: string | null;
+  source_url?: string | null;
+  timestamp?: string | null;
+  _es_test?: boolean;
+};
+
 export type ConversationFilters = {
   query?: string;
   consultype?: string;
@@ -1836,6 +1849,115 @@ export async function recordSelectorCheckoutLead(input: SelectorCheckoutLead) {
     contactId,
     threadId: conversation.id,
     messageId: inserted[0]?.id ?? null,
+    duplicate: false
+  };
+}
+
+export async function recordSelectorWhatsAppClick(input: SelectorWhatsAppClick) {
+  if (!isDbConfigured()) {
+    return { contactId: null, threadId: null, duplicate: false };
+  }
+
+  const sql = getSql();
+  const phone = normalizeWhatsAppRecipient(input.whatsapp_cliente);
+  const eventId = [
+    "selector-whatsapp-click",
+    phone,
+    input.lead_id ?? input.consulta_id ?? "",
+    input.timestamp ?? ""
+  ].join(":");
+
+  const existingEvent = (await sql`
+    select pe.id::text, c.id::text as thread_id, ct.id::text as contact_id
+    from platform_events pe
+    left join contacts ct on ct.id = pe.contact_id
+    left join conversations c on c.contact_id = ct.id
+    where pe.event = 'selector_whatsapp_click'
+      and pe.payload->>'event_id' = ${eventId}
+    order by c.last_message_at desc nulls last, c.created_at desc
+    limit 1
+  `) as Array<{ id: string; thread_id: string | null; contact_id: string | null }>;
+
+  if (existingEvent[0]) {
+    return {
+      contactId: existingEvent[0].contact_id,
+      threadId: existingEvent[0].thread_id,
+      duplicate: true
+    };
+  }
+
+  const displayName = input.nombre?.trim() || null;
+  const payload = JSON.stringify({
+    source: "selector",
+    event: input.evento,
+    event_id: eventId,
+    whatsapp_click: input
+  });
+
+  const contacts = (await sql`
+    insert into contacts (phone, account_id, external_user_id, display_name, platform, source, last_seen_at)
+    values (
+      ${phone},
+      (select id from channel_accounts where slug = 'whatsapp-principal' limit 1),
+      ${phone},
+      ${displayName},
+      'whatsapp',
+      'selector',
+      now()
+    )
+    on conflict (phone) do update
+    set account_id = coalesce(contacts.account_id, excluded.account_id),
+        external_user_id = coalesce(contacts.external_user_id, excluded.external_user_id),
+        display_name = coalesce(nullif(excluded.display_name, ''), contacts.display_name),
+        source = coalesce(contacts.source, 'selector'),
+        last_seen_at = now(),
+        updated_at = now()
+    returning id::text
+  `) as Array<{ id: string }>;
+
+  const contactId = contacts[0].id;
+  const existingConversation = (await sql`
+    select id::text
+    from conversations
+    where contact_id = ${contactId}
+      and status in ('open', 'waiting', 'quoted', 'hot', 'handoff')
+    order by last_message_at desc nulls last, created_at desc
+    limit 1
+  `) as Array<{ id: string }>;
+
+  const conversation =
+    existingConversation[0] ??
+    (
+      (await sql`
+        insert into conversations (contact_id, account_id, channel, status, last_message_at, ai_enabled)
+        values (
+          ${contactId},
+          (select account_id from contacts where id = ${contactId}),
+          'whatsapp',
+          'open',
+          now(),
+          true
+        )
+        returning id::text
+      `) as Array<{ id: string }>
+    )[0];
+
+  await sql`
+    update conversations
+    set unread = true,
+        last_message_at = greatest(coalesce(last_message_at, '-infinity'::timestamptz), now()),
+        updated_at = now()
+    where id = ${conversation.id}
+  `;
+
+  await sql`
+    insert into platform_events (contact_id, phone, event, payload)
+    values (${contactId}, ${phone}, 'selector_whatsapp_click', ${payload}::jsonb)
+  `;
+
+  return {
+    contactId,
+    threadId: conversation.id,
     duplicate: false
   };
 }

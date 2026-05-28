@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { config } from "@/lib/config";
-import { normalizeWhatsAppRecipient, recordAgentReply, recordSelectorCheckoutLead } from "@/lib/crm";
+import {
+  normalizeWhatsAppRecipient,
+  recordAgentReply,
+  recordSelectorCheckoutLead,
+  recordSelectorWhatsAppClick
+} from "@/lib/crm";
 import { sendPushNotificationToAll } from "@/lib/push";
 import { sendWhatsAppText } from "@/lib/whatsapp";
 
@@ -43,6 +48,19 @@ const checkoutSchema = z.object({
   _es_test: optionalTestFlag
 }).passthrough();
 
+const whatsappClickSchema = z.object({
+  origen: z.literal("selector"),
+  evento: z.enum(["whatsapp_click", "wa_click", "whatsapp_abierto"]),
+  whatsapp_cliente: z.string().min(6),
+  nombre: z.string().nullable().optional(),
+  zona: z.string().nullable().optional(),
+  lead_id: z.string().nullable().optional(),
+  consulta_id: z.string().nullable().optional(),
+  source_url: z.string().nullable().optional(),
+  timestamp: z.string().nullable().optional(),
+  _es_test: optionalTestFlag
+}).passthrough();
+
 export async function POST(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
@@ -55,10 +73,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "JSON invalido." }, { status: 400 });
   }
 
-  const parsed = checkoutSchema.safeParse(payload);
+  const clickParsed = whatsappClickSchema.safeParse(payload);
+  if (clickParsed.success) {
+    if (clickParsed.data._es_test) {
+      return NextResponse.json({ ok: true, test: true, processed: false });
+    }
 
+    try {
+      const result = await recordSelectorWhatsAppClick(clickParsed.data);
+      return NextResponse.json({ ok: true, event: "selector_whatsapp_click", duplicate: result.duplicate, conversationId: result.threadId });
+    } catch (error) {
+      console.error("No pudimos procesar el click de WhatsApp del selector.", error);
+      return NextResponse.json({ ok: false, error: "No pudimos procesar el click de WhatsApp." }, { status: 500 });
+    }
+  }
+
+  const parsed = checkoutSchema.safeParse(payload);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Payload invalido.", issues: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({
+      error: "Payload invalido.",
+      issues: {
+        checkout: parsed.error.flatten(),
+        whatsappClick: clickParsed.error.flatten()
+      }
+    }, { status: 400 });
   }
 
   if (parsed.data._es_test) {

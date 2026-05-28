@@ -3963,7 +3963,9 @@ function InboxList({
 
     setFollowUpText("");
     setFollowUpDueAt("");
-    setFollowUps(payload?.followUps ?? []);
+    const nextFollowUps = payload?.followUps ?? [];
+    setFollowUps(nextFollowUps);
+    syncConversationFollowUpCounters(selected.id, nextFollowUps);
   }
 
   async function updateFollowUpStatus(id: string, status: "pending" | "sent" | "cancelled") {
@@ -3988,7 +3990,28 @@ function InboxList({
       return;
     }
 
-    setFollowUps(payload?.followUps ?? []);
+    const nextFollowUps = payload?.followUps ?? [];
+    setFollowUps(nextFollowUps);
+    syncConversationFollowUpCounters(selected.id, nextFollowUps);
+  }
+
+  function syncConversationFollowUpCounters(conversationId: string, nextFollowUps: ConversationFollowUp[]) {
+    const pendingFollowUps = nextFollowUps.filter((followUp) => followUp.status === "proposed" || followUp.status === "pending");
+    const overdueFollowUps = pendingFollowUps.filter((followUp) => new Date(followUp.due_at).getTime() <= Date.now());
+
+    setItems((current) => {
+      const nextItems = current.map((item) =>
+        item.id === conversationId
+          ? {
+              ...item,
+              pending_followups: pendingFollowUps.length,
+              overdue_followups: overdueFollowUps.length
+            }
+          : item
+      );
+      onConversationsChange(nextItems);
+      return nextItems;
+    });
   }
 
   async function refreshConversations(nextFilters = filters, options: { silent?: boolean; suppressSound?: boolean } = {}) {
@@ -4974,6 +4997,12 @@ function InboxList({
                 <strong>{conversation.display_name || conversation.phone}</strong>
                 <small>Sentimiento: {conversation.sentiment || "neutro"}</small>
                 <span className={`tag ${conversation.consultype}`}>{labelBySlug.get(conversation.consultype)?.name ?? getConsultypeLabel(conversation.consultype)}</span>
+                {conversation.pending_followups ? (
+                  <span className={`followup-pill ${conversation.overdue_followups ? "due" : ""}`}>
+                    <Clock3 size={12} />
+                    {conversation.overdue_followups ? `${conversation.overdue_followups} vencida${conversation.overdue_followups > 1 ? "s" : ""}` : `${conversation.pending_followups} tarea${conversation.pending_followups > 1 ? "s" : ""}`}
+                  </span>
+                ) : null}
                 {conversation.assigned_name ? <span className="assigned-pill">asignado: {conversation.assigned_name}</span> : null}
               </button>
               <details className="row-menu">

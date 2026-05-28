@@ -39,6 +39,8 @@ export type ConversationSummary = {
   last_direction: string | null;
   unread_count: number;
   unread: boolean;
+  pending_followups: number;
+  overdue_followups: number;
 };
 
 export type ContactSummary = {
@@ -2087,7 +2089,9 @@ export async function listConversations(filters: ConversationFilters = {}) {
       u.full_name as assigned_name,
       lm.body as last_message,
       lm.direction as last_direction,
-      case when c.unread then 1 else 0 end::int as unread_count
+      case when c.unread then 1 else 0 end::int as unread_count,
+      coalesce(fu.pending_followups, 0)::int as pending_followups,
+      coalesce(fu.overdue_followups, 0)::int as overdue_followups
     from conversations c
     join contacts ct on ct.id = c.contact_id
     left join channel_accounts ca on ca.id = c.account_id
@@ -2099,6 +2103,13 @@ export async function listConversations(filters: ConversationFilters = {}) {
       order by m.created_at desc
       limit 1
     ) lm on true
+    left join lateral (
+      select
+        count(*) filter (where f.status in ('proposed', 'pending'))::int as pending_followups,
+        count(*) filter (where f.status in ('proposed', 'pending') and f.due_at <= now())::int as overdue_followups
+      from follow_ups f
+      where f.conversation_id = c.id
+    ) fu on true
     where (${search}::text is null or lower(coalesce(ct.display_name, '')) like ${search} or ct.phone like ${phoneSearch})
       and (${consultype}::text is null or ct.consultype = ${consultype})
       and (${status}::text is null or c.status = ${status})

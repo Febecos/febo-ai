@@ -342,6 +342,103 @@ button:disabled {
   background: #8dc63f;
 }
 
+.operational-signals {
+  background: linear-gradient(180deg, rgba(45, 100, 143, 0.78), rgba(16, 71, 110, 0.82));
+  border: 1px solid rgba(125, 199, 234, 0.3);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.operational-signals-head {
+  align-items: flex-end;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.operational-signals-head h3 {
+  font-size: 17px;
+  margin: 0;
+}
+
+.operational-signals-head p {
+  color: rgba(235, 248, 255, 0.76);
+  font-size: 12px;
+  margin: 0;
+}
+
+.operational-signal-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.operational-signal {
+  align-items: start;
+  background: rgba(8, 32, 55, 0.42);
+  border: 1px solid rgba(125, 199, 234, 0.28);
+  border-left: 4px solid #8dc63f;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: auto 1fr;
+  min-width: 0;
+  padding: 10px;
+}
+
+.operational-signal > span {
+  background: rgba(141, 198, 63, 0.18);
+  border: 1px solid rgba(141, 198, 63, 0.32);
+  border-radius: 999px;
+  color: #eaffcf;
+  font-size: 11px;
+  font-weight: 700;
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 3px 8px;
+}
+
+.operational-signal strong {
+  color: #ffffff;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.operational-signal b {
+  color: #ffffff;
+  display: block;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.operational-signal p {
+  color: rgba(235, 248, 255, 0.76);
+  font-size: 12px;
+  margin: 0;
+}
+
+.operational-signal.warn {
+  border-left-color: #ffc928;
+}
+
+.operational-signal.warn > span {
+  background: rgba(255, 201, 40, 0.17);
+  border-color: rgba(255, 201, 40, 0.36);
+  color: #fff2b5;
+}
+
+.operational-signal.danger {
+  border-left-color: #ff5d72;
+}
+
+.operational-signal.danger > span {
+  background: rgba(255, 93, 114, 0.18);
+  border-color: rgba(255, 93, 114, 0.38);
+  color: #ffd7dd;
+}
+
 .metrics-two-columns {
   display: grid;
   gap: 14px;
@@ -4190,6 +4287,7 @@ select option:hover {
   .metrics-grid,
   .metrics-grid.compact,
   .metrics-insights,
+  .operational-signal-grid,
   .metrics-two-columns,
   .metrics-two-columns.wide-left {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4741,9 +4839,15 @@ select option:hover {
   .metrics-grid,
   .metrics-grid.compact,
   .metrics-insights,
+  .operational-signal-grid,
   .metrics-two-columns,
   .metrics-two-columns.wide-left {
     grid-template-columns: 1fr;
+  }
+
+  .operational-signals-head {
+    align-items: start;
+    display: grid;
   }
 
   .metric-bar-row {

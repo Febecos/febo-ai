@@ -719,6 +719,7 @@ function MetricsPanel({ stats, users }: { stats: Stats; users: AppUser[] }) {
         <Metric label="No le&iacute;das" value={currentStats.unread} />
       </div>
       <MetricInsightStrip stats={currentStats} />
+      <OperationalSignalPanel stats={currentStats} />
       <div className="metrics-two-columns wide-left">
         <AcquisitionChart days={currentStats.acquisition_daily} groupBy={groupBy} />
         <SourceMetrics sources={currentStats.by_source} total={currentStats.contacts} />
@@ -764,6 +765,82 @@ function MetricsPanel({ stats, users }: { stats: Stats; users: AppUser[] }) {
       <DailyMetrics days={currentStats.daily} groupBy={groupBy} />
     </section>
   );
+}
+
+function OperationalSignalPanel({ stats }: { stats: Stats }) {
+  const signals = [
+    buildOperationalSignal({
+      label: "No leidas",
+      value: stats.unread,
+      detail: "Conversaciones para revisar primero.",
+      okLabel: "Bandeja al dia",
+      warnAt: 5,
+      dangerAt: 15
+    }),
+    buildOperationalSignal({
+      label: "Calientes",
+      value: stats.hot,
+      detail: "Oportunidades que conviene cerrar o asignar.",
+      okLabel: "Sin calientes pendientes",
+      warnAt: 1,
+      dangerAt: 8
+    }),
+    buildOperationalSignal({
+      label: "Plantillas fallidas",
+      value: stats.templates_failed_7d,
+      detail: "Revisar token, variables o ventana de WhatsApp.",
+      okLabel: "Plantillas OK",
+      warnAt: 1,
+      dangerAt: 3
+    }),
+    buildOperationalSignal({
+      label: "Seguimientos",
+      value: stats.followups_pending,
+      detail: "Clientes para retomar antes de que se enfrien.",
+      okLabel: "Sin seguimientos pendientes",
+      warnAt: 5,
+      dangerAt: 20
+    })
+  ];
+
+  return (
+    <section className="operational-signals" aria-label="Semaforo operativo">
+      <div className="operational-signals-head">
+        <h3>Semaforo operativo</h3>
+        <p>Prioridades rapidas para mirar antes de entrar al detalle.</p>
+      </div>
+      <div className="operational-signal-grid">
+        {signals.map((signal) => (
+          <article className={`operational-signal ${signal.tone}`} key={signal.label}>
+            <span>{signal.status}</span>
+            <strong>{signal.value.toLocaleString("es-AR")}</strong>
+            <div>
+              <b>{signal.label}</b>
+              <p>{signal.value > 0 ? signal.detail : signal.okLabel}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function buildOperationalSignal(input: {
+  label: string;
+  value: number;
+  detail: string;
+  okLabel: string;
+  warnAt: number;
+  dangerAt: number;
+}) {
+  const tone = input.value >= input.dangerAt ? "danger" : input.value >= input.warnAt ? "warn" : "ok";
+  const status = tone === "danger" ? "Urgente" : tone === "warn" ? "Atencion" : "OK";
+
+  return {
+    ...input,
+    status,
+    tone
+  };
 }
 
 function MetricInsightStrip({ stats }: { stats: Stats }) {

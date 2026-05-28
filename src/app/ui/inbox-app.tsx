@@ -3541,10 +3541,23 @@ function InboxList({
 
   function scrollThreadToBottom() {
     if (messageThreadRef.current) {
-      messageThreadRef.current.scrollTop = messageThreadRef.current.scrollHeight;
+      messageThreadRef.current.scrollTo({
+        top: messageThreadRef.current.scrollHeight,
+        behavior: "auto"
+      });
     }
 
     threadEndRef.current?.scrollIntoView({ block: "end" });
+  }
+
+  function scheduleThreadScrollToBottom() {
+    window.requestAnimationFrame(() => {
+      scrollThreadToBottom();
+      window.requestAnimationFrame(scrollThreadToBottom);
+    });
+
+    const timeoutIds = [120, 360, 900].map((delay) => window.setTimeout(scrollThreadToBottom, delay));
+    return () => timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
   }
 
   useEffect(() => {
@@ -3607,13 +3620,7 @@ function InboxList({
       return;
     }
 
-    window.requestAnimationFrame(() => {
-      scrollThreadToBottom();
-      window.requestAnimationFrame(scrollThreadToBottom);
-    });
-
-    const timeoutId = window.setTimeout(scrollThreadToBottom, 160);
-    return () => window.clearTimeout(timeoutId);
+    return scheduleThreadScrollToBottom();
   }, [activeConversationTab, loadingMessages, messages.length, mobileDetailOpen, selected?.id]);
 
   useEffect(() => {
@@ -3764,6 +3771,10 @@ function InboxList({
     }
 
     setMessages(payload?.messages ?? []);
+
+    if (!options.silent && activeConversationTab === "chat") {
+      scheduleThreadScrollToBottom();
+    }
   }
 
   async function loadConversationNotes(conversationId?: string, options: { silent?: boolean } = {}) {

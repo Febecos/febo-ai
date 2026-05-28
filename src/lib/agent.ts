@@ -6,6 +6,7 @@ import { config, requireEnv } from "./config";
 import {
   AgentConversationMessage,
   ConversationMemory,
+  getAgentContactContext,
   getConversationMemory,
   listLabelDefinitions,
   listAgentConversationContext,
@@ -175,6 +176,7 @@ export async function runFebecosAgent(input: {
   const prompt = await getOperatingPrompt();
   const history = await listAgentConversationContext(input.conversationId, 50);
   const memory = await getConversationMemory(input.conversationId);
+  const contactContext = await getAgentContactContext(input.conversationId);
   const labelDefinitions = await listLabelDefinitions();
   const allowedConsultypes = Array.from(
     new Set([...consultypeValues, ...labelDefinitions.filter((label) => label.active).map((label) => label.slug)])
@@ -239,6 +241,8 @@ export async function runFebecosAgent(input: {
       "El campo consultype debe ser el slug exacto de una etiqueta activa de etiquetasDisponibles o uno de los tipos base permitidos. Si una etiqueta indica transferir/asignar a un vendedor, usa ese slug y deja escalar=true.",
       "No repreguntes datos que el cliente ya dio en el historial. Si faltan datos, pregunta solo el dato faltante mas importante.",
       "Si el ultimo mensaje puede ser continuidad de un caso viejo, asumilo como continuidad cuando menciona cuotas, pago, entrega, envio, stock, precio, medidas, instalacion o asesor. Solo pregunta si siguen con eso o si es algo nuevo cuando realmente no haya forma de inferir el tema.",
+      "Si contactoPrevio indica imported_from='hariaz' o que la conversacion existia antes del primer mensaje local, tratala como contacto recurrente aunque history tenga pocos mensajes. No saludes como contacto nuevo: pregunta corto si quieren seguir con el presupuesto/conversacion anterior o si es una consulta nueva.",
+      "Si contactoPrevio trae imported_payload con nombre o tipo, usalo como pista operativa, pero no inventes el contenido exacto de un presupuesto si no esta en history o memoriaComercial.",
       "Responde al ultimo mensaje del cliente, pero manteniendo continuidad con lo ya conversado.",
       "Si el historial muestra que un humano ya tomo la conversacion o la IA esta pausada, no intentes cerrar ni avanzar por tu cuenta.",
       "Cuando el contexto incluya selectorQuote, usalo como unica fuente para modelo, precio, caudal, stock y cuotas. No digas que no tenes acceso al sistema.",
@@ -271,6 +275,7 @@ export async function runFebecosAgent(input: {
                 message: input.message,
                 history: conversationHistory,
                 memoriaComercial: conversationMemory,
+                contactoPrevio: contactContext,
                 etiquetasDisponibles: labelDefinitions.map((label) => ({
                   slug: label.slug,
                   name: label.name,

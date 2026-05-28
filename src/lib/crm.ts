@@ -318,6 +318,16 @@ export type ConversationMemory = {
   updated_at: string;
 };
 
+export type AgentContactContext = {
+  phone: string | null;
+  display_name: string | null;
+  imported_from: string | null;
+  imported_payload: Record<string, unknown> | null;
+  conversation_created_at: string | null;
+  first_message_at: string | null;
+  message_count: number;
+};
+
 export type DashboardMetricPoint = {
   label: string;
   value: number;
@@ -2565,6 +2575,32 @@ export async function getConversationMemory(conversationId: string | null | unde
     where conversation_id = ${conversationId}
     limit 1
   `) as ConversationMemory[];
+
+  return rows[0] ?? null;
+}
+
+export async function getAgentContactContext(conversationId: string | null | undefined) {
+  if (!isDbConfigured() || !conversationId) {
+    return null;
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    select
+      ct.phone,
+      ct.display_name,
+      ct.imported_from,
+      ct.imported_payload,
+      c.created_at::text as conversation_created_at,
+      min(m.created_at)::text as first_message_at,
+      count(m.id)::int as message_count
+    from conversations c
+    join contacts ct on ct.id = c.contact_id
+    left join messages m on m.conversation_id = c.id
+    where c.id = ${conversationId}
+    group by ct.phone, ct.display_name, ct.imported_from, ct.imported_payload, c.created_at
+    limit 1
+  `) as AgentContactContext[];
 
   return rows[0] ?? null;
 }

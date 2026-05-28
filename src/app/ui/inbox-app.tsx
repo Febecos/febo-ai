@@ -48,6 +48,7 @@ import type {
   ConversationMessage,
   ConversationNote,
   ConversationEvent,
+  ConversationFollowUp,
   ConversationSummary,
   DashboardStats,
   LabelDefinition,
@@ -3373,14 +3374,20 @@ function InboxList({
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [notes, setNotes] = useState<ConversationNote[]>([]);
   const [events, setEvents] = useState<ConversationEvent[]>([]);
-  const [activeConversationTab, setActiveConversationTab] = useState<"chat" | "notes" | "audit">("chat");
+  const [followUps, setFollowUps] = useState<ConversationFollowUp[]>([]);
+  const [activeConversationTab, setActiveConversationTab] = useState<"chat" | "notes" | "tasks" | "audit">("chat");
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [loadingEvents, setLoadingEvents] = useState(false);
+  const [loadingFollowUps, setLoadingFollowUps] = useState(false);
   const [messageError, setMessageError] = useState("");
   const [noteError, setNoteError] = useState("");
+  const [followUpError, setFollowUpError] = useState("");
   const [noteText, setNoteText] = useState("");
+  const [followUpText, setFollowUpText] = useState("");
+  const [followUpDueAt, setFollowUpDueAt] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const [savingFollowUp, setSavingFollowUp] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [replyFile, setReplyFile] = useState<File | null>(null);
   const [replyFilePreviewUrl, setReplyFilePreviewUrl] = useState("");
@@ -3604,6 +3611,9 @@ function InboxList({
   useEffect(() => {
     setNoteText("");
     setNoteError("");
+    setFollowUpText("");
+    setFollowUpDueAt("");
+    setFollowUpError("");
     setChatName(selected?.display_name || "");
     setTagPanelOpen(false);
     setSummaryOpen(false);
@@ -3614,6 +3624,7 @@ function InboxList({
     setTemplateComposerOpen(false);
     void loadConversationMessages(selected?.id);
     void loadConversationNotes(selected?.id);
+    void loadConversationFollowUps(selected?.id);
     void loadConversationEvents(selected?.id);
   }, [selected?.id]);
 
@@ -3682,6 +3693,7 @@ function InboxList({
       await refreshConversations(filters, { silent: true });
       await loadConversationMessages(selectedIdRef.current, { silent: true });
       await loadConversationNotes(selectedIdRef.current, { silent: true });
+      await loadConversationFollowUps(selectedIdRef.current, { silent: true });
       await loadConversationEvents(selectedIdRef.current, { silent: true });
     }
 
@@ -3796,6 +3808,39 @@ function InboxList({
     setEvents(payload?.events ?? []);
   }
 
+  async function loadConversationFollowUps(conversationId?: string, options: { silent?: boolean } = {}) {
+    if (!conversationId) {
+      setFollowUps([]);
+      return;
+    }
+
+    if (!options.silent) {
+      setLoadingFollowUps(true);
+      setFollowUpError("");
+    }
+
+    const response = await fetch(`/api/conversation-followups?conversationId=${conversationId}`);
+    const payload = await readJsonResponse(response);
+
+    if (conversationId !== selectedIdRef.current) {
+      return;
+    }
+
+    if (!options.silent) {
+      setLoadingFollowUps(false);
+    }
+
+    if (!response.ok) {
+      if (!options.silent) {
+        setFollowUps([]);
+        setFollowUpError(payload?.error ?? "No pudimos cargar las tareas.");
+      }
+      return;
+    }
+
+    setFollowUps(payload?.followUps ?? []);
+  }
+
   function primeNotificationBaseline(nextItems: ConversationSummary[]) {
     notificationBaselineRef.current.latestByConversation = new Map(
       nextItems.map((conversation) => [conversation.id, conversation.last_message_at])
@@ -3855,6 +3900,62 @@ function InboxList({
 
     setNoteText("");
     setNotes(payload?.notes ?? []);
+  }
+
+  async function saveConversationFollowUp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selected?.id || !followUpText.trim() || !followUpDueAt) {
+      return;
+    }
+
+    setSavingFollowUp(true);
+    setFollowUpError("");
+    const response = await fetch("/api/conversation-followups", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        conversationId: selected.id,
+        dueAt: new Date(followUpDueAt).toISOString(),
+        reason: followUpText.trim()
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setSavingFollowUp(false);
+
+    if (!response.ok) {
+      setFollowUpError(payload?.error ?? "No pudimos guardar la tarea.");
+      return;
+    }
+
+    setFollowUpText("");
+    setFollowUpDueAt("");
+    setFollowUps(payload?.followUps ?? []);
+  }
+
+  async function updateFollowUpStatus(id: string, status: "pending" | "sent" | "cancelled") {
+    if (!selected?.id) {
+      return;
+    }
+
+    setFollowUpError("");
+    const response = await fetch("/api/conversation-followups", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        conversationId: selected.id,
+        id,
+        status
+      })
+    });
+    const payload = await readJsonResponse(response);
+
+    if (!response.ok) {
+      setFollowUpError(payload?.error ?? "No pudimos actualizar la tarea.");
+      return;
+    }
+
+    setFollowUps(payload?.followUps ?? []);
   }
 
   async function refreshConversations(nextFilters = filters, options: { silent?: boolean; suppressSound?: boolean } = {}) {
@@ -5184,6 +5285,15 @@ function InboxList({
                 <span>{notes.length}</span>
               </button>
               <button
+                className={activeConversationTab === "tasks" ? "active" : ""}
+                onClick={() => setActiveConversationTab("tasks")}
+                type="button"
+              >
+                <ClipboardList size={17} />
+                Tareas
+                <span>{followUps.filter((followUp) => followUp.status === "proposed" || followUp.status === "pending").length}</span>
+              </button>
+              <button
                 className={activeConversationTab === "audit" ? "active" : ""}
                 onClick={() => setActiveConversationTab("audit")}
                 type="button"
@@ -5194,7 +5304,7 @@ function InboxList({
               </button>
             </div>
 
-            <div className={`conversation-workspace ${activeConversationTab === "notes" ? "show-notes" : ""} ${activeConversationTab === "audit" ? "show-audit" : ""}`}>
+            <div className={`conversation-workspace ${activeConversationTab === "notes" ? "show-notes" : ""} ${activeConversationTab === "tasks" ? "show-tasks" : ""} ${activeConversationTab === "audit" ? "show-audit" : ""}`}>
               <div className="thread-panel">
                 {loadingMessages ? <div className="empty-state">Cargando mensajes...</div> : null}
                 {messageError ? <div className="empty-state warn">{messageError}</div> : null}
@@ -5264,6 +5374,61 @@ function InboxList({
                   {noteError ? <span className="warn">{noteError}</span> : null}
                 </form>
               </div>
+              <div className="tasks-panel">
+                {loadingFollowUps ? <div className="empty-state">Cargando tareas...</div> : null}
+                {!loadingFollowUps && followUps.length ? (
+                  <div className="task-list">
+                    {followUps.map((followUp) => (
+                      <article className={`task-card ${followUp.status}`} key={followUp.id}>
+                        <div>
+                          <strong>{followUp.reason}</strong>
+                          <small>
+                            {formatMessageTime(followUp.due_at)} - {getFollowUpStatusLabel(followUp.status)}
+                            {followUp.created_by_name ? ` - ${followUp.created_by_name}` : ""}
+                          </small>
+                        </div>
+                        {followUp.status === "proposed" || followUp.status === "pending" ? (
+                          <div className="task-actions">
+                            {followUp.status === "proposed" ? (
+                              <button className="secondary" onClick={() => updateFollowUpStatus(followUp.id, "pending")} type="button">
+                                Aceptar
+                              </button>
+                            ) : null}
+                            <button className="primary" onClick={() => updateFollowUpStatus(followUp.id, "sent")} type="button">
+                              Hecho
+                            </button>
+                            <button className="secondary danger" onClick={() => updateFollowUpStatus(followUp.id, "cancelled")} type="button">
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : null}
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+                {!loadingFollowUps && !followUps.length ? <div className="empty-state">Sin tareas o seguimientos todavia.</div> : null}
+                <form className="task-composer" onSubmit={saveConversationFollowUp}>
+                  <textarea
+                    disabled={savingFollowUp}
+                    onChange={(event) => setFollowUpText(event.target.value)}
+                    placeholder="Ej: llamar para confirmar pago o revisar disponibilidad."
+                    value={followUpText}
+                  />
+                  <div className="task-composer-row">
+                    <input
+                      disabled={savingFollowUp}
+                      onChange={(event) => setFollowUpDueAt(event.target.value)}
+                      type="datetime-local"
+                      value={followUpDueAt}
+                    />
+                    <button className="primary" disabled={savingFollowUp || !followUpText.trim() || !followUpDueAt} type="submit">
+                      <Calendar size={17} />
+                      {savingFollowUp ? "Guardando" : "Crear tarea"}
+                    </button>
+                  </div>
+                  {followUpError ? <span className="warn">{followUpError}</span> : null}
+                </form>
+              </div>
               <div className="audit-panel">
                 {loadingEvents ? <div className="empty-state">Cargando auditoria...</div> : null}
                 {!loadingEvents && events.length ? (
@@ -5326,6 +5491,13 @@ function InboxList({
                     type="button"
                   >
                     Notas internas
+                  </button>
+                  <button
+                    className="tasks-tab"
+                    onClick={() => setActiveConversationTab("tasks")}
+                    type="button"
+                  >
+                    Tareas
                   </button>
                   <button
                     className="audit-tab"
@@ -5420,6 +5592,13 @@ function InboxList({
                     Notas internas
                   </button>
                   <button
+                    className={`tasks-tab ${activeConversationTab === "tasks" ? "active" : ""}`}
+                    onClick={() => setActiveConversationTab("tasks")}
+                    type="button"
+                  >
+                    Tareas
+                  </button>
+                  <button
                     className={`audit-tab ${activeConversationTab === "audit" ? "active" : ""}`}
                     onClick={() => setActiveConversationTab("audit")}
                     type="button"
@@ -5445,6 +5624,22 @@ function formatMessageTime(value: string) {
     minute: "2-digit",
     month: "2-digit"
   }).format(new Date(value));
+}
+
+function getFollowUpStatusLabel(status: ConversationFollowUp["status"]) {
+  if (status === "proposed") {
+    return "Sugerida";
+  }
+
+  if (status === "pending") {
+    return "Pendiente";
+  }
+
+  if (status === "sent") {
+    return "Realizada";
+  }
+
+  return "Cancelada";
 }
 
 function getConversationEventTitle(event: ConversationEvent) {

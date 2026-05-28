@@ -2207,6 +2207,7 @@ button:disabled {
 }
 
 .conversation-workspace.show-notes,
+.conversation-workspace.show-tasks,
 .conversation-workspace.show-audit {
   grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
 }
@@ -2324,6 +2325,22 @@ button:disabled {
   grid-template-rows: minmax(0, 1fr) auto;
 }
 
+.tasks-panel {
+  background: #2b3036;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: none;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 14px;
+}
+
+.conversation-workspace.show-tasks .tasks-panel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
 .audit-panel {
   background: #2b3036;
   border: 1px solid var(--line);
@@ -2345,15 +2362,21 @@ button:disabled {
   gap: 10px;
 }
 
-.note-composer textarea {
+.note-composer textarea,
+.task-composer textarea,
+.task-composer input {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #20252a;
   color: var(--ink);
-  min-height: 100px;
   padding: 11px 12px;
-  resize: vertical;
   width: 100%;
+}
+
+.note-composer textarea,
+.task-composer textarea {
+  min-height: 100px;
+  resize: vertical;
 }
 
 .notes-list {
@@ -2364,6 +2387,13 @@ button:disabled {
 }
 
 .audit-list {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.task-list {
   display: grid;
   gap: 10px;
   min-height: 0;
@@ -2397,6 +2427,12 @@ button:disabled {
     border-color: rgba(34, 197, 94, 0.52);
     box-shadow: inset 3px 0 0 rgba(34, 197, 94, 0.76);
   }
+
+  .conversation-workspace.show-tasks .tasks-panel {
+    background: rgba(56, 189, 248, 0.08);
+    border-color: rgba(56, 189, 248, 0.54);
+    box-shadow: inset 3px 0 0 rgba(56, 189, 248, 0.78);
+  }
 }
 
 .note-card {
@@ -2416,6 +2452,63 @@ button:disabled {
 
 .note-card small {
   color: var(--muted);
+}
+
+.task-composer {
+  border-top: 1px solid rgba(56, 189, 248, 0.28);
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.task-composer-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.task-card {
+  background: rgba(2, 22, 42, 0.48);
+  border: 1px solid rgba(142, 213, 245, 0.24);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.task-card.pending,
+.task-card.proposed {
+  border-color: rgba(56, 189, 248, 0.55);
+}
+
+.task-card.sent {
+  opacity: 0.68;
+}
+
+.task-card.cancelled {
+  opacity: 0.5;
+}
+
+.task-card strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.task-card small {
+  color: var(--muted);
+  display: block;
+  margin-top: 4px;
+}
+
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.task-actions button {
+  min-height: 30px;
+  padding: 0 10px;
 }
 
 .audit-card {
@@ -4764,11 +4857,16 @@ select option:hover {
     display: none;
   }
 
+  .conversation-workspace.show-tasks .thread-panel {
+    display: none;
+  }
+
   .conversation-workspace.show-audit .thread-panel {
     display: none;
   }
 
   .conversation-workspace:not(.show-notes) .notes-panel,
+  .conversation-workspace:not(.show-tasks) .tasks-panel,
   .conversation-workspace:not(.show-audit) .audit-panel {
     display: none;
   }

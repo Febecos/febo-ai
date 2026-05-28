@@ -239,6 +239,21 @@ export type ConversationEvent = {
   created_at: string;
 };
 
+export type ConversationFollowUp = {
+  id: string;
+  conversation_id: string;
+  contact_id: string | null;
+  phone: string | null;
+  due_at: string;
+  status: "proposed" | "pending" | "sent" | "cancelled";
+  reason: string;
+  source: string;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AppSetting = {
   key: string;
   value: unknown;
@@ -2276,6 +2291,139 @@ export async function listConversationEvents(conversationId: string, limit = 80)
   ` as ConversationEvent[];
 
   return rows.reverse();
+}
+
+export async function listConversationFollowUps(conversationId: string, limit = 80) {
+  if (!isDbConfigured() || !conversationId) {
+    return [];
+  }
+
+  const sql = getSql();
+  const safeLimit = Math.min(Math.max(limit, 20), 200);
+
+  return await sql`
+    select
+      f.id::text,
+      f.conversation_id::text,
+      f.contact_id::text,
+      f.phone,
+      f.due_at::text,
+      f.status,
+      f.reason,
+      f.source,
+      f.created_by::text,
+      u.full_name as created_by_name,
+      f.created_at::text,
+      f.updated_at::text
+    from follow_ups f
+    left join app_users u on u.id = f.created_by
+    where f.conversation_id = ${conversationId}
+    order by
+      case when f.status in ('proposed', 'pending') then 0 else 1 end,
+      f.due_at asc,
+      f.created_at desc
+    limit ${safeLimit}
+  ` as ConversationFollowUp[];
+}
+
+export async function createConversationFollowUp(input: {
+  conversationId: string;
+  userId: string | null;
+  dueAt: Date;
+  reason: string;
+  source?: string;
+}) {
+  if (!isDbConfigured()) {
+    return;
+  }
+
+  const sql = getSql();
+  const conversation = await sql`
+    select c.contact_id::text, ct.phone
+    from conversations c
+    join contacts ct on ct.id = c.contact_id
+    where c.id = ${input.conversationId}
+    limit 1
+  ` as Array<{ contact_id: string; phone: string | null }>;
+  const target = conversation[0];
+
+  if (!target) {
+    return;
+  }
+
+  await sql`
+    insert into follow_ups (conversation_id, contact_id, phone, due_at, status, reason, source, created_by)
+    values (
+      ${input.conversationId},
+      ${target.contact_id},
+      ${target.phone ? normalizePhone(target.phone) : null},
+      ${input.dueAt.toISOString()},
+      'pending',
+      ${input.reason},
+      ${input.source ?? "manual"},
+      ${input.userId ?? null}
+    )
+  `;
+
+  await sql`
+    insert into platform_events (contact_id, phone, event, payload)
+    values (
+      ${target.contact_id},
+      ${target.phone ? normalizePhone(target.phone) : null},
+      'follow_up_created',
+      ${JSON.stringify({
+        dueAt: input.dueAt.toISOString(),
+        reason: input.reason,
+        source: input.source ?? "manual",
+        actorUserId: input.userId ?? null
+      })}::jsonb
+    )
+  `;
+}
+
+export async function updateConversationFollowUpStatus(input: {
+  id: string;
+  conversationId: string;
+  userId: string | null;
+  status: "pending" | "sent" | "cancelled";
+}) {
+  if (!isDbConfigured()) {
+    return;
+  }
+
+  const sql = getSql();
+  const updated = await sql`
+    update follow_ups f
+    set status = ${input.status},
+        updated_at = now()
+    from conversations c
+    join contacts ct on ct.id = c.contact_id
+    where f.id = ${input.id}
+      and f.conversation_id = ${input.conversationId}
+      and c.id = f.conversation_id
+    returning f.id::text, f.contact_id::text, coalesce(f.phone, ct.phone) as phone, f.reason, f.due_at::text
+  ` as Array<{ id: string; contact_id: string | null; phone: string | null; reason: string; due_at: string }>;
+  const followUp = updated[0];
+
+  if (!followUp) {
+    return;
+  }
+
+  await sql`
+    insert into platform_events (contact_id, phone, event, payload)
+    values (
+      ${followUp.contact_id},
+      ${followUp.phone ? normalizePhone(followUp.phone) : null},
+      'follow_up_status_changed',
+      ${JSON.stringify({
+        followUpId: followUp.id,
+        status: input.status,
+        reason: followUp.reason,
+        dueAt: followUp.due_at,
+        actorUserId: input.userId ?? null
+      })}::jsonb
+    )
+  `;
 }
 
 export async function createConversationNote(input: {

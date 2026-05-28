@@ -48,6 +48,7 @@ import type {
   ConversationMessage,
   ConversationNote,
   ConversationEvent,
+  AssignedFollowUpAlert,
   ConversationFollowUp,
   ConversationSummary,
   DashboardStats,
@@ -3375,6 +3376,8 @@ function InboxList({
   const [notes, setNotes] = useState<ConversationNote[]>([]);
   const [events, setEvents] = useState<ConversationEvent[]>([]);
   const [followUps, setFollowUps] = useState<ConversationFollowUp[]>([]);
+  const [dueFollowUps, setDueFollowUps] = useState<AssignedFollowUpAlert[]>([]);
+  const [dismissedDueFollowUps, setDismissedDueFollowUps] = useState<string[]>([]);
   const [activeConversationTab, setActiveConversationTab] = useState<"chat" | "notes" | "tasks" | "audit">("chat");
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingNotes, setLoadingNotes] = useState(false);
@@ -3448,6 +3451,7 @@ function InboxList({
     initialized: false,
     latestByConversation: new Map<string, string>()
   });
+  const dueFollowUpIdsRef = useRef<Set<string>>(new Set());
   const [filters, setFilters] = useState({
     query: "",
     consultype: "all",
@@ -3455,6 +3459,10 @@ function InboxList({
     assignedTo: "all"
   });
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
+  const visibleDueFollowUps = useMemo(
+    () => dueFollowUps.filter((followUp) => !dismissedDueFollowUps.includes(followUp.id)),
+    [dismissedDueFollowUps, dueFollowUps]
+  );
   const availableLabels = useMemo(() => {
     const bySlug = new Map<string, LabelDefinition>();
 
@@ -3631,6 +3639,7 @@ function InboxList({
   useEffect(() => {
     void loadTemplatesForContactForm();
     void loadQuickReplies();
+    void loadDueFollowUps();
   }, []);
 
   useEffect(() => {
@@ -3695,6 +3704,7 @@ function InboxList({
       await loadConversationNotes(selectedIdRef.current, { silent: true });
       await loadConversationFollowUps(selectedIdRef.current, { silent: true });
       await loadConversationEvents(selectedIdRef.current, { silent: true });
+      await loadDueFollowUps({ silent: true });
     }
 
     const intervalId = window.setInterval(() => {
@@ -3839,6 +3849,28 @@ function InboxList({
     }
 
     setFollowUps(payload?.followUps ?? []);
+  }
+
+  async function loadDueFollowUps(options: { silent?: boolean } = {}) {
+    const response = await fetch("/api/followups/due");
+    const payload = await readJsonResponse(response);
+
+    if (!response.ok) {
+      if (!options.silent) {
+        setDueFollowUps([]);
+      }
+      return;
+    }
+
+    const nextFollowUps = (Array.isArray(payload?.followUps) ? payload.followUps : []) as AssignedFollowUpAlert[];
+    const nextIds = new Set<string>(nextFollowUps.map((followUp) => followUp.id));
+    const hasNewDueFollowUp = nextFollowUps.some((followUp) => !dueFollowUpIdsRef.current.has(followUp.id));
+    dueFollowUpIdsRef.current = nextIds;
+    setDueFollowUps(nextFollowUps);
+
+    if (hasNewDueFollowUp) {
+      void playInboxNotificationSound(notificationAudioContextRef);
+    }
   }
 
   function primeNotificationBaseline(nextItems: ConversationSummary[]) {
@@ -4292,6 +4324,13 @@ function InboxList({
     setSelectedId(conversationId);
     setMobileDetailOpen(true);
     markConversationRead(conversationId);
+  }
+
+  function openDueFollowUp(followUp: AssignedFollowUpAlert) {
+    setDismissedDueFollowUps((current) => current.includes(followUp.id) ? current : [...current, followUp.id]);
+    setSelectedId(followUp.conversation_id);
+    setActiveConversationTab("tasks");
+    setMobileDetailOpen(true);
   }
 
   function markConversationUnread(conversationId: string) {
@@ -4773,6 +4812,30 @@ function InboxList({
 
   return (
     <div className={`inbox-panel ${mobileDetailOpen ? "show-detail" : "show-list"}`}>
+      {visibleDueFollowUps.length ? (
+        <div className="followup-alert-stack" role="status">
+          {visibleDueFollowUps.slice(0, 3).map((followUp) => (
+            <article className="followup-alert" key={followUp.id}>
+              <Clock3 size={18} />
+              <div>
+                <strong>Seguimiento activo</strong>
+                <p>{followUp.display_name || followUp.phone || "Contacto"}: {followUp.reason}</p>
+                <small>{formatMessageTime(followUp.due_at)}</small>
+              </div>
+              <button className="primary" onClick={() => openDueFollowUp(followUp)} type="button">
+                Ver
+              </button>
+              <button
+                className="secondary"
+                onClick={() => setDismissedDueFollowUps((current) => current.includes(followUp.id) ? current : [...current, followUp.id])}
+                type="button"
+              >
+                Cerrar
+              </button>
+            </article>
+          ))}
+        </div>
+      ) : null}
       <div className="conversation-list">
         <div className="panel-title">
           Conversaciones

@@ -1250,6 +1250,44 @@ button:disabled {
   min-width: 0;
 }
 
+.followup-alert-stack {
+  display: grid;
+  gap: 8px;
+  max-width: min(560px, calc(100vw - 32px));
+  position: fixed;
+  right: 18px;
+  top: 78px;
+  z-index: 220;
+}
+
+.followup-alert {
+  align-items: center;
+  background: #0b3455;
+  border: 1px solid rgba(142, 213, 245, 0.58);
+  border-left: 4px solid #9bd33f;
+  border-radius: 10px;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.32);
+  color: #ffffff;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  padding: 10px 12px;
+}
+
+.followup-alert p {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+.followup-alert small {
+  color: rgba(226, 242, 255, 0.72);
+}
+
+.followup-alert button {
+  min-height: 30px;
+  padding: 0 10px;
+}
+
 .contacts-manager {
   align-items: stretch;
   display: grid;
@@ -4331,6 +4369,21 @@ select option:hover {
     aspect-ratio: auto;
     min-height: 132px;
     padding: 10px;
+  }
+
+  .followup-alert-stack {
+    left: 90px;
+    max-width: calc(100vw - 104px);
+    right: 14px;
+    top: 82px;
+  }
+
+  .followup-alert {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .followup-alert button {
+    justify-content: center;
   }
 
   .app-shell {

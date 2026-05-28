@@ -254,6 +254,13 @@ export type ConversationFollowUp = {
   updated_at: string;
 };
 
+export type AssignedFollowUpAlert = ConversationFollowUp & {
+  display_name: string | null;
+  phone: string | null;
+  assigned_to: string | null;
+  assigned_name: string | null;
+};
+
 export type AppSetting = {
   key: string;
   value: unknown;
@@ -2424,6 +2431,44 @@ export async function updateConversationFollowUpStatus(input: {
       })}::jsonb
     )
   `;
+}
+
+export async function listDueFollowUpsForAssignedUser(userId: string, limit = 20) {
+  if (!isDbConfigured() || !userId) {
+    return [];
+  }
+
+  const sql = getSql();
+  const safeLimit = Math.min(Math.max(limit, 1), 50);
+
+  return await sql`
+    select
+      f.id::text,
+      f.conversation_id::text,
+      f.contact_id::text,
+      coalesce(f.phone, ct.phone) as phone,
+      f.due_at::text,
+      f.status,
+      f.reason,
+      f.source,
+      f.created_by::text,
+      creator.full_name as created_by_name,
+      f.created_at::text,
+      f.updated_at::text,
+      ct.display_name,
+      c.assigned_to::text,
+      assigned.full_name as assigned_name
+    from follow_ups f
+    join conversations c on c.id = f.conversation_id
+    join contacts ct on ct.id = c.contact_id
+    left join app_users creator on creator.id = f.created_by
+    left join app_users assigned on assigned.id = c.assigned_to
+    where c.assigned_to = ${userId}
+      and f.status in ('proposed', 'pending')
+      and f.due_at <= now()
+    order by f.due_at asc
+    limit ${safeLimit}
+  ` as AssignedFollowUpAlert[];
 }
 
 export async function createConversationNote(input: {

@@ -102,13 +102,98 @@ try {
     [patterns]
   );
 
+  const platformEvents = await client.query(
+    `
+      select
+        pe.id::text,
+        pe.contact_id::text,
+        pe.phone,
+        pe.event,
+        pe.payload,
+        pe.created_at::text
+      from platform_events pe
+      left join contacts ct on ct.id = pe.contact_id
+      where regexp_replace(coalesce(ct.phone, pe.phone, ''), '\\D', '', 'g') like any($1)
+         or pe.payload::text ilike any($1)
+      order by pe.created_at desc
+      limit 80
+    `,
+    [patterns]
+  );
+
+  const notes = await client.query(
+    `
+      select
+        n.id::text,
+        n.conversation_id::text,
+        left(n.body, 300) body,
+        u.full_name as created_by_name,
+        n.created_at::text
+      from conversation_notes n
+      join conversations c on c.id = n.conversation_id
+      join contacts ct on ct.id = c.contact_id
+      left join app_users u on u.id = n.created_by
+      where regexp_replace(ct.phone, '\\D', '', 'g') like any($1)
+      order by n.created_at desc
+      limit 50
+    `,
+    [patterns]
+  );
+
+  const memory = await client.query(
+    `
+      select
+        cm.conversation_id::text,
+        left(cm.summary, 500) summary,
+        cm.technical_facts,
+        cm.commercial_facts,
+        cm.pending_questions,
+        cm.last_intent,
+        cm.last_topic,
+        cm.updated_at::text
+      from conversation_memory cm
+      join conversations c on c.id = cm.conversation_id
+      join contacts ct on ct.id = c.contact_id
+      where regexp_replace(ct.phone, '\\D', '', 'g') like any($1)
+      order by cm.updated_at desc
+      limit 20
+    `,
+    [patterns]
+  );
+
+  const outgoingWebhookDeliveries = await client.query(
+    `
+      select
+        d.id::text,
+        w.name as webhook_name,
+        d.event,
+        d.status,
+        d.response_status,
+        left(coalesce(d.response_body, ''), 400) response_body,
+        left(coalesce(d.error, ''), 400) error,
+        d.created_at::text
+      from outgoing_webhook_deliveries d
+      left join outgoing_webhooks w on w.id = d.webhook_id
+      where d.payload::text ilike any($1)
+         or coalesce(d.response_body, '') ilike any($1)
+         or coalesce(d.error, '') ilike any($1)
+      order by d.created_at desc
+      limit 80
+    `,
+    [patterns]
+  );
+
   console.log(JSON.stringify({
     ok: true,
     phone,
     variants,
     contacts: contacts.rows,
     conversations: conversations.rows,
-    recentMessages: messages.rows
+    recentMessages: messages.rows,
+    platformEvents: platformEvents.rows,
+    notes: notes.rows,
+    memory: memory.rows,
+    outgoingWebhookDeliveries: outgoingWebhookDeliveries.rows
   }, null, 2));
 } finally {
   await client.end();

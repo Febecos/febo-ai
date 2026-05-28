@@ -2309,11 +2309,39 @@ function canUserSeeCrmConversation(conversation: ConversationSummary, currentUse
 }
 
 function getCrmPlatformLabel(conversation: ConversationSummary) {
-  return conversation.platform || "WhatsApp";
+  return getConversationChannelMeta(conversation).label;
 }
 
 function getCrmLabelTitle(conversation: ConversationSummary) {
   return humanizeTemplateName(conversation.consultype || getCrmBoardColumnId(conversation));
+}
+
+function getConversationChannelMeta(conversation: Pick<ConversationSummary, "channel" | "platform" | "account_name">) {
+  const rawChannel = (conversation.channel || conversation.platform || "whatsapp").toLowerCase();
+  const channel = rawChannel.includes("instagram")
+    ? "instagram"
+    : rawChannel.includes("facebook")
+      ? "facebook"
+      : rawChannel.includes("tiktok")
+        ? "tiktok"
+        : rawChannel.includes("whatsapp")
+          ? "whatsapp"
+          : rawChannel || "whatsapp";
+  const labels: Record<string, string> = {
+    facebook: "Facebook",
+    instagram: "Instagram",
+    tiktok: "TikTok",
+    whatsapp: "WhatsApp"
+  };
+  const label = labels[channel] ?? humanizeTemplateName(channel);
+  const accountName = conversation.account_name || "";
+
+  return {
+    accountName,
+    className: `channel-${channel.replace(/[^a-z0-9-]/g, "-")}`,
+    label,
+    title: accountName ? `${label} - ${accountName}` : label
+  };
 }
 
 function ContactsPanel({
@@ -5027,7 +5055,10 @@ function InboxList({
           </div>
         ) : null}
         {items.length ? (
-          items.map((conversation) => (
+          items.map((conversation) => {
+            const channelMeta = getConversationChannelMeta(conversation);
+
+            return (
             <article
               className={`conversation-row ${conversation.id === selected?.id ? "active" : ""} ${isConversationUnread(conversation) ? "unread" : ""}`}
               key={conversation.id}
@@ -5038,7 +5069,7 @@ function InboxList({
                 type="button"
               >
                 <span className="row-meta">
-                  <span className="channel-pill">WHATSAPP</span>
+                  <span className={`channel-pill ${channelMeta.className}`} title={channelMeta.title}>{channelMeta.label}</span>
                   <time>{formatListDate(conversation.last_message_at)}</time>
                 </span>
                 <strong>{conversation.display_name || conversation.phone}</strong>
@@ -5080,7 +5111,8 @@ function InboxList({
                 </div>
               </details>
             </article>
-          ))
+            );
+          })
         ) : (
           <div className="empty-state">Cuando importemos Hariaz o entren mensajes, van a aparecer aca.</div>
         )}
@@ -5094,14 +5126,20 @@ function InboxList({
       >
         {selected ? (
           <>
+            {(() => {
+              const channelMeta = getConversationChannelMeta(selected);
+
+              return (
+                <>
             <button className="back-button" onClick={() => setMobileDetailOpen(false)} type="button">
               <ChevronLeft size={18} />
               Volver
             </button>
             <div className="detail-head">
               <div className="detail-channel">
-                <strong>WHATSAPP</strong>
+                <strong className={channelMeta.className}>{channelMeta.label}</strong>
                 <span>| {selected.phone}</span>
+                {channelMeta.accountName ? <small>{channelMeta.accountName}</small> : null}
                 <em>{selected.display_name || selected.phone}</em>
               </div>
               <div className="detail-actions">
@@ -5161,6 +5199,9 @@ function InboxList({
                 </details>
               </div>
             </div>
+                </>
+              );
+            })()}
             <div className="mobile-detail-name">
               <span>{selected.display_name || selected.phone}</span>
               {selected.phone ? (

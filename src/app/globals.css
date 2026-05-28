@@ -1665,11 +1665,27 @@ button:disabled {
 }
 
 .channel-pill::before {
-  background: #25d366;
+  background: var(--channel-color, #25d366);
   border-radius: 3px;
   content: "";
   height: 15px;
   width: 15px;
+}
+
+.channel-pill.channel-whatsapp {
+  --channel-color: #25d366;
+}
+
+.channel-pill.channel-instagram {
+  --channel-color: #e1306c;
+}
+
+.channel-pill.channel-facebook {
+  --channel-color: #1877f2;
+}
+
+.channel-pill.channel-tiktok {
+  --channel-color: #00f2ea;
 }
 
 .assigned-pill {
@@ -2084,6 +2100,41 @@ button:disabled {
 .detail-channel strong {
   color: #ffffff;
   font-size: 16px;
+}
+
+.detail-channel strong::before {
+  background: var(--channel-color, #25d366);
+  border-radius: 4px;
+  content: "";
+  display: inline-block;
+  height: 12px;
+  margin-right: 6px;
+  width: 12px;
+}
+
+.detail-channel strong.channel-whatsapp {
+  --channel-color: #25d366;
+}
+
+.detail-channel strong.channel-instagram {
+  --channel-color: #e1306c;
+}
+
+.detail-channel strong.channel-facebook {
+  --channel-color: #1877f2;
+}
+
+.detail-channel strong.channel-tiktok {
+  --channel-color: #00f2ea;
+}
+
+.detail-channel small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .detail-channel em {
@@ -4710,7 +4761,8 @@ select option:hover {
   }
 
   .detail-channel strong,
-  .detail-channel > span {
+  .detail-channel > span,
+  .detail-channel small {
     display: none;
   }
 

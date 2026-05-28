@@ -151,6 +151,8 @@ const CLIENT_DIRECT_UPLOAD_LIMIT_BYTES = 100 * 1024 * 1024;
 const MANUAL_REPLY_TIMEOUT_MS = 70000;
 const MANUAL_BLOB_UPLOAD_TIMEOUT_MS = 25000;
 const PCM_RECORDING_TARGET_SAMPLE_RATE = 16000;
+const AUDIO_RECORDER_MODE_STORAGE_KEY = "febo-audio-recorder-mode";
+type AudioRecorderMode = "auto" | "normal" | "compatible" | "very-compatible";
 const OUTGOING_WEBHOOK_EVENTS = [
   { value: "selector_checkout_abierto", label: "Selector abierto" },
   { value: "lead_caliente", label: "Lead caliente" },
@@ -3402,6 +3404,7 @@ function InboxList({
   const [recording, setRecording] = useState(false);
   const [preparingRecording, setPreparingRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [audioRecorderMode, setAudioRecorderMode] = useState<AudioRecorderMode>("auto");
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [quickReplyForm, setQuickReplyForm] = useState({
@@ -3464,6 +3467,14 @@ function InboxList({
     () => dueFollowUps.filter((followUp) => !dismissedDueFollowUps.includes(followUp.id)),
     [dismissedDueFollowUps, dueFollowUps]
   );
+
+  useEffect(() => {
+    const savedMode = window.localStorage.getItem(AUDIO_RECORDER_MODE_STORAGE_KEY);
+
+    if (isAudioRecorderMode(savedMode)) {
+      setAudioRecorderMode(savedMode);
+    }
+  }, []);
   const availableLabels = useMemo(() => {
     const bySlug = new Map<string, LabelDefinition>();
 
@@ -4652,6 +4663,11 @@ function InboxList({
     setAttachment(event.dataTransfer.files?.[0] ?? null);
   }
 
+  function updateAudioRecorderMode(mode: AudioRecorderMode) {
+    setAudioRecorderMode(mode);
+    window.localStorage.setItem(AUDIO_RECORDER_MODE_STORAGE_KEY, mode);
+  }
+
   async function startRecording() {
     setReplyError("");
 
@@ -4661,15 +4677,35 @@ function InboxList({
     }
 
     try {
-      const usePcmRecorder = shouldUsePcmRecorderForDevice();
+      const useVeryCompatibleRecorder = audioRecorderMode === "very-compatible";
+      const usePcmRecorder =
+        audioRecorderMode === "compatible" ||
+        useVeryCompatibleRecorder ||
+        (audioRecorderMode === "auto" && shouldUsePcmRecorderForDevice());
+      const compatibleAudioConstraints: MediaTrackConstraints = useVeryCompatibleRecorder
+        ? {
+            autoGainControl: false,
+            channelCount: { ideal: 1, max: 1 },
+            echoCancellation: false,
+            noiseSuppression: false,
+            sampleRate: { ideal: PCM_RECORDING_TARGET_SAMPLE_RATE },
+            sampleSize: { ideal: 16 }
+          }
+        : {
+            autoGainControl: true,
+            channelCount: { ideal: 1 },
+            echoCancellation: true,
+            noiseSuppression: true,
+            sampleRate: { ideal: PCM_RECORDING_TARGET_SAMPLE_RATE }
+          };
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          autoGainControl: true,
-          channelCount: usePcmRecorder ? { ideal: 1 } : undefined,
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: usePcmRecorder ? { ideal: 16000 } : undefined
-        }
+        audio: usePcmRecorder
+          ? compatibleAudioConstraints
+          : {
+              autoGainControl: true,
+              echoCancellation: true,
+              noiseSuppression: true
+            }
       });
       recordingStreamRef.current = stream;
       const mediaRecorderMimeType = getSupportedRecordingMimeType();
@@ -4709,7 +4745,7 @@ function InboxList({
         await audioContext.resume();
       }
       const source = audioContext.createMediaStreamSource(stream);
-      const processor = audioContext.createScriptProcessor(usePcmRecorder ? 16384 : 4096, 1, 1);
+      const processor = audioContext.createScriptProcessor(useVeryCompatibleRecorder ? 32768 : usePcmRecorder ? 16384 : 4096, 1, 1);
 
       recordingSamplesRef.current = [];
       recordingSampleRateRef.current = audioContext.sampleRate;
@@ -5633,6 +5669,19 @@ function InboxList({
                 >
                   <Paperclip size={18} />
                 </button>
+                <label className="audio-mode-control" title="Modo de grabacion de audio para este dispositivo">
+                  <span>Audio</span>
+                  <select
+                    disabled={sendingReply || recording || preparingRecording}
+                    onChange={(event) => updateAudioRecorderMode(event.target.value as AudioRecorderMode)}
+                    value={audioRecorderMode}
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="normal">Normal</option>
+                    <option value="compatible">Compatible</option>
+                    <option value="very-compatible">Muy compatible</option>
+                  </select>
+                </label>
                 <div className="reply-input-wrap">
                   <textarea
                     disabled={sendingReply}
@@ -6196,6 +6245,10 @@ function shouldUsePcmRecorderForDevice() {
   const deviceText = `${userAgent} ${platform}`;
 
   return /\b(huawei|honor|emui|harmonyos|lya-|kirin)\b/i.test(deviceText);
+}
+
+function isAudioRecorderMode(value: unknown): value is AudioRecorderMode {
+  return value === "auto" || value === "normal" || value === "compatible" || value === "very-compatible";
 }
 
 function getRecordingExtension(mimeType: string) {

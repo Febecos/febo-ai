@@ -4237,7 +4237,7 @@ select option:hover {
   align-items: center;
   display: grid;
   gap: 6px;
-  grid-template-columns: auto auto auto minmax(220px, 1fr) auto;
+  grid-template-columns: auto auto auto auto minmax(220px, 1fr) auto;
 }
 
 .composer-tabs {
@@ -4278,6 +4278,40 @@ select option:hover {
   aspect-ratio: 1;
   min-width: 38px;
   padding: 0;
+}
+
+.audio-mode-control {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.28);
+  border: 1px solid rgba(191, 238, 255, 0.32);
+  border-radius: 7px;
+  color: #e9f8ff;
+  display: inline-flex;
+  gap: 5px;
+  min-height: 38px;
+  padding: 0 7px;
+  white-space: nowrap;
+}
+
+.audio-mode-control span {
+  color: rgba(230, 244, 255, 0.72);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.audio-mode-control select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  max-width: 118px;
+  outline: 0;
+}
+
+.audio-mode-control select:disabled {
+  opacity: 0.65;
 }
 
 .answer-box {
@@ -4990,7 +5024,7 @@ select option:hover {
   }
 
   .composer-line {
-    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-columns: auto auto auto minmax(0, 1fr) auto;
   }
 
   .composer-line button {
@@ -5002,6 +5036,19 @@ select option:hover {
   .composer-line .composer-icon-button {
     min-width: 36px;
     padding: 0;
+  }
+
+  .audio-mode-control {
+    min-height: 34px;
+    padding: 0 6px;
+  }
+
+  .audio-mode-control span {
+    display: none;
+  }
+
+  .audio-mode-control select {
+    max-width: 86px;
   }
 }
 

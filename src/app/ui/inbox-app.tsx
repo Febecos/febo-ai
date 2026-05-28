@@ -5161,7 +5161,14 @@ function InboxList({
                 </details>
               </div>
             </div>
-            <div className="mobile-detail-name">{selected.display_name || selected.phone}</div>
+            <div className="mobile-detail-name">
+              <span>{selected.display_name || selected.phone}</span>
+              {selected.phone ? (
+                <a href={`tel:${selected.phone.replace(/\D/g, "")}`} onClick={(event) => event.stopPropagation()}>
+                  {selected.phone}
+                </a>
+              ) : null}
+            </div>
 
             <div className="toolbar">
               <label className="chat-name-field">

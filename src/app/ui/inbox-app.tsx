@@ -150,6 +150,7 @@ const BACKEND_ATTACHMENT_UPLOAD_LIMIT_BYTES = 16 * 1024 * 1024;
 const CLIENT_DIRECT_UPLOAD_LIMIT_BYTES = 100 * 1024 * 1024;
 const MANUAL_REPLY_TIMEOUT_MS = 70000;
 const MANUAL_BLOB_UPLOAD_TIMEOUT_MS = 25000;
+const PCM_RECORDING_TARGET_SAMPLE_RATE = 16000;
 const OUTGOING_WEBHOOK_EVENTS = [
   { value: "selector_checkout_abierto", label: "Selector abierto" },
   { value: "lead_caliente", label: "Lead caliente" },
@@ -4680,7 +4681,7 @@ function InboxList({
         return;
       }
 
-      const audioContext = usePcmRecorder ? new AudioContextConstructor({ sampleRate: 16000 }) : new AudioContextConstructor();
+      const audioContext = usePcmRecorder ? new AudioContextConstructor({ sampleRate: PCM_RECORDING_TARGET_SAMPLE_RATE }) : new AudioContextConstructor();
       if (audioContext.state === "suspended") {
         await audioContext.resume();
       }
@@ -6201,12 +6202,15 @@ function buildWavRecordingFile(chunks: Int16Array[], sampleRate: number) {
     return null;
   }
 
-  const sampleCount = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const sourceSampleCount = chunks.reduce((total, chunk) => total + chunk.length, 0);
 
-  if (!sampleCount) {
+  if (!sourceSampleCount) {
     return null;
   }
 
+  const targetSampleRate = Math.min(sampleRate || PCM_RECORDING_TARGET_SAMPLE_RATE, PCM_RECORDING_TARGET_SAMPLE_RATE);
+  const outputSamples = resamplePcm16(chunks, sampleRate || targetSampleRate, targetSampleRate);
+  const sampleCount = outputSamples.length;
   const buffer = new ArrayBuffer(44 + sampleCount * 2);
   const view = new DataView(buffer);
   let cursor = 0;
@@ -6225,9 +6229,9 @@ function buildWavRecordingFile(chunks: Int16Array[], sampleRate: number) {
   cursor += 2;
   view.setUint16(cursor, 1, true);
   cursor += 2;
-  view.setUint32(cursor, sampleRate, true);
+  view.setUint32(cursor, targetSampleRate, true);
   cursor += 4;
-  view.setUint32(cursor, sampleRate * 2, true);
+  view.setUint32(cursor, targetSampleRate * 2, true);
   cursor += 4;
   view.setUint16(cursor, 2, true);
   cursor += 2;
@@ -6238,14 +6242,41 @@ function buildWavRecordingFile(chunks: Int16Array[], sampleRate: number) {
   view.setUint32(cursor, sampleCount * 2, true);
   cursor += 4;
 
-  for (const chunk of chunks) {
-    for (const sample of chunk) {
-      view.setInt16(cursor, sample, true);
-      cursor += 2;
-    }
+  for (const sample of outputSamples) {
+    view.setInt16(cursor, sample, true);
+    cursor += 2;
   }
 
   return new File([buffer], `audio-febo-${Date.now()}.wav`, { type: "audio/wav" });
+}
+
+function resamplePcm16(chunks: Int16Array[], sourceSampleRate: number, targetSampleRate: number) {
+  const sourceSampleCount = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const source = new Int16Array(sourceSampleCount);
+  let cursor = 0;
+
+  for (const chunk of chunks) {
+    source.set(chunk, cursor);
+    cursor += chunk.length;
+  }
+
+  if (!source.length || sourceSampleRate <= targetSampleRate) {
+    return source;
+  }
+
+  const ratio = sourceSampleRate / targetSampleRate;
+  const outputLength = Math.max(1, Math.floor(source.length / ratio));
+  const output = new Int16Array(outputLength);
+
+  for (let index = 0; index < outputLength; index += 1) {
+    const sourceIndex = index * ratio;
+    const leftIndex = Math.floor(sourceIndex);
+    const rightIndex = Math.min(leftIndex + 1, source.length - 1);
+    const fraction = sourceIndex - leftIndex;
+    output[index] = Math.round(source[leftIndex] + (source[rightIndex] - source[leftIndex]) * fraction);
+  }
+
+  return output;
 }
 
 function writeAscii(view: DataView, offset: number, value: string) {

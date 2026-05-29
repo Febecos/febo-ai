@@ -26,6 +26,8 @@ import {
   Mic,
   MoreVertical,
   Paperclip,
+  PanelLeftClose,
+  PanelLeftOpen,
   CircleHelp,
   RefreshCcw,
   Save,
@@ -181,6 +183,8 @@ const OUTGOING_WEBHOOK_EVENTS = [
   { value: "*", label: "Todos los eventos" }
 ];
 
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "febo-sidebar-collapsed";
+
 export function InboxApp({
   conversations,
   currentUser,
@@ -306,8 +310,13 @@ function ToolWorkspace({
   const [focusedContact, setFocusedContact] = useState({ id: "", signal: 0 });
   const [pushStatus, setPushStatus] = useState("Notificaciones");
   const [actionNotice, setActionNotice] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const isAdmin = currentUser.role === "admin";
   const crmFavoritesStorageKey = `febo-crm-favorites:${currentUser.id}`;
+
+  useEffect(() => {
+    setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "1");
+  }, []);
 
   useEffect(() => {
     if (!actionNotice) {
@@ -402,12 +411,28 @@ function ToolWorkspace({
     });
   }
 
+  function toggleSidebarCollapsed() {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, next ? "1" : "0");
+      return next;
+    });
+  }
+
   return (
-    <section className="admin-workspace">
+    <section className={`admin-workspace ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <nav className="tool-sidebar" aria-label="Herramientas de trabajo">
         <div className="tool-brand">
           <span aria-label="Febecos" className="brand-mark" role="img" />
           <strong>Febo AI</strong>
+          <button
+            className="sidebar-toggle"
+            onClick={toggleSidebarCollapsed}
+            title={sidebarCollapsed ? "Abrir menu" : "Contraer menu"}
+            type="button"
+          >
+            {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
         </div>
         <button
           className={activeTool === "conversations" ? "active" : ""}
@@ -3777,6 +3802,7 @@ function InboxList({
     status: "all",
     assignedTo: "all"
   });
+  const [contactDetailOpen, setContactDetailOpen] = useState(false);
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
   const visibleDueFollowUps = useMemo(
     () => dueFollowUps.filter((followUp) => !dismissedDueFollowUps.includes(followUp.id)),
@@ -3790,6 +3816,21 @@ function InboxList({
       setAudioRecorderMode(savedMode);
     }
   }, []);
+
+  useEffect(() => {
+    if (!contactDetailOpen) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setContactDetailOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [contactDetailOpen]);
   const availableLabels = useMemo(() => {
     const bySlug = new Map<string, LabelDefinition>();
 
@@ -5514,11 +5555,10 @@ function InboxList({
             </div>
 
             <div className="toolbar">
-              <label className="chat-name-field">
-                Nombre chat:
-                <input value={chatName} onChange={(event) => setChatName(event.target.value)} />
-              </label>
-              <button className="secondary" onClick={saveChatName} type="button">Guardar</button>
+              <button className="contact-open-button" onClick={() => setContactDetailOpen(true)} type="button">
+                <span>Contacto</span>
+                <strong>{selected.display_name || selected.phone}</strong>
+              </button>
               <div className="toolbar-icons">
                 <span className="tag-editor-anchor">
                   <button className="icon-action" onClick={() => setTagPanelOpen(!tagPanelOpen)} title="Editar etiqueta" type="button"><Tags size={17} /></button>
@@ -5584,6 +5624,59 @@ function InboxList({
                 </details>
               </div>
             </div>
+
+            {contactDetailOpen ? (
+              <aside aria-label="Detalles del contacto" className="contact-detail-drawer">
+                <header>
+                  <div>
+                    <span>Detalles del contacto</span>
+                    <strong>{selected.display_name || selected.phone}</strong>
+                  </div>
+                  <button aria-label="Cerrar detalles" onClick={() => setContactDetailOpen(false)} type="button">
+                    <X size={18} />
+                  </button>
+                </header>
+                <div className="contact-detail-body">
+                  <section className="contact-profile-card">
+                    <span aria-hidden="true" className="contact-avatar">
+                      {(selected.display_name || selected.phone || "?").slice(0, 1).toUpperCase()}
+                    </span>
+                    <strong>{selected.display_name || "Sin nombre cargado"}</strong>
+                    {selected.phone ? (
+                      <a href={`tel:+${selected.phone.replace(/\D/g, "")}`}>{selected.phone}</a>
+                    ) : (
+                      <span>Sin telefono</span>
+                    )}
+                  </section>
+                  <dl className="contact-detail-list">
+                    <div>
+                      <dt>Canal</dt>
+                      <dd>{getConversationChannelMeta(selected).title}</dd>
+                    </div>
+                    <div>
+                      <dt>Etiqueta</dt>
+                      <dd>{labelBySlug.get(selected.consultype)?.name ?? getConsultypeLabel(selected.consultype)}</dd>
+                    </div>
+                    <div>
+                      <dt>Sentimiento</dt>
+                      <dd>{selected.sentiment || "neutral"}</dd>
+                    </div>
+                    <div>
+                      <dt>Asignado</dt>
+                      <dd>{selected.assigned_name || "Sin asignar"}</dd>
+                    </div>
+                    <div>
+                      <dt>Ultimo mensaje</dt>
+                      <dd>{formatMessageTime(selected.last_message_at)}</dd>
+                    </div>
+                    <div>
+                      <dt>Estado</dt>
+                      <dd>{selected.status}</dd>
+                    </div>
+                  </dl>
+                </div>
+              </aside>
+            ) : null}
 
             {summaryOpen ? (
               <div className="modal-backdrop">

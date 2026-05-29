@@ -3854,6 +3854,21 @@ function InboxList({
     setActiveQuickReplyIndex(0);
   }, [quickReplyQuery]);
 
+  useEffect(() => {
+    if (!imagePreview) {
+      return;
+    }
+
+    function handlePreviewKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setImagePreview(null);
+      }
+    }
+
+    window.addEventListener("keydown", handlePreviewKeyDown);
+    return () => window.removeEventListener("keydown", handlePreviewKeyDown);
+  }, [imagePreview]);
+
   function scrollThreadToBottom() {
     if (messageThreadRef.current) {
       messageThreadRef.current.scrollTo({

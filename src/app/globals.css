@@ -2812,17 +2812,20 @@ button:disabled {
 }
 
 .image-preview-backdrop {
+  align-items: center;
   background: rgba(3, 12, 24, 0.82);
-  padding: 18px;
+  overflow: hidden;
+  padding: 24px;
   z-index: 120;
 }
 
 .image-preview-dialog {
   align-items: center;
   display: grid;
-  height: min(92vh, 920px);
+  height: calc(100dvh - 48px);
   justify-items: center;
-  max-width: min(96vw, 1280px);
+  max-height: calc(100dvh - 48px);
+  max-width: calc(100vw - 48px);
   position: relative;
   width: 100%;
 }
@@ -2831,8 +2834,8 @@ button:disabled {
   background: #ffffff;
   border-radius: 10px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-  max-height: 100%;
-  max-width: 100%;
+  max-height: calc(100dvh - 48px);
+  max-width: calc(100vw - 48px);
   object-fit: contain;
 }
 
@@ -2852,6 +2855,23 @@ button:disabled {
   right: 8px;
   top: 8px;
   z-index: 1;
+}
+
+@media (max-width: 720px) {
+  .image-preview-backdrop {
+    padding: 12px;
+  }
+
+  .image-preview-dialog {
+    height: calc(100dvh - 24px);
+    max-height: calc(100dvh - 24px);
+    max-width: calc(100vw - 24px);
+  }
+
+  .image-preview-dialog img {
+    max-height: calc(100dvh - 24px);
+    max-width: calc(100vw - 24px);
+  }
 }
 
 .message-video {

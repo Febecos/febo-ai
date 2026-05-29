@@ -5568,7 +5568,7 @@ function InboxList({
       </div>
 
       <div
-        className={`conversation-detail ${draggingFile ? "dragging-file" : ""}`}
+        className={`conversation-detail ${draggingFile ? "dragging-file" : ""} ${contactDetailOpen ? "contact-drawer-open" : ""}`}
         onDragLeave={handleConversationDragLeave}
         onDragOver={handleConversationDragOver}
         onDrop={handleDrop}
@@ -5765,7 +5765,10 @@ function InboxList({
                   <dl className="contact-detail-list">
                     <div>
                       <dt>Canal</dt>
-                      <dd>{getContactPanelChannelLabel(selected)}</dd>
+                      <dd>
+                        <span>{getContactPanelChannelLabel(selected)}</span>
+                        {selected.account_phone_number ? <small>{selected.account_phone_number}</small> : null}
+                      </dd>
                     </div>
                   </dl>
                   <section className="contact-extra-editor">

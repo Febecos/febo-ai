@@ -41,6 +41,7 @@ export type ConversationSummary = {
   last_message_at: string;
   account_id: string | null;
   account_name: string | null;
+  account_phone_number: string | null;
   channel: string;
   contact_id: string;
   phone: string;
@@ -2365,6 +2366,7 @@ export async function listConversations(filters: ConversationFilters = {}) {
       c.last_message_at::text,
       c.account_id::text,
       ca.name as account_name,
+      ca.phone_number as account_phone_number,
       c.channel,
       ct.id as contact_id,
       ct.phone,

@@ -28,7 +28,15 @@ const updateContactSchema = z.object({
   contactType: z.string().trim().max(40).optional(),
   sentiment: z.string().trim().max(40).optional(),
   consultype: z.string().trim().max(40).optional(),
-  assignedTo: z.string().uuid().nullable().optional()
+  assignedTo: z.string().uuid().nullable().optional(),
+  contactInfo: z.object({
+    notes: z.string().max(3000).optional(),
+    additional: z.array(z.object({
+      id: z.string().max(80).optional(),
+      title: z.string().max(80).optional(),
+      value: z.string().max(400).optional()
+    })).max(20).optional()
+  }).optional()
 });
 
 export async function GET(request: NextRequest) {

@@ -96,6 +96,12 @@ type OutgoingWebhookDelivery = {
   created_at: string;
 };
 
+type ContactAdditionalInfo = {
+  id: string;
+  title: string;
+  value: string;
+};
+
 type ChannelAccountForm = {
   id: string;
   slug: string;
@@ -3803,6 +3809,14 @@ function InboxList({
     assignedTo: "all"
   });
   const [contactDetailOpen, setContactDetailOpen] = useState(false);
+  const [contactDetailSaving, setContactDetailSaving] = useState(false);
+  const [contactDetailMessage, setContactDetailMessage] = useState("");
+  const [contactDetailForm, setContactDetailForm] = useState({
+    displayName: "",
+    phone: "",
+    notes: "",
+    additional: [] as ContactAdditionalInfo[]
+  });
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
   const visibleDueFollowUps = useMemo(
     () => dueFollowUps.filter((followUp) => !dismissedDueFollowUps.includes(followUp.id)),
@@ -3831,6 +3845,21 @@ function InboxList({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [contactDetailOpen]);
+
+  useEffect(() => {
+    if (!selected) {
+      return;
+    }
+
+    const contactInfo = getContactInfoPayload(selected.imported_payload);
+    setContactDetailForm({
+      displayName: selected.display_name ?? "",
+      phone: selected.phone,
+      notes: contactInfo.notes,
+      additional: contactInfo.additional
+    });
+    setContactDetailMessage("");
+  }, [selected?.contact_id]);
   const availableLabels = useMemo(() => {
     const bySlug = new Map<string, LabelDefinition>();
 
@@ -4868,6 +4897,74 @@ function InboxList({
     await patchConversation(selected.id, { displayName: chatName.trim() || null });
   }
 
+  function addContactDetailField() {
+    setContactDetailForm((current) => ({
+      ...current,
+      additional: [
+        ...current.additional,
+        {
+          id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now()),
+          title: "",
+          value: ""
+        }
+      ]
+    }));
+  }
+
+  function updateContactDetailField(id: string, key: "title" | "value", value: string) {
+    setContactDetailForm((current) => ({
+      ...current,
+      additional: current.additional.map((item) => (item.id === id ? { ...item, [key]: value } : item))
+    }));
+  }
+
+  function removeContactDetailField(id: string) {
+    setContactDetailForm((current) => ({
+      ...current,
+      additional: current.additional.filter((item) => item.id !== id)
+    }));
+  }
+
+  async function saveContactDetails(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+
+    if (!selected?.contact_id) {
+      return;
+    }
+
+    setContactDetailSaving(true);
+    setContactDetailMessage("");
+    const response = await fetch("/api/contacts", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        contactId: selected.contact_id,
+        displayName: contactDetailForm.displayName.trim() || null,
+        phone: contactDetailForm.phone,
+        contactType: selected.contact_type || "prospecto",
+        sentiment: selected.sentiment || "neutral",
+        consultype: selected.consultype || "otro",
+        assignedTo: selected.assigned_to || null,
+        contactInfo: {
+          notes: contactDetailForm.notes,
+          additional: contactDetailForm.additional
+        }
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setContactDetailSaving(false);
+
+    if (!response.ok) {
+      setContactDetailMessage(payload?.error ?? "No pudimos guardar el contacto.");
+      return;
+    }
+
+    const nextItems = payload?.conversations ?? [];
+    setItems(nextItems);
+    onConversationsChange(nextItems);
+    setContactDetailMessage("Datos guardados.");
+  }
+
   function resetFilters() {
     const nextFilters = { query: "", consultype: "all", status: "all", assignedTo: "all" };
     selectedTagsRef.current = [];
@@ -5636,17 +5733,28 @@ function InboxList({
                     <X size={18} />
                   </button>
                 </header>
-                <div className="contact-detail-body">
+                <form className="contact-detail-body" onSubmit={saveContactDetails}>
                   <section className="contact-profile-card">
                     <span aria-hidden="true" className="contact-avatar">
                       {(selected.display_name || selected.phone || "?").slice(0, 1).toUpperCase()}
                     </span>
-                    <strong>{selected.display_name || "Sin nombre cargado"}</strong>
-                    {selected.phone ? (
-                      <a href={`tel:+${selected.phone.replace(/\D/g, "")}`}>{selected.phone}</a>
-                    ) : (
-                      <span>Sin telefono</span>
-                    )}
+                    <label>
+                      Nombre
+                      <input
+                        value={contactDetailForm.displayName}
+                        onChange={(event) => setContactDetailForm((current) => ({ ...current, displayName: event.target.value }))}
+                        placeholder="Nombre del contacto"
+                      />
+                    </label>
+                    <label>
+                      WhatsApp
+                      <input
+                        value={contactDetailForm.phone}
+                        onChange={(event) => setContactDetailForm((current) => ({ ...current, phone: event.target.value }))}
+                        placeholder="549..."
+                      />
+                    </label>
+                    {selected.phone ? <a href={`tel:+${selected.phone.replace(/\D/g, "")}`}>Llamar al contacto</a> : null}
                   </section>
                   <dl className="contact-detail-list">
                     <div>
@@ -5674,7 +5782,46 @@ function InboxList({
                       <dd>{selected.status}</dd>
                     </div>
                   </dl>
-                </div>
+                  <section className="contact-extra-editor">
+                    <label>
+                      Informacion del contacto
+                      <textarea
+                        value={contactDetailForm.notes}
+                        onChange={(event) => setContactDetailForm((current) => ({ ...current, notes: event.target.value }))}
+                        placeholder="Notas utiles del cliente, referencias, condiciones, datos comerciales..."
+                      />
+                    </label>
+                    <div className="contact-extra-head">
+                      <strong>Informacion adicional</strong>
+                      <button onClick={addContactDetailField} type="button">
+                        <UserPlus size={15} />
+                        Agregar
+                      </button>
+                    </div>
+                    {contactDetailForm.additional.map((item) => (
+                      <div className="contact-extra-row" key={item.id}>
+                        <input
+                          value={item.title}
+                          onChange={(event) => updateContactDetailField(item.id, "title", event.target.value)}
+                          placeholder="Titulo"
+                        />
+                        <input
+                          value={item.value}
+                          onChange={(event) => updateContactDetailField(item.id, "value", event.target.value)}
+                          placeholder="Informacion"
+                        />
+                        <button aria-label="Eliminar dato" onClick={() => removeContactDetailField(item.id)} type="button">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </section>
+                  {contactDetailMessage ? <p className={contactDetailMessage.includes("guardados") ? "ok inline" : "warn"}>{contactDetailMessage}</p> : null}
+                  <button className="primary contact-save-button" disabled={contactDetailSaving} type="submit">
+                    <Save size={16} />
+                    {contactDetailSaving ? "Guardando" : "Guardar contacto"}
+                  </button>
+                </form>
               </aside>
             ) : null}
 
@@ -6942,6 +7089,25 @@ function getStatusLabel(value: string) {
 
 function getConsultypeLabel(value: string) {
   return CONSULTYPE_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
+function getContactInfoPayload(payload: Record<string, unknown> | null | undefined) {
+  const rawInfo = payload?.contact_info as { notes?: unknown; additional?: unknown } | undefined;
+  const rawAdditional = Array.isArray(rawInfo?.additional) ? rawInfo.additional : [];
+
+  return {
+    notes: typeof rawInfo?.notes === "string" ? rawInfo.notes : "",
+    additional: rawAdditional
+      .map((item) => {
+        const value = item as { id?: unknown; title?: unknown; value?: unknown };
+        return {
+          id: typeof value.id === "string" ? value.id : String(Date.now() + Math.random()),
+          title: typeof value.title === "string" ? value.title : "",
+          value: typeof value.value === "string" ? value.value : ""
+        };
+      })
+      .filter((item) => item.title || item.value)
+  };
 }
 
 function getFallbackLabelColor(slug: string) {

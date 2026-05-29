@@ -46,10 +46,12 @@ export type ConversationSummary = {
   phone: string;
   display_name: string | null;
   platform: string;
+  contact_type: string;
   sentiment: string;
   consultype: string;
   assigned_to: string | null;
   assigned_name: string | null;
+  imported_payload: Record<string, unknown> | null;
   last_message: string | null;
   last_direction: string | null;
   unread_count: number;
@@ -2368,10 +2370,12 @@ export async function listConversations(filters: ConversationFilters = {}) {
       ct.phone,
       ct.display_name,
       coalesce(nullif(c.channel, ''), ct.platform) as platform,
+      ct.contact_type,
       ct.sentiment,
       ct.consultype,
       c.assigned_to::text,
       u.full_name as assigned_name,
+      ct.imported_payload,
       lm.body as last_message,
       lm.direction as last_direction,
       case when c.unread then 1 else 0 end::int as unread_count,
@@ -2435,6 +2439,7 @@ export async function listContacts(filters: ContactFilters = {}) {
       u.full_name as assigned_name,
       ct.source,
       ct.imported_from,
+      ct.imported_payload,
       ct.last_seen_at::text,
       c.id::text as conversation_id,
       c.status as conversation_status
@@ -2462,6 +2467,10 @@ export async function updateContact(input: {
   sentiment?: string;
   consultype?: string;
   assignedTo?: string | null;
+  contactInfo?: {
+    notes?: string;
+    additional?: Array<{ id?: string; title?: string; value?: string }>;
+  };
 }) {
   if (!isDbConfigured()) {
     return null;
@@ -2473,6 +2482,20 @@ export async function updateContact(input: {
   const contactType = input.contactType?.trim().toLowerCase() || "prospecto";
   const sentiment = normalizeSentiment(input.sentiment);
   const consultype = normalizeConsultype(input.consultype);
+  const contactInfoPayload = input.contactInfo
+    ? JSON.stringify({
+        contact_info: {
+          notes: input.contactInfo.notes?.trim() ?? "",
+          additional: (input.contactInfo.additional ?? [])
+            .map((item) => ({
+              id: item.id || crypto.randomUUID(),
+              title: item.title?.trim() ?? "",
+              value: item.value?.trim() ?? ""
+            }))
+            .filter((item) => item.title || item.value)
+        }
+      })
+    : null;
 
   const rows = (await sql`
     update contacts
@@ -2482,6 +2505,10 @@ export async function updateContact(input: {
         sentiment = ${sentiment},
         consultype = ${consultype},
         assigned_to = ${input.assignedTo ?? null}::uuid,
+        imported_payload = case
+          when ${contactInfoPayload}::jsonb is null then imported_payload
+          else coalesce(imported_payload, '{}'::jsonb) || ${contactInfoPayload}::jsonb
+        end,
         updated_at = now()
     where id = ${input.contactId}
     returning id::text

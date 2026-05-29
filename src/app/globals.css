@@ -3128,6 +3128,36 @@ button:disabled {
   text-align: center;
 }
 
+.contact-profile-card label,
+.contact-extra-editor label {
+  color: rgba(223, 242, 255, 0.74);
+  display: grid;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 5px;
+  text-align: left;
+  width: 100%;
+}
+
+.contact-profile-card input,
+.contact-extra-editor textarea,
+.contact-extra-row input {
+  background: rgba(5, 31, 56, 0.82);
+  border: 1px solid rgba(142, 213, 245, 0.34);
+  border-radius: 7px;
+  color: #ffffff;
+  font: inherit;
+  min-height: 38px;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.contact-extra-editor textarea {
+  min-height: 96px;
+  padding: 10px;
+  resize: vertical;
+}
+
 .contact-avatar {
   align-items: center;
   background: linear-gradient(180deg, var(--brand-green), #4aa8d8);
@@ -3164,6 +3194,47 @@ button:disabled {
 
 .contact-detail-list dd {
   margin: 0;
+}
+
+.contact-extra-editor {
+  background: rgba(5, 27, 48, 0.46);
+  border: 1px solid rgba(143, 213, 241, 0.16);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.contact-extra-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.contact-extra-head button,
+.contact-extra-row button {
+  align-items: center;
+  background: rgba(143, 210, 244, 0.16);
+  border: 1px solid rgba(191, 238, 255, 0.42);
+  border-radius: 7px;
+  color: #f3fbff;
+  display: inline-flex;
+  gap: 6px;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.contact-extra-row {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) auto;
+}
+
+.contact-save-button {
+  justify-content: center;
+  width: 100%;
 }
 
 .toolbar-icons {

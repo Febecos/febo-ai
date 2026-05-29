@@ -2793,12 +2793,65 @@ button:disabled {
   padding: 8px 9px;
 }
 
+.message-image-button {
+  background: transparent;
+  border: 0;
+  cursor: zoom-in;
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  text-align: left;
+}
+
 .message-image {
   border-radius: 8px;
   display: block;
   max-height: 320px;
   max-width: 100%;
   object-fit: contain;
+}
+
+.image-preview-backdrop {
+  background: rgba(3, 12, 24, 0.82);
+  padding: 18px;
+  z-index: 120;
+}
+
+.image-preview-dialog {
+  align-items: center;
+  display: grid;
+  height: min(92vh, 920px);
+  justify-items: center;
+  max-width: min(96vw, 1280px);
+  position: relative;
+  width: 100%;
+}
+
+.image-preview-dialog img {
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.image-preview-close {
+  align-items: center;
+  background: rgba(10, 22, 36, 0.9);
+  border: 1px solid rgba(191, 238, 255, 0.35);
+  border-radius: 999px;
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 42px;
+  min-width: 42px;
+  padding: 0;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 1;
 }
 
 .message-video {

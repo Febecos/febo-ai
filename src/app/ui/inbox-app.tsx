@@ -3711,6 +3711,7 @@ function InboxList({
   const [replyText, setReplyText] = useState("");
   const [replyFile, setReplyFile] = useState<File | null>(null);
   const [replyFilePreviewUrl, setReplyFilePreviewUrl] = useState("");
+  const [imagePreview, setImagePreview] = useState<{ alt: string; src: string } | null>(null);
   const [sendingReply, setSendingReply] = useState(false);
   const [replyProgress, setReplyProgress] = useState("");
   const [replyError, setReplyError] = useState("");
@@ -5802,7 +5803,7 @@ function InboxList({
                               ))}
                             </div>
                           ) : null}
-                          {message.media_id ? <MessageMedia message={message} /> : null}
+                          {message.media_id ? <MessageMedia message={message} onImageOpen={setImagePreview} /> : null}
                           <small>
                             {authorLabel} - {formatMessageTime(message.created_at)}
                           </small>
@@ -5817,6 +5818,16 @@ function InboxList({
                   <div className="empty-state">Contacto importado sin historial de conversacion.</div>
                 ) : null}
               </div>
+              {imagePreview ? (
+                <div className="modal-backdrop image-preview-backdrop" onClick={() => setImagePreview(null)}>
+                  <div className="image-preview-dialog" onClick={(event) => event.stopPropagation()}>
+                    <button aria-label="Cerrar imagen" className="image-preview-close" onClick={() => setImagePreview(null)} type="button">
+                      <X size={22} />
+                    </button>
+                    <img alt={imagePreview.alt} src={imagePreview.src} />
+                  </div>
+                </div>
+              ) : null}
               <div className="notes-panel">
                 {loadingNotes ? <div className="empty-state">Cargando notas...</div> : null}
                 {!loadingNotes && notes.length ? (
@@ -6301,13 +6312,28 @@ function formatDeliveryStatus(message: ConversationMessage) {
   return labels[message.whatsapp_status ?? ""] ?? message.whatsapp_status ?? "";
 }
 
-function MessageMedia({ message }: { message: ConversationMessage }) {
+function MessageMedia({
+  message,
+  onImageOpen
+}: {
+  message: ConversationMessage;
+  onImageOpen: (preview: { alt: string; src: string }) => void;
+}) {
   const src = `/api/message-media?messageId=${message.id}`;
   const mimeType = message.media_mime_type ?? "";
   const filename = message.media_filename ?? "archivo";
 
   if (mimeType.startsWith("image/")) {
-    return <img alt={filename} className="message-image" src={src} />;
+    return (
+      <button
+        aria-label="Ampliar imagen"
+        className="message-image-button"
+        onClick={() => onImageOpen({ alt: filename, src })}
+        type="button"
+      >
+        <img alt={filename} className="message-image" src={src} />
+      </button>
+    );
   }
 
   if (mimeType.startsWith("audio/")) {

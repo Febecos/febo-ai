@@ -590,6 +590,7 @@ function MetricsPanel({ stats, users }: { stats: Stats; users: AppUser[] }) {
   const [endDate, setEndDate] = useState(() => toDateInputDaysAgo(0));
   const [assignedTo, setAssignedTo] = useState("all");
   const [loading, setLoading] = useState(false);
+  const [loadedOnce, setLoadedOnce] = useState(false);
   const [notice, setNotice] = useState("");
   const totalPeriod = currentStats.inbound_7d + currentStats.outbound_7d;
   const aiShare = currentStats.outbound_7d ? Math.round((currentStats.ai_7d / currentStats.outbound_7d) * 100) : 0;
@@ -611,6 +612,7 @@ function MetricsPanel({ stats, users }: { stats: Stats; users: AppUser[] }) {
         throw new Error(data.error ?? "No pudimos actualizar las metricas.");
       }
       setCurrentStats(data.stats);
+      setLoadedOnce(true);
       setNotice("Metricas actualizadas correctamente.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "No pudimos actualizar las metricas.");
@@ -618,6 +620,12 @@ function MetricsPanel({ stats, users }: { stats: Stats; users: AppUser[] }) {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!loadedOnce && !loading) {
+      void refreshMetrics();
+    }
+  }, [loadedOnce, loading]);
 
   function applyQuickRange(days: number) {
     const nextStart = toDateInputDaysAgo(days - 1);

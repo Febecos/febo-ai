@@ -3062,7 +3062,7 @@ button:disabled {
   position: absolute;
   right: 0;
   top: 0;
-  width: min(360px, calc(100vw - 36px));
+  width: min(680px, calc(100vw - 36px));
   z-index: 82;
 }
 
@@ -3117,15 +3117,14 @@ button:disabled {
 }
 
 .contact-profile-card {
-  align-items: center;
   background: rgba(5, 27, 48, 0.68);
   border: 1px solid rgba(143, 213, 241, 0.22);
   border-radius: 8px;
   display: grid;
-  gap: 7px;
-  justify-items: center;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   padding: 18px 12px;
-  text-align: center;
+  text-align: left;
 }
 
 .contact-profile-card label,
@@ -3153,7 +3152,7 @@ button:disabled {
 }
 
 .contact-extra-editor textarea {
-  min-height: 96px;
+  min-height: 190px;
   padding: 10px;
   resize: vertical;
 }
@@ -3173,6 +3172,7 @@ button:disabled {
 
 .contact-profile-card a {
   color: #8fd5f1;
+  grid-column: 1 / -1;
   font-weight: 800;
   text-decoration: none;
 }
@@ -5310,14 +5310,42 @@ select option:hover {
   .contact-detail-drawer {
     border: 1px solid rgba(143, 213, 241, 0.32);
     border-radius: 10px;
-    bottom: 10px;
+    bottom: auto;
     left: 54px;
+    max-height: calc(100dvh - 20px);
     max-width: calc(100vw - 66px);
     position: fixed;
     right: 10px;
     top: 10px;
     width: auto;
     z-index: 150;
+  }
+
+  .contact-detail-drawer header {
+    min-height: 58px;
+    padding: 0 12px;
+  }
+
+  .contact-detail-body {
+    max-height: calc(100dvh - 80px);
+    padding: 12px;
+  }
+
+  .contact-profile-card {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .contact-extra-editor textarea {
+    min-height: 180px;
+  }
+
+  .contact-extra-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .contact-extra-row input:nth-child(2) {
+    grid-column: 1 / -1;
   }
 
   .tag-editor-panel input {

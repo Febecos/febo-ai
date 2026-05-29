@@ -2661,6 +2661,15 @@ function getConversationChannelMeta(conversation: Pick<ConversationSummary, "cha
   };
 }
 
+function getContactPanelChannelLabel(conversation: Pick<ConversationSummary, "channel" | "platform" | "account_name">) {
+  const meta = getConversationChannelMeta(conversation);
+  if (meta.label.toLowerCase() === "whatsapp") {
+    return meta.accountName.toLowerCase().includes("principal") ? "WhatsApp principal" : "WhatsApp";
+  }
+
+  return meta.title;
+}
+
 function ContactsPanel({
   focusedContact,
   onContactCreated,
@@ -5735,9 +5744,6 @@ function InboxList({
                 </header>
                 <form className="contact-detail-body" onSubmit={saveContactDetails}>
                   <section className="contact-profile-card">
-                    <span aria-hidden="true" className="contact-avatar">
-                      {(selected.display_name || selected.phone || "?").slice(0, 1).toUpperCase()}
-                    </span>
                     <label>
                       Nombre
                       <input
@@ -5759,27 +5765,7 @@ function InboxList({
                   <dl className="contact-detail-list">
                     <div>
                       <dt>Canal</dt>
-                      <dd>{getConversationChannelMeta(selected).title}</dd>
-                    </div>
-                    <div>
-                      <dt>Etiqueta</dt>
-                      <dd>{labelBySlug.get(selected.consultype)?.name ?? getConsultypeLabel(selected.consultype)}</dd>
-                    </div>
-                    <div>
-                      <dt>Sentimiento</dt>
-                      <dd>{selected.sentiment || "neutral"}</dd>
-                    </div>
-                    <div>
-                      <dt>Asignado</dt>
-                      <dd>{selected.assigned_name || "Sin asignar"}</dd>
-                    </div>
-                    <div>
-                      <dt>Ultimo mensaje</dt>
-                      <dd>{formatMessageTime(selected.last_message_at)}</dd>
-                    </div>
-                    <div>
-                      <dt>Estado</dt>
-                      <dd>{selected.status}</dd>
+                      <dd>{getContactPanelChannelLabel(selected)}</dd>
                     </div>
                   </dl>
                   <section className="contact-extra-editor">

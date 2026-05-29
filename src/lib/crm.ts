@@ -19,6 +19,21 @@ export type UserAdminSummary = AppUser & {
   sales_priority: number;
 };
 
+export type ChannelAccount = {
+  id: string;
+  slug: string;
+  name: string;
+  channel: "whatsapp" | "instagram" | "facebook" | "tiktok";
+  external_account_id: string | null;
+  phone_number: string | null;
+  auto_reply_enabled: boolean;
+  active: boolean;
+  settings: Record<string, unknown>;
+  has_access_token: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ConversationSummary = {
   id: string;
   status: string;
@@ -777,6 +792,144 @@ export async function upsertAppSetting(input: {
   `) as AppSetting[];
 
   return rows[0] ?? null;
+}
+
+export async function listChannelAccounts() {
+  if (!isDbConfigured()) {
+    return [] as ChannelAccount[];
+  }
+
+  const sql = getSql();
+
+  return (await sql`
+    select
+      id::text,
+      slug,
+      name,
+      channel,
+      external_account_id,
+      phone_number,
+      auto_reply_enabled,
+      active,
+      coalesce(settings - 'access_token', '{}'::jsonb) as settings,
+      coalesce(settings ? 'access_token', false) as has_access_token,
+      created_at::text,
+      updated_at::text
+    from channel_accounts
+    order by
+      case channel
+        when 'whatsapp' then 1
+        when 'instagram' then 2
+        when 'facebook' then 3
+        when 'tiktok' then 4
+        else 9
+      end,
+      name
+  `) as ChannelAccount[];
+}
+
+export async function upsertChannelAccount(input: {
+  id?: string | null;
+  slug?: string | null;
+  name: string;
+  channel: "whatsapp" | "instagram" | "facebook" | "tiktok";
+  externalAccountId?: string | null;
+  phoneNumber?: string | null;
+  accessToken?: string | null;
+  keepAccessToken?: boolean;
+  autoReplyEnabled: boolean;
+  active: boolean;
+}) {
+  if (!isDbConfigured()) {
+    return null;
+  }
+
+  const sql = getSql();
+  const slug = slugifyLabel(input.slug || `${input.channel}-${input.name}`);
+  const externalAccountId = input.externalAccountId?.trim() || null;
+  const phoneNumber = input.phoneNumber?.trim() || null;
+  const accessToken = input.accessToken?.trim() || null;
+  const hasNewToken = accessToken !== null;
+
+  if (input.id) {
+    const rows = (await sql`
+      update channel_accounts
+      set slug = ${slug},
+          name = ${input.name.trim()},
+          channel = ${input.channel},
+          external_account_id = ${externalAccountId},
+          phone_number = ${phoneNumber},
+          auto_reply_enabled = ${input.autoReplyEnabled},
+          active = ${input.active},
+          settings = case
+            when ${input.keepAccessToken ?? false} then channel_accounts.settings
+            when ${hasNewToken} then coalesce(channel_accounts.settings, '{}'::jsonb) || ${JSON.stringify({ access_token: accessToken })}::jsonb
+            else channel_accounts.settings - 'access_token'
+          end,
+          updated_at = now()
+      where id = ${input.id}::uuid
+      returning id::text
+    `) as Array<{ id: string }>;
+
+    return rows[0] ?? null;
+  }
+
+  const rows = (await sql`
+    insert into channel_accounts (
+      id,
+      slug,
+      name,
+      channel,
+      external_account_id,
+      phone_number,
+      auto_reply_enabled,
+      active,
+      settings
+    )
+    values (
+      gen_random_uuid(),
+      ${slug},
+      ${input.name.trim()},
+      ${input.channel},
+      ${externalAccountId},
+      ${phoneNumber},
+      ${input.autoReplyEnabled},
+      ${input.active},
+      ${JSON.stringify(hasNewToken ? { access_token: accessToken } : {})}::jsonb
+    )
+    on conflict (slug) do update
+    set name = excluded.name,
+        channel = excluded.channel,
+        external_account_id = excluded.external_account_id,
+        phone_number = excluded.phone_number,
+        auto_reply_enabled = excluded.auto_reply_enabled,
+        active = excluded.active,
+        settings = case
+          when ${input.keepAccessToken ?? false} then channel_accounts.settings
+          when ${hasNewToken} then coalesce(channel_accounts.settings, '{}'::jsonb) || excluded.settings
+          else channel_accounts.settings - 'access_token'
+        end,
+        updated_at = now()
+    returning id::text
+  `) as Array<{ id: string }>;
+
+  return rows[0] ?? null;
+}
+
+export async function disableChannelAccount(id: string) {
+  if (!isDbConfigured()) {
+    return;
+  }
+
+  const sql = getSql();
+
+  await sql`
+    update channel_accounts
+    set active = false,
+        auto_reply_enabled = false,
+        updated_at = now()
+    where id = ${id}::uuid
+  `;
 }
 
 function sanitizeWebhook(row: {

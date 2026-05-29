@@ -44,6 +44,7 @@ import {
 import { CSSProperties, DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AppUser,
+  ChannelAccount,
   ContactSummary,
   ConversationMessage,
   ConversationNote,
@@ -91,6 +92,19 @@ type OutgoingWebhookDelivery = {
   response_body: string | null;
   error: string | null;
   created_at: string;
+};
+
+type ChannelAccountForm = {
+  id: string;
+  slug: string;
+  name: string;
+  channel: "whatsapp" | "instagram" | "facebook" | "tiktok";
+  externalAccountId: string;
+  phoneNumber: string;
+  accessToken: string;
+  keepAccessToken: boolean;
+  autoReplyEnabled: boolean;
+  active: boolean;
 };
 
 type AgentTestResponse = {
@@ -1087,6 +1101,19 @@ function getMetricColor(label: string) {
 function SettingsPanel({ users }: { users: AppUser[] }) {
   const [settings, setSettings] = useState<AppSetting[]>([]);
   const [openSettingsSection, setOpenSettingsSection] = useState("delay");
+  const [channelAccounts, setChannelAccounts] = useState<ChannelAccount[]>([]);
+  const [channelForm, setChannelForm] = useState<ChannelAccountForm>({
+    id: "",
+    slug: "instagram-febecos",
+    name: "Instagram Febecos",
+    channel: "instagram",
+    externalAccountId: "",
+    phoneNumber: "",
+    accessToken: "",
+    keepAccessToken: false,
+    autoReplyEnabled: false,
+    active: false
+  });
   const [webhooks, setWebhooks] = useState<OutgoingWebhook[]>([]);
   const [webhookDeliveries, setWebhookDeliveries] = useState<OutgoingWebhookDelivery[]>([]);
   const [webhookForm, setWebhookForm] = useState({
@@ -1103,6 +1130,7 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
 
   useEffect(() => {
     void loadSettings();
+    void loadChannelAccounts();
     void loadOutgoingWebhooks();
   }, []);
 
@@ -1122,6 +1150,15 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
     if (response.ok) {
       setWebhooks(payload?.webhooks ?? []);
       setWebhookDeliveries(payload?.deliveries ?? []);
+    }
+  }
+
+  async function loadChannelAccounts() {
+    const response = await fetch("/api/channel-accounts");
+    const payload = await readJsonResponse(response);
+
+    if (response.ok) {
+      setChannelAccounts(payload?.accounts ?? []);
     }
   }
 
@@ -1193,6 +1230,93 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
       events: webhook.events.length ? webhook.events : ["selector_checkout_abierto"],
       active: webhook.active
     });
+  }
+
+  function editChannelAccount(account: ChannelAccount) {
+    setOpenSettingsSection("channels");
+    setChannelForm({
+      id: account.id,
+      slug: account.slug,
+      name: account.name,
+      channel: account.channel,
+      externalAccountId: account.external_account_id ?? "",
+      phoneNumber: account.phone_number ?? "",
+      accessToken: "",
+      keepAccessToken: account.has_access_token,
+      autoReplyEnabled: account.auto_reply_enabled,
+      active: account.active
+    });
+  }
+
+  function resetChannelForm(channel: ChannelAccountForm["channel"] = "instagram") {
+    setChannelForm({
+      id: "",
+      slug: channel === "instagram" ? "instagram-febecos" : `${channel}-febecos`,
+      name: channel === "instagram" ? "Instagram Febecos" : `${humanizeTemplateName(channel)} Febecos`,
+      channel,
+      externalAccountId: "",
+      phoneNumber: "",
+      accessToken: "",
+      keepAccessToken: false,
+      autoReplyEnabled: false,
+      active: false
+    });
+  }
+
+  async function saveChannelAccount() {
+    setSavingKey("channel-account");
+    setMessage("");
+
+    const response = await fetch("/api/channel-accounts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "upsert",
+        id: channelForm.id || null,
+        slug: channelForm.slug || null,
+        name: channelForm.name,
+        channel: channelForm.channel,
+        externalAccountId: channelForm.externalAccountId || null,
+        phoneNumber: channelForm.phoneNumber || null,
+        accessToken: channelForm.accessToken || null,
+        keepAccessToken: channelForm.keepAccessToken && !channelForm.accessToken,
+        autoReplyEnabled: channelForm.autoReplyEnabled,
+        active: channelForm.active
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setSavingKey("");
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos guardar la cuenta.");
+      return false;
+    }
+
+    setChannelAccounts(payload?.accounts ?? []);
+    setChannelForm((current) => ({ ...current, accessToken: "", keepAccessToken: false }));
+    setMessage("Cuenta conectada guardada.");
+    return true;
+  }
+
+  async function disableChannelAccount(id: string) {
+    setSavingKey(`channel-disable-${id}`);
+    setMessage("");
+
+    const response = await fetch("/api/channel-accounts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "disable", id })
+    });
+    const payload = await readJsonResponse(response);
+    setSavingKey("");
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos desactivar la cuenta.");
+      return;
+    }
+
+    setChannelAccounts(payload?.accounts ?? []);
+    setMessage("Cuenta desactivada.");
   }
 
   function toggleWebhookEvent(eventName: string) {
@@ -1352,6 +1476,21 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
               <p>Configura el mensaje que abre el Flow ya publicado en Meta.</p>
             </span>
             <span className="settings-card-meta">{selectorFlowId ? `Flow ${selectorFlowId}` : "Sin Flow"}</span>
+            <ChevronDown size={18} />
+          </button>
+        </article>
+
+        <article className={`settings-card settings-accordion ${openSettingsSection === "channels" ? "is-open" : ""}`}>
+          <button
+            className="settings-card-header"
+            onClick={() => setOpenSettingsSection((current) => (current === "channels" ? "" : "channels"))}
+            type="button"
+          >
+            <span>
+              <h3>Cuentas conectadas</h3>
+              <p>WhatsApp, Instagram y futuros canales separados por cuenta.</p>
+            </span>
+            <span className="settings-card-meta">{channelAccounts.filter((account) => account.active).length} activas</span>
             <ChevronDown size={18} />
           </button>
         </article>
@@ -1524,6 +1663,145 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
                   >
                     {savingKey === "selector-flow" ? "Guardando" : "Guardar configuracion del Flow"}
                   </button>
+                </div>
+              </div>
+            ) : null}
+
+            {openSettingsSection === "channels" ? (
+              <div className="settings-card-body">
+                <div className="webhook-layout">
+                  <div className="webhook-form">
+                    <label className="field">
+                      <FieldHelpLabel
+                        help="Nombre interno de la cuenta. Ejemplo: Instagram Febecos. Sirve para ver de donde viene cada conversacion."
+                        label="Nombre"
+                      />
+                      <input
+                        onChange={(event) => setChannelForm((current) => ({ ...current, name: event.target.value }))}
+                        value={channelForm.name}
+                      />
+                    </label>
+                    <label className="field">
+                      <FieldHelpLabel
+                        help="Identificador estable de FEBO para esta cuenta. Conviene no cambiarlo despues de conectar webhooks."
+                        label="Slug interno"
+                      />
+                      <input
+                        onChange={(event) => setChannelForm((current) => ({ ...current, slug: event.target.value }))}
+                        value={channelForm.slug}
+                      />
+                    </label>
+                    <label className="field">
+                      <FieldHelpLabel
+                        help="Canal al que pertenece esta cuenta. Ahora empezamos por Instagram; luego seguimos con Facebook, TikTok y segundo WhatsApp."
+                        label="Canal"
+                      />
+                      <select
+                        onChange={(event) => resetChannelForm(event.target.value as ChannelAccountForm["channel"])}
+                        value={channelForm.channel}
+                      >
+                        <option value="instagram">Instagram</option>
+                        <option value="facebook">Facebook</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="tiktok">TikTok</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      <FieldHelpLabel
+                        help="ID externo de Meta/TikTok para empatar webhooks entrantes con esta cuenta. En Instagram suele ser el Instagram Business Account ID."
+                        label="ID externo"
+                      />
+                      <input
+                        placeholder="Instagram Business Account ID"
+                        onChange={(event) => setChannelForm((current) => ({ ...current, externalAccountId: event.target.value }))}
+                        value={channelForm.externalAccountId}
+                      />
+                    </label>
+                    <label className="field">
+                      <FieldHelpLabel
+                        help="Opcional. Para WhatsApp puede ser numero; para Instagram puede quedar vacio."
+                        label="Telefono / referencia"
+                      />
+                      <input
+                        onChange={(event) => setChannelForm((current) => ({ ...current, phoneNumber: event.target.value }))}
+                        value={channelForm.phoneNumber}
+                      />
+                    </label>
+                    <label className="field">
+                      <FieldHelpLabel
+                        help="Token de acceso del canal. FEBO lo guarda, pero no lo muestra. Si editas y lo dejas vacio, conserva el token anterior."
+                        label="Token de acceso"
+                      />
+                      <input
+                        placeholder={channelForm.keepAccessToken ? "Token guardado; dejar vacio para conservar" : "Pegar token"}
+                        onChange={(event) => setChannelForm((current) => ({ ...current, accessToken: event.target.value }))}
+                        type="password"
+                        value={channelForm.accessToken}
+                      />
+                    </label>
+                    <label className="toggle-row">
+                      <input
+                        checked={channelForm.active}
+                        onChange={(event) => setChannelForm((current) => ({ ...current, active: event.target.checked }))}
+                        type="checkbox"
+                      />
+                      Cuenta activa
+                    </label>
+                    <label className="toggle-row">
+                      <input
+                        checked={channelForm.autoReplyEnabled}
+                        onChange={(event) => setChannelForm((current) => ({ ...current, autoReplyEnabled: event.target.checked }))}
+                        type="checkbox"
+                      />
+                      Respuesta automatica IA
+                    </label>
+                    <div className="settings-actions-row">
+                      <button
+                        className="primary"
+                        disabled={savingKey === "channel-account"}
+                        onClick={() => void saveChannelAccount()}
+                        type="button"
+                      >
+                        {savingKey === "channel-account" ? "Guardando" : channelForm.id ? "Guardar cuenta" : "Crear cuenta"}
+                      </button>
+                      <button onClick={() => resetChannelForm("instagram")} type="button">Nueva Instagram</button>
+                    </div>
+                  </div>
+
+                  <div className="webhook-list">
+                    <h4>Cuentas configuradas</h4>
+                    {channelAccounts.length ? channelAccounts.map((account) => {
+                      const channelMeta = getConversationChannelMeta({
+                        account_name: account.name,
+                        channel: account.channel,
+                        platform: account.channel
+                      });
+
+                      return (
+                        <div key={account.id} className="webhook-item">
+                          <div>
+                            <strong className={channelMeta.className}>{account.name}</strong>
+                            <span>
+                              {channelMeta.label} · {account.active ? "Activa" : "Inactiva"} · {account.auto_reply_enabled ? "IA activa" : "IA apagada"}
+                              {account.has_access_token ? " · token guardado" : ""}
+                            </span>
+                            <small>{account.external_account_id || account.phone_number || account.slug}</small>
+                          </div>
+                          <div className="webhook-actions">
+                            <button onClick={() => editChannelAccount(account)} type="button">Editar</button>
+                            <button
+                              className="danger"
+                              disabled={savingKey === `channel-disable-${account.id}`}
+                              onClick={() => void disableChannelAccount(account.id)}
+                              type="button"
+                            >
+                              Desactivar
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }) : <p>No hay cuentas configuradas todavia.</p>}
+                  </div>
                 </div>
               </div>
             ) : null}

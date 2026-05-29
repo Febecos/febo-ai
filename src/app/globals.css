@@ -5090,7 +5090,7 @@ select option:hover {
   }
 
   .composer-line {
-    grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+    grid-template-columns: 36px 36px minmax(88px, 1fr) auto;
   }
 
   .composer-line button {
@@ -5104,9 +5104,20 @@ select option:hover {
     padding: 0;
   }
 
+  .composer-line .reply-input-wrap {
+    grid-column: 1 / -1;
+    order: 2;
+  }
+
+  .composer-line > .primary {
+    justify-self: stretch;
+    min-width: 86px;
+  }
+
   .audio-mode-control {
     min-height: 34px;
     padding: 0 6px;
+    min-width: 0;
   }
 
   .audio-mode-control span {
@@ -5114,7 +5125,8 @@ select option:hover {
   }
 
   .audio-mode-control select {
-    max-width: 86px;
+    max-width: 100%;
+    min-width: 0;
   }
 }
 

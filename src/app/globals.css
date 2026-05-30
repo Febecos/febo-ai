@@ -2439,6 +2439,12 @@ button:disabled {
   color: #ffffff;
 }
 
+.conversation-tabs button.notes-tab.active {
+  background: #f59e0b;
+  border-color: #fbbf24;
+  color: #1f2937;
+}
+
 .conversation-tabs span {
   background: rgba(255, 255, 255, 0.18);
   border-radius: 999px;
@@ -5799,6 +5805,12 @@ select {
   box-shadow: inset 4px 0 0 var(--green), inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
+.conversation-tabs button.notes-tab.active {
+  background: linear-gradient(180deg, #f7b13f 0%, #ef9518 100%);
+  border-color: rgba(255, 215, 139, 0.92);
+  color: #172033;
+}
+
 .conversation-row,
 .contact-row,
 .crm-card,
@@ -5906,6 +5918,12 @@ select {
 }
 
 .chat-bubble.outbound.human-outbound {
+  background: linear-gradient(180deg, #f5a623 0%, #ed9514 100%);
+  border-color: rgba(255, 215, 139, 0.9);
+  color: #172033;
+}
+
+.chat-bubble.outbound.human-outbound.audio-bubble {
   background: linear-gradient(180deg, #f5a623 0%, #ed9514 100%);
   border-color: rgba(255, 215, 139, 0.9);
   color: #172033;

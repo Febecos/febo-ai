@@ -6012,7 +6012,7 @@ function InboxList({
                 <span>{messages.length}</span>
               </button>
               <button
-                className={activeConversationTab === "notes" ? "active" : ""}
+                className={`notes-tab ${activeConversationTab === "notes" ? "active" : ""}`}
                 onClick={() => setActiveConversationTab("notes")}
                 type="button"
               >

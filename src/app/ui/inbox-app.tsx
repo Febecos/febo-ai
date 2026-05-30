@@ -3827,7 +3827,8 @@ function InboxList({
     query: "",
     consultype: "all",
     status: "all",
-    assignedTo: "all"
+    assignedTo: "all",
+    unreadOnly: false
   });
   const [contactDetailOpen, setContactDetailOpen] = useState(false);
   const [contactDetailSaving, setContactDetailSaving] = useState(false);
@@ -3921,7 +3922,7 @@ function InboxList({
     return Array.from(bySlug.values()).sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
   }, [labelDefinitions]);
   const activeFiltersCount =
-    selectedTags.length + selectedClassifications.length + (filters.assignedTo !== "all" ? 1 : 0);
+    selectedTags.length + selectedClassifications.length + (filters.assignedTo !== "all" ? 1 : 0) + (filters.unreadOnly ? 1 : 0);
   const quickReplyQuery = getQuickReplyQuery(replyText);
   const filteredLabels = useMemo(() => {
     const query = normalizeTemplateSearchKey(tagSearch);
@@ -4488,7 +4489,8 @@ function InboxList({
       const sentimentMatches =
         !selectedClassificationsRef.current.length || selectedClassificationsRef.current.includes(item.sentiment);
       const tagMatches = !selectedTagsRef.current.length || selectedTagsRef.current.includes(item.consultype);
-      return tagMatches && sentimentMatches;
+      const unreadMatches = !nextFilters.unreadOnly || isConversationUnread(item);
+      return tagMatches && sentimentMatches && unreadMatches;
     });
     notifyIfNewInboundConversation(nextItems, options.suppressSound !== true);
     setItems(nextItems);
@@ -4987,7 +4989,7 @@ function InboxList({
   }
 
   function resetFilters() {
-    const nextFilters = { query: "", consultype: "all", status: "all", assignedTo: "all" };
+    const nextFilters = { query: "", consultype: "all", status: "all", assignedTo: "all", unreadOnly: false };
     selectedTagsRef.current = [];
     selectedClassificationsRef.current = [];
     setSelectedTags([]);
@@ -5401,11 +5403,14 @@ function InboxList({
           Conversaciones
         </div>
         <div className="list-tabs">
-          <button className={filters.status === "all" ? "active" : ""} onClick={() => updateFilters({ status: "all" })} type="button">
+          <button className={filters.status === "all" && !filters.unreadOnly ? "active" : ""} onClick={() => updateFilters({ status: "all", unreadOnly: false })} type="button">
             Todos
           </button>
-          <button className={filters.status === "handoff" ? "active" : ""} onClick={() => updateFilters({ status: "handoff" })} type="button">
+          <button className={filters.status === "handoff" && !filters.unreadOnly ? "active" : ""} onClick={() => updateFilters({ status: "handoff", unreadOnly: false })} type="button">
             Escalados
+          </button>
+          <button className={filters.unreadOnly ? "active" : ""} onClick={() => updateFilters({ status: "all", unreadOnly: true })} type="button">
+            No leidos
           </button>
           <button className={`filters-toggle ${filtersOpen ? "open" : ""}`} onClick={() => setFiltersOpen(!filtersOpen)} type="button">
             <Filter size={16} />

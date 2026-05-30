@@ -1299,7 +1299,7 @@ button:disabled {
   align-items: stretch;
   display: grid;
   gap: 0;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 340px minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   min-width: 0;
@@ -1500,7 +1500,7 @@ button:disabled {
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 7px;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto auto auto minmax(0, 1fr);
   padding: 9px 10px 7px;
 }
 
@@ -1535,7 +1535,7 @@ button:disabled {
 }
 
 .filters-popover {
-  background: #373b41;
+  background: #0b3455;
   border: 1px solid #555d68;
   border-radius: 6px;
   box-sizing: border-box;
@@ -5792,7 +5792,7 @@ select {
 .tag-editor-panel,
 .filters-popover,
 .event-menu > div {
-  background: rgba(9, 41, 72, 0.62);
+  background: #0b3455;
   border-color: rgba(142, 213, 245, 0.3);
   color: #f8fbff;
 }

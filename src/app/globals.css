@@ -2112,7 +2112,7 @@ button:disabled {
 }
 
 .conversation-detail.contact-drawer-open {
-  padding-right: min(410px, calc(100vw - 320px));
+  padding-right: min(450px, calc(100vw - 320px));
 }
 
 .back-button {
@@ -3066,7 +3066,7 @@ button:disabled {
   position: absolute;
   right: 0;
   top: 0;
-  width: min(390px, calc(100vw - 36px));
+  width: min(430px, calc(100vw - 36px));
   z-index: 82;
 }
 
@@ -3159,7 +3159,8 @@ button:disabled {
 }
 
 .contact-extra-editor textarea {
-  height: 100%;
+  align-self: stretch;
+  height: auto;
   min-height: 230px;
   padding: 10px;
   resize: vertical;
@@ -3231,6 +3232,7 @@ button:disabled {
 }
 
 .contact-extra-editor label {
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
 }
 

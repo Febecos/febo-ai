@@ -5673,7 +5673,7 @@ function InboxList({
             </div>
 
             <div className="toolbar">
-              <button className="contact-open-button" onClick={() => setContactDetailOpen(true)} type="button">
+              <button className="contact-open-button" onClick={() => setContactDetailOpen((open) => !open)} type="button">
                 <span>Contacto</span>
                 <strong>{selected.display_name || selected.phone}</strong>
               </button>

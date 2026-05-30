@@ -5518,9 +5518,37 @@ select option:hover {
   }
 
   .notes-panel,
+  .tasks-panel,
   .audit-panel {
     grid-column: 1 / -1;
     min-width: 0;
+    width: 100%;
+  }
+
+  .tasks-panel {
+    gap: 10px;
+    overflow: hidden;
+    padding: 10px;
+  }
+
+  .task-list {
+    min-width: 0;
+  }
+
+  .task-composer {
+    min-width: 0;
+  }
+
+  .task-composer textarea {
+    min-height: 74px;
+  }
+
+  .task-composer-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .task-composer-row button {
+    justify-content: center;
     width: 100%;
   }
 

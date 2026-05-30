@@ -2670,6 +2670,18 @@ function getContactPanelChannelLabel(conversation: Pick<ConversationSummary, "ch
   return meta.title;
 }
 
+function getContactPanelChannelPhone(conversation: Pick<ConversationSummary, "channel" | "platform" | "account_name" | "account_phone_number">) {
+  const meta = getConversationChannelMeta(conversation);
+  if (conversation.account_phone_number) {
+    return conversation.account_phone_number;
+  }
+  if (meta.label.toLowerCase() === "whatsapp" && meta.accountName.toLowerCase().includes("principal")) {
+    return "+54 9 11 2739-9430";
+  }
+
+  return "";
+}
+
 function ContactsPanel({
   focusedContact,
   onContactCreated,
@@ -5764,10 +5776,10 @@ function InboxList({
                   </section>
                   <dl className="contact-detail-list">
                     <div>
-                      <dt>Canal</dt>
+                      <dt>Canal usado</dt>
                       <dd>
                         <span>{getContactPanelChannelLabel(selected)}</span>
-                        {selected.account_phone_number ? <small>{selected.account_phone_number}</small> : null}
+                        {getContactPanelChannelPhone(selected) ? <small>{getContactPanelChannelPhone(selected)}</small> : null}
                       </dd>
                     </div>
                   </dl>

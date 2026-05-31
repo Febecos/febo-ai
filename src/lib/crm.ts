@@ -30,6 +30,8 @@ export type ChannelAccount = {
   active: boolean;
   settings: Record<string, unknown>;
   has_access_token: boolean;
+  has_bridge_token: boolean;
+  has_webhook_token: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -59,6 +61,16 @@ export type ConversationSummary = {
   unread: boolean;
   pending_followups: number;
   overdue_followups: number;
+};
+
+export type ConversationReplyTarget = {
+  conversation_id: string;
+  contact_id: string;
+  phone: string;
+  account_slug: string | null;
+  account_provider: string | null;
+  bridge_url: string | null;
+  bridge_token: string | null;
 };
 
 export type ContactSummary = {
@@ -814,8 +826,10 @@ export async function listChannelAccounts() {
       phone_number,
       auto_reply_enabled,
       active,
-      coalesce(settings - 'access_token', '{}'::jsonb) as settings,
+      coalesce(settings - 'access_token' - 'bridge_token' - 'webhook_token', '{}'::jsonb) as settings,
       coalesce(settings ? 'access_token', false) as has_access_token,
+      coalesce(settings ? 'bridge_token', false) as has_bridge_token,
+      coalesce(settings ? 'webhook_token', false) as has_webhook_token,
       created_at::text,
       updated_at::text
     from channel_accounts
@@ -839,7 +853,13 @@ export async function upsertChannelAccount(input: {
   externalAccountId?: string | null;
   phoneNumber?: string | null;
   accessToken?: string | null;
+  provider?: string | null;
+  bridgeUrl?: string | null;
+  bridgeToken?: string | null;
+  webhookToken?: string | null;
   keepAccessToken?: boolean;
+  keepBridgeToken?: boolean;
+  keepWebhookToken?: boolean;
   autoReplyEnabled: boolean;
   active: boolean;
 }) {
@@ -853,6 +873,21 @@ export async function upsertChannelAccount(input: {
   const phoneNumber = input.phoneNumber?.trim() || null;
   const accessToken = input.accessToken?.trim() || null;
   const hasNewToken = accessToken !== null;
+  const provider = input.provider?.trim() || null;
+  const bridgeUrl = input.bridgeUrl?.trim() || null;
+  const bridgeToken = input.bridgeToken?.trim() || null;
+  const webhookToken = input.webhookToken?.trim() || null;
+  const settingsUpdate = {
+    ...(provider ? { provider } : {}),
+    ...(bridgeUrl ? { bridge_url: bridgeUrl } : {}),
+    ...(accessToken ? { access_token: accessToken } : {}),
+    ...(bridgeToken ? { bridge_token: bridgeToken } : {}),
+    ...(webhookToken ? { webhook_token: webhookToken } : {})
+  };
+  const settingsJson = JSON.stringify(settingsUpdate);
+  const accessTokenKeyToRemove = input.keepAccessToken || hasNewToken ? "__keep_access_token__" : "access_token";
+  const bridgeTokenKeyToRemove = input.keepBridgeToken || bridgeToken !== null ? "__keep_bridge_token__" : "bridge_token";
+  const webhookTokenKeyToRemove = input.keepWebhookToken || webhookToken !== null ? "__keep_webhook_token__" : "webhook_token";
 
   if (input.id) {
     const rows = (await sql`
@@ -864,11 +899,12 @@ export async function upsertChannelAccount(input: {
           phone_number = ${phoneNumber},
           auto_reply_enabled = ${input.autoReplyEnabled},
           active = ${input.active},
-          settings = case
-            when ${input.keepAccessToken ?? false} then channel_accounts.settings
-            when ${hasNewToken} then coalesce(channel_accounts.settings, '{}'::jsonb) || ${JSON.stringify({ access_token: accessToken })}::jsonb
-            else channel_accounts.settings - 'access_token'
-          end,
+          settings = (
+            coalesce(channel_accounts.settings, '{}'::jsonb)
+              - ${accessTokenKeyToRemove}
+              - ${bridgeTokenKeyToRemove}
+              - ${webhookTokenKeyToRemove}
+          ) || ${settingsJson}::jsonb,
           updated_at = now()
       where id = ${input.id}::uuid
       returning id::text
@@ -898,7 +934,7 @@ export async function upsertChannelAccount(input: {
       ${phoneNumber},
       ${input.autoReplyEnabled},
       ${input.active},
-      ${JSON.stringify(hasNewToken ? { access_token: accessToken } : {})}::jsonb
+      ${settingsJson}::jsonb
     )
     on conflict (slug) do update
     set name = excluded.name,
@@ -907,11 +943,12 @@ export async function upsertChannelAccount(input: {
         phone_number = excluded.phone_number,
         auto_reply_enabled = excluded.auto_reply_enabled,
         active = excluded.active,
-        settings = case
-          when ${input.keepAccessToken ?? false} then channel_accounts.settings
-          when ${hasNewToken} then coalesce(channel_accounts.settings, '{}'::jsonb) || excluded.settings
-          else channel_accounts.settings - 'access_token'
-        end,
+        settings = (
+          coalesce(channel_accounts.settings, '{}'::jsonb)
+            - ${accessTokenKeyToRemove}
+            - ${bridgeTokenKeyToRemove}
+            - ${webhookTokenKeyToRemove}
+        ) || excluded.settings,
         updated_at = now()
     returning id::text
   `) as Array<{ id: string }>;
@@ -933,6 +970,38 @@ export async function disableChannelAccount(id: string) {
         updated_at = now()
     where id = ${id}::uuid
   `;
+}
+
+export async function getChannelAccountBridgeAuth(accountSlug: string) {
+  if (!isDbConfigured()) {
+    return null;
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    select
+      id::text,
+      slug,
+      name,
+      channel,
+      active,
+      settings->>'provider' as provider,
+      settings->>'webhook_token' as webhook_token
+    from channel_accounts
+    where slug = ${accountSlug}
+      and channel = 'whatsapp'
+    limit 1
+  `) as Array<{
+    id: string;
+    slug: string;
+    name: string;
+    channel: "whatsapp";
+    active: boolean;
+    provider: string | null;
+    webhook_token: string | null;
+  }>;
+
+  return rows[0] ?? null;
 }
 
 function sanitizeWebhook(row: {
@@ -3060,12 +3129,17 @@ export async function getConversationReplyTarget(conversationId: string) {
     select
       c.id::text as conversation_id,
       c.contact_id::text,
-      ct.phone
+      ct.phone,
+      ca.slug as account_slug,
+      ca.settings->>'provider' as account_provider,
+      ca.settings->>'bridge_url' as bridge_url,
+      ca.settings->>'bridge_token' as bridge_token
     from conversations c
     join contacts ct on ct.id = c.contact_id
+    left join channel_accounts ca on ca.id = c.account_id
     where c.id = ${conversationId}
     limit 1
-  `) as Array<{ conversation_id: string; contact_id: string; phone: string }>;
+  `) as ConversationReplyTarget[];
 
   return rows[0] ?? null;
 }

@@ -3,6 +3,7 @@ import { put } from "@vercel/blob";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { getConversationReplyTarget, listConversationMessages, recordManualOutboundMessage, saveMessageMedia } from "@/lib/crm";
+import { getWhatsAppQrSentMessageId, isWhatsAppQrBridge, sendWhatsAppQrText } from "@/lib/whatsapp-qr";
 import {
   sendWhatsAppAudio,
   sendWhatsAppDocument,
@@ -109,7 +110,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const usesQrBridge = isWhatsAppQrBridge({
+      provider: target.account_provider,
+      bridgeUrl: target.bridge_url,
+      bridgeToken: target.bridge_token
+    });
+
     if ("media" in parsed.data) {
+      if (usesQrBridge) {
+        return NextResponse.json({ error: "La cuenta QR por ahora solo soporta mensajes de texto desde FEBO." }, { status: 400 });
+      }
+
       const mediaKind = getMediaKind({
         name: parsed.data.media.filename,
         type: parsed.data.media.mimeType
@@ -149,6 +160,10 @@ export async function POST(request: NextRequest) {
         dataBase64: null
       });
     } else if ("file" in parsed.data) {
+      if (usesQrBridge) {
+        return NextResponse.json({ error: "La cuenta QR por ahora solo soporta mensajes de texto desde FEBO." }, { status: 400 });
+      }
+
       const file = parsed.data.file;
       const caption = parsed.data.caption;
       const whatsappFile = await prepareAttachmentForWhatsApp(file);
@@ -198,6 +213,10 @@ export async function POST(request: NextRequest) {
         dataBase64: buffer.toString("base64")
       });
     } else if ("kind" in parsed.data && parsed.data.kind === "selector-flow") {
+      if (usesQrBridge) {
+        return NextResponse.json({ error: "El selector Flow solo esta disponible en WhatsApp Cloud API." }, { status: 400 });
+      }
+
       const sent = await sendWhatsAppSelectorFlow({
         to: target.phone,
         conversationId: parsed.data.conversationId
@@ -216,13 +235,21 @@ export async function POST(request: NextRequest) {
         preserveAiEnabled: true
       });
     } else if ("text" in parsed.data) {
-      const sent = await sendWhatsAppText(target.phone, parsed.data.text);
+      const sent = usesQrBridge
+        ? await sendWhatsAppQrText({
+            bridgeUrl: target.bridge_url ?? "",
+            bridgeToken: target.bridge_token ?? "",
+            to: target.phone,
+            body: parsed.data.text,
+            conversationId: parsed.data.conversationId
+          })
+        : await sendWhatsAppText(target.phone, parsed.data.text);
       await recordManualOutboundMessage({
         conversationId: parsed.data.conversationId,
         contactId: target.contact_id,
         userId: user.id,
         body: parsed.data.text,
-        waMessageId: getSentMessageId(sent)
+        waMessageId: usesQrBridge ? getWhatsAppQrSentMessageId(sent) : getSentMessageId(sent)
       });
     }
   } catch (error) {

@@ -109,8 +109,14 @@ type ChannelAccountForm = {
   channel: "whatsapp" | "instagram" | "facebook" | "tiktok";
   externalAccountId: string;
   phoneNumber: string;
+  provider: "cloud_api" | "qr_bridge";
+  bridgeUrl: string;
   accessToken: string;
+  bridgeToken: string;
+  webhookToken: string;
   keepAccessToken: boolean;
+  keepBridgeToken: boolean;
+  keepWebhookToken: boolean;
   autoReplyEnabled: boolean;
   active: boolean;
 };
@@ -1148,8 +1154,14 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
     channel: "instagram",
     externalAccountId: "",
     phoneNumber: "",
+    provider: "cloud_api",
+    bridgeUrl: "",
     accessToken: "",
+    bridgeToken: "",
+    webhookToken: "",
     keepAccessToken: false,
+    keepBridgeToken: false,
+    keepWebhookToken: false,
     autoReplyEnabled: false,
     active: false
   });
@@ -1280,8 +1292,14 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
       channel: account.channel,
       externalAccountId: account.external_account_id ?? "",
       phoneNumber: account.phone_number ?? "",
+      provider: account.settings.provider === "qr_bridge" ? "qr_bridge" : "cloud_api",
+      bridgeUrl: typeof account.settings.bridge_url === "string" ? account.settings.bridge_url : "",
       accessToken: "",
+      bridgeToken: "",
+      webhookToken: "",
       keepAccessToken: account.has_access_token,
+      keepBridgeToken: account.has_bridge_token,
+      keepWebhookToken: account.has_webhook_token,
       autoReplyEnabled: account.auto_reply_enabled,
       active: account.active
     });
@@ -1295,8 +1313,14 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
       channel,
       externalAccountId: "",
       phoneNumber: "",
+      provider: "cloud_api",
+      bridgeUrl: "",
       accessToken: "",
+      bridgeToken: "",
+      webhookToken: "",
       keepAccessToken: false,
+      keepBridgeToken: false,
+      keepWebhookToken: false,
       autoReplyEnabled: false,
       active: false
     });
@@ -1317,8 +1341,14 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
         channel: channelForm.channel,
         externalAccountId: channelForm.externalAccountId || null,
         phoneNumber: channelForm.phoneNumber || null,
+        provider: channelForm.provider,
+        bridgeUrl: channelForm.provider === "qr_bridge" ? channelForm.bridgeUrl || null : null,
         accessToken: channelForm.accessToken || null,
+        bridgeToken: channelForm.provider === "qr_bridge" ? channelForm.bridgeToken || null : null,
+        webhookToken: channelForm.provider === "qr_bridge" ? channelForm.webhookToken || null : null,
         keepAccessToken: channelForm.keepAccessToken && !channelForm.accessToken,
+        keepBridgeToken: channelForm.keepBridgeToken && !channelForm.bridgeToken,
+        keepWebhookToken: channelForm.keepWebhookToken && !channelForm.webhookToken,
         autoReplyEnabled: channelForm.autoReplyEnabled,
         active: channelForm.active
       })
@@ -1332,7 +1362,15 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
     }
 
     setChannelAccounts(payload?.accounts ?? []);
-    setChannelForm((current) => ({ ...current, accessToken: "", keepAccessToken: false }));
+    setChannelForm((current) => ({
+      ...current,
+      accessToken: "",
+      bridgeToken: "",
+      webhookToken: "",
+      keepAccessToken: false,
+      keepBridgeToken: false,
+      keepWebhookToken: false
+    }));
     setMessage("Cuenta conectada guardada.");
     return true;
   }
@@ -1745,6 +1783,21 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
                         <option value="tiktok">TikTok</option>
                       </select>
                     </label>
+                    {channelForm.channel === "whatsapp" ? (
+                      <label className="field">
+                        <FieldHelpLabel
+                          help="Cloud API usa Meta oficial. QR bridge usa un servicio externo persistente conectado por codigo QR."
+                          label="Proveedor WhatsApp"
+                        />
+                        <select
+                          onChange={(event) => setChannelForm((current) => ({ ...current, provider: event.target.value as ChannelAccountForm["provider"] }))}
+                          value={channelForm.provider}
+                        >
+                          <option value="cloud_api">Cloud API oficial</option>
+                          <option value="qr_bridge">QR bridge</option>
+                        </select>
+                      </label>
+                    ) : null}
                     <label className="field">
                       <FieldHelpLabel
                         help="ID externo de Meta/TikTok para empatar webhooks entrantes con esta cuenta. En Instagram suele ser el Instagram Business Account ID."
@@ -1766,6 +1819,45 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
                         value={channelForm.phoneNumber}
                       />
                     </label>
+                    {channelForm.channel === "whatsapp" && channelForm.provider === "qr_bridge" ? (
+                      <>
+                        <label className="field">
+                          <FieldHelpLabel
+                            help="URL publica del servicio QR bridge persistente. Ejemplo: https://whatsapp-qr.febecos.com"
+                            label="URL QR bridge"
+                          />
+                          <input
+                            placeholder="https://whatsapp-qr.febecos.com"
+                            onChange={(event) => setChannelForm((current) => ({ ...current, bridgeUrl: event.target.value }))}
+                            value={channelForm.bridgeUrl}
+                          />
+                        </label>
+                        <label className="field">
+                          <FieldHelpLabel
+                            help="Token que FEBO usa para pedirle al bridge que envie mensajes. Si editas y queda vacio, conserva el guardado."
+                            label="Token bridge salida"
+                          />
+                          <input
+                            placeholder={channelForm.keepBridgeToken ? "Token guardado; dejar vacio para conservar" : "Token del bridge"}
+                            onChange={(event) => setChannelForm((current) => ({ ...current, bridgeToken: event.target.value }))}
+                            type="password"
+                            value={channelForm.bridgeToken}
+                          />
+                        </label>
+                        <label className="field">
+                          <FieldHelpLabel
+                            help="Token que el bridge debe mandar a FEBO en /api/whatsapp-qr/webhook para registrar mensajes entrantes."
+                            label="Token webhook entrada"
+                          />
+                          <input
+                            placeholder={channelForm.keepWebhookToken ? "Token guardado; dejar vacio para conservar" : "Token webhook"}
+                            onChange={(event) => setChannelForm((current) => ({ ...current, webhookToken: event.target.value }))}
+                            type="password"
+                            value={channelForm.webhookToken}
+                          />
+                        </label>
+                      </>
+                    ) : null}
                     <label className="field">
                       <FieldHelpLabel
                         help="Token de acceso del canal. FEBO lo guarda, pero no lo muestra. Si editas y lo dejas vacio, conserva el token anterior."
@@ -1823,6 +1915,8 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
                             <span>
                               {channelMeta.label} · {account.active ? "Activa" : "Inactiva"} · {account.auto_reply_enabled ? "IA activa" : "IA apagada"}
                               {account.has_access_token ? " · token guardado" : ""}
+                              {account.settings.provider === "qr_bridge" ? " · QR bridge" : ""}
+                              {account.has_bridge_token ? " · bridge token" : ""}
                             </span>
                             <small>{account.external_account_id || account.phone_number || account.slug}</small>
                           </div>

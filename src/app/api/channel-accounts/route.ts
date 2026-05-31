@@ -13,8 +13,14 @@ const upsertSchema = z.object({
   channel: z.enum(channels),
   externalAccountId: z.string().trim().max(120).optional().nullable(),
   phoneNumber: z.string().trim().max(40).optional().nullable(),
+  provider: z.enum(["cloud_api", "qr_bridge"]).optional().nullable(),
+  bridgeUrl: z.string().trim().url().optional().nullable(),
   accessToken: z.string().trim().max(600).optional().nullable(),
+  bridgeToken: z.string().trim().max(600).optional().nullable(),
+  webhookToken: z.string().trim().max(600).optional().nullable(),
   keepAccessToken: z.boolean().optional(),
+  keepBridgeToken: z.boolean().optional(),
+  keepWebhookToken: z.boolean().optional(),
   autoReplyEnabled: z.boolean(),
   active: z.boolean()
 });
@@ -63,8 +69,14 @@ export async function POST(request: NextRequest) {
       channel: parsed.data.channel,
       externalAccountId: parsed.data.externalAccountId,
       phoneNumber: parsed.data.phoneNumber,
+      provider: parsed.data.provider,
+      bridgeUrl: parsed.data.bridgeUrl,
       accessToken: parsed.data.accessToken,
+      bridgeToken: parsed.data.bridgeToken,
+      webhookToken: parsed.data.webhookToken,
       keepAccessToken: parsed.data.keepAccessToken,
+      keepBridgeToken: parsed.data.keepBridgeToken,
+      keepWebhookToken: parsed.data.keepWebhookToken,
       autoReplyEnabled: parsed.data.autoReplyEnabled,
       active: parsed.data.active
     });

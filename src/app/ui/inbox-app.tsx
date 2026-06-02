@@ -333,6 +333,7 @@ function ToolWorkspace({
   const [activeTool, setActiveTool] = useState<ToolKey>("conversations");
   const [workspaceConversations, setWorkspaceConversations] = useState(conversations);
   const [labelDefinitions, setLabelDefinitions] = useState<LabelDefinition[]>([]);
+  const [conversationLabelSlugs, setConversationLabelSlugs] = useState<string[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [favoritesLoaded, setFavoritesLoaded] = useState(false);
   const [conversationNavSignal, setConversationNavSignal] = useState(0);
@@ -422,6 +423,14 @@ function ToolWorkspace({
 
     if (response.ok && Array.isArray(payload?.labels)) {
       setLabelDefinitions(payload.labels);
+    }
+
+    if (response.ok && Array.isArray(payload?.conversationLabels)) {
+      setConversationLabelSlugs(
+        payload.conversationLabels
+          .map((label: { slug?: unknown }) => (typeof label.slug === "string" ? label.slug : ""))
+          .filter(Boolean)
+      );
     }
   }
 
@@ -573,7 +582,15 @@ function ToolWorkspace({
         {activeTool === "metrics" && isAdmin ? <MetricsPanel stats={stats} users={users} /> : null}
         {activeTool === "templates" ? <TemplatesPanel currentUser={currentUser} /> : null}
         {activeTool === "labels" ? (
-          <LabelsPanel currentUser={currentUser} labels={labelDefinitions} onLabelsChange={setLabelDefinitions} />
+          <LabelsPanel
+            conversationLabelSlugs={[
+              ...conversationLabelSlugs,
+              ...workspaceConversations.map((conversation) => conversation.consultype).filter(Boolean)
+            ]}
+            currentUser={currentUser}
+            labels={labelDefinitions}
+            onLabelsChange={setLabelDefinitions}
+          />
         ) : null}
         {activeTool === "contacts" ? (
           <ContactsPanel
@@ -2136,18 +2153,69 @@ function upsertLocalSetting(settings: AppSetting[], key: string, value: unknown)
 }
 
 function LabelsPanel({
+  conversationLabelSlugs,
   currentUser,
   labels,
   onLabelsChange
 }: {
+  conversationLabelSlugs: string[];
   currentUser: AppUser;
   labels: LabelDefinition[];
   onLabelsChange: (labels: LabelDefinition[]) => void;
 }) {
-  const sortedLabels = useMemo(
-    () => [...labels].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)),
-    [labels]
-  );
+  const sortedLabels = useMemo(() => {
+    const bySlug = new Map<string, LabelDefinition>();
+
+    for (const option of CONSULTYPE_OPTIONS) {
+      bySlug.set(option.value, {
+        slug: option.value,
+        name: option.label,
+        color: getFallbackLabelColor(option.value),
+        instructions: "",
+        active: true,
+        sort_order: 100,
+        created_at: "",
+        updated_at: ""
+      });
+    }
+
+    for (const slug of TAG_FILTERS) {
+      if (!bySlug.has(slug)) {
+        bySlug.set(slug, {
+          slug,
+          name: humanizeTemplateName(slug),
+          color: getFallbackLabelColor(slug),
+          instructions: "",
+          active: true,
+          sort_order: 150,
+          created_at: "",
+          updated_at: ""
+        });
+      }
+    }
+
+    for (const slug of conversationLabelSlugs) {
+      if (slug && !bySlug.has(slug)) {
+        bySlug.set(slug, {
+          slug,
+          name: humanizeTemplateName(slug),
+          color: getFallbackLabelColor(slug),
+          instructions: "",
+          active: true,
+          sort_order: 180,
+          created_at: "",
+          updated_at: ""
+        });
+      }
+    }
+
+    for (const label of labels) {
+      bySlug.set(label.slug, label);
+    }
+
+    return Array.from(bySlug.values()).sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+  }, [conversationLabelSlugs, labels]);
+  const [labelSearch, setLabelSearch] = useState("");
   const [form, setForm] = useState({
     slug: "",
     name: "",
@@ -2159,7 +2227,15 @@ function LabelsPanel({
   const [selectedSlug, setSelectedSlug] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const selectedLabel = sortedLabels.find((label) => label.slug === selectedSlug) ?? sortedLabels[0];
+  const filteredSortedLabels = useMemo(() => {
+    const query = normalizeTemplateSearchKey(labelSearch);
+    if (!query) {
+      return sortedLabels;
+    }
+
+    return sortedLabels.filter((label) => normalizeTemplateSearchKey(`${label.name} ${label.slug}`).includes(query));
+  }, [labelSearch, sortedLabels]);
+  const selectedLabel = sortedLabels.find((label) => label.slug === selectedSlug) ?? filteredSortedLabels[0] ?? sortedLabels[0];
   const activeCount = labels.filter((label) => label.active).length;
   const isAdmin = currentUser.role === "admin";
 
@@ -2302,9 +2378,7 @@ function LabelsPanel({
         <div>
           <h2>Etiquetas autom&aacute;ticas de IA</h2>
           <p>Estas etiquetas ayudan a FEBO a clasificar conversaciones y orientar automatizaciones.</p>
-          <small>
-            {activeCount} / {labels.length} activas. La descripci&oacute;n orienta a la IA y conviene mantenerla breve.
-          </small>
+          <small>{activeCount} configuradas activas. {sortedLabels.length} visibles entre base, conversaciones y personalizadas.</small>
         </div>
         <div className="label-panel-actions">
           <button className="secondary compact" disabled={saving} onClick={restoreBaseLabels} type="button">
@@ -2319,10 +2393,22 @@ function LabelsPanel({
 
       <div className="label-config-workspace">
         <aside className="label-config-sidebar">
-          <span className="label-sidebar-caption">Seleccion&aacute; una etiqueta para editarla.</span>
+          <label className="search-field label-search-field">
+            <Search size={15} />
+            <input
+              placeholder="Buscar etiqueta"
+              value={labelSearch}
+              onChange={(event) => setLabelSearch(event.target.value)}
+            />
+          </label>
+          <span className="label-sidebar-caption">
+            {filteredSortedLabels.length} etiquetas
+          </span>
           <div className="label-config-stack">
-            {sortedLabels.map((label) => {
+            {filteredSortedLabels.map((label) => {
+              const configured = labels.some((item) => item.slug === label.slug);
               const isBase = TAG_FILTERS.includes(label.slug) || CONSULTYPE_OPTIONS.some((option) => option.value === label.slug);
+              const sourceLabel = configured ? (isBase ? "Base" : "Personalizada") : "En conversaciones";
               return (
                 <button
                   className={`label-config-item ${selectedLabel?.slug === label.slug ? "selected" : ""}`}
@@ -2336,13 +2422,13 @@ function LabelsPanel({
                   <span>
                     <strong>{label.name}</strong>
                     <small>
-                      {isBase ? "Base" : "Personalizada"} - {label.active ? "Activa" : "Inactiva"}
+                      {sourceLabel} - {label.active ? "Activa" : "Inactiva"}
                     </small>
                   </span>
-                  <span className="label-edit-hint">Editar</span>
                 </button>
               );
             })}
+            {!filteredSortedLabels.length ? <div className="empty-state">No hay etiquetas con ese nombre.</div> : null}
           </div>
         </aside>
 
@@ -2400,26 +2486,6 @@ function LabelsPanel({
               <input checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} type="checkbox" />
               Etiqueta activa
             </label>
-          </div>
-
-          <div className="label-preview-zone">
-            <span>Previsualizaci&oacute;n</span>
-            <div className="label-preview-chat">
-              <span>Cliente ficticio: &ldquo;Hola, quisiera saber si tienen stock y precio.&rdquo;</span>
-              <div className="label-preview-ai">
-                <small>La IA podr&iacute;a clasificar esta conversaci&oacute;n as&iacute;</small>
-                <span className="tag-pill preview" style={{ "--tag-color": form.color } as CSSProperties}>
-                  {form.name || "Etiqueta"}
-                </span>
-              </div>
-            </div>
-            <div className="label-preview-strip">
-              {sortedLabels.slice(0, 10).map((label) => (
-                <span className="tag-pill preview" key={label.slug} style={{ "--tag-color": label.color } as CSSProperties}>
-                  {label.name}
-                </span>
-              ))}
-            </div>
           </div>
 
           <div className="template-actions label-save-actions">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
-import { listLabelDefinitions, restoreBaseLabelDefinitions, upsertLabelDefinition } from "@/lib/crm";
+import { listConversationConsultypeLabels, listLabelDefinitions, restoreBaseLabelDefinitions, upsertLabelDefinition } from "@/lib/crm";
 
 const labelSchema = z.object({
   slug: z.string().trim().max(60).optional(),
@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({
-    labels: await listLabelDefinitions(user.role === "admin" && request.nextUrl.searchParams.get("all") === "1")
+    labels: await listLabelDefinitions(user.role === "admin" && request.nextUrl.searchParams.get("all") === "1"),
+    conversationLabels: await listConversationConsultypeLabels()
   });
 }
 

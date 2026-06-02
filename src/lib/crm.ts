@@ -1409,6 +1409,21 @@ export async function listLabelDefinitions(includeInactive = false) {
   `) as LabelDefinition[];
 }
 
+export async function listConversationConsultypeLabels() {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  return (await sql`
+    select distinct consultype as slug
+    from contacts
+    where consultype is not null
+      and trim(consultype) <> ''
+    order by consultype
+  `) as Array<{ slug: string }>;
+}
+
 export async function upsertLabelDefinition(input: {
   slug?: string | null;
   name: string;

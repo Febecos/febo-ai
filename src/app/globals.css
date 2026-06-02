@@ -1489,6 +1489,14 @@ button:disabled {
   padding: 3px 8px;
 }
 
+.conversation-list-sticky {
+  background: inherit;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 15;
+}
+
 .filters {
   border-bottom: 1px solid var(--line);
   display: grid;
@@ -1497,10 +1505,9 @@ button:disabled {
 }
 
 .list-tabs {
-  border-bottom: 1px solid var(--line);
   display: grid;
-  gap: 7px;
-  grid-template-columns: auto auto auto minmax(0, 1fr);
+  gap: 8px;
+  grid-template-columns: minmax(96px, 1fr) auto 38px 38px;
   padding: 9px 10px 7px;
 }
 
@@ -1516,6 +1523,49 @@ button:disabled {
   min-height: 31px;
   padding: 0 11px;
   position: relative;
+}
+
+.conversation-scope-control {
+  align-items: center;
+  background: #2f343a;
+  border: 1px solid #506070;
+  border-radius: 4px;
+  color: #ffffff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 31px;
+  min-width: 0;
+  padding: 0 8px 0 0;
+}
+
+.conversation-scope-control select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  min-width: 0;
+  outline: 0;
+  padding: 0 8px;
+  width: 100%;
+}
+
+.conversation-scope-control svg {
+  pointer-events: none;
+}
+
+.list-tabs button.icon-only {
+  aspect-ratio: 1;
+  gap: 0;
+  min-width: 38px;
+  padding: 0;
+}
+
+.list-tabs .tag-visibility-toggle.active {
+  background: linear-gradient(180deg, #d9ff8a 0%, #aee449 100%);
+  border-color: rgba(240, 255, 186, 0.9);
+  color: #15310c;
 }
 
 .list-tabs button.active {
@@ -1548,7 +1598,7 @@ button:disabled {
   padding: 12px 10px;
   position: absolute;
   right: 10px;
-  top: 108px;
+  top: 100%;
   z-index: 20;
 }
 
@@ -5809,6 +5859,12 @@ select {
   background: linear-gradient(180deg, #f7b13f 0%, #ef9518 100%);
   border-color: rgba(255, 215, 139, 0.92);
   color: #172033;
+}
+
+.list-tabs .tag-visibility-toggle.active {
+  background: linear-gradient(180deg, #d9ff8a 0%, #aee449 100%);
+  border-color: rgba(240, 255, 186, 0.9);
+  color: #15310c;
 }
 
 .conversation-row,

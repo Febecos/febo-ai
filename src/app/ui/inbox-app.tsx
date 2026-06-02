@@ -4154,6 +4154,7 @@ function InboxList({
   const [eventMenuOpen, setEventMenuOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [conversationTagsVisible, setConversationTagsVisible] = useState(true);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedClassifications, setSelectedClassifications] = useState<string[]>([]);
   const [transferUserId, setTransferUserId] = useState("");
@@ -4286,7 +4287,7 @@ function InboxList({
     return Array.from(bySlug.values()).sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
   }, [labelDefinitions]);
   const activeFiltersCount =
-    selectedTags.length + selectedClassifications.length + (filters.assignedTo !== "all" ? 1 : 0) + (filters.unreadOnly ? 1 : 0);
+    selectedTags.length + selectedClassifications.length + (filters.assignedTo !== "all" && filters.assignedTo !== "mine" ? 1 : 0);
   const quickReplyQuery = getQuickReplyQuery(replyText);
   const filteredLabels = useMemo(() => {
     const query = normalizeTemplateSearchKey(tagSearch);
@@ -4296,6 +4297,7 @@ function InboxList({
     });
   }, [availableLabels, tagSearch]);
   const labelBySlug = useMemo(() => new Map(availableLabels.map((label) => [label.slug, label])), [availableLabels]);
+  const unreadConversationCount = useMemo(() => items.filter(isConversationUnread).length, [items]);
   const matchingQuickReplies = useMemo(
     () => quickReplyQuery === null ? [] : quickReplies
       .filter((reply) => {
@@ -5794,37 +5796,52 @@ function InboxList({
         </div>
       ) : null}
       <div className="conversation-list">
-        <div className="panel-title">
-          Conversaciones
-        </div>
-        <div className="list-tabs">
-          <button className={filters.status === "all" && !filters.unreadOnly ? "active" : ""} onClick={() => updateFilters({ status: "all", unreadOnly: false })} type="button">
-            Todos
-          </button>
-          <button className={filters.status === "handoff" && !filters.unreadOnly ? "active" : ""} onClick={() => updateFilters({ status: "handoff", unreadOnly: false })} type="button">
-            Escalados
-          </button>
-          <button className={filters.unreadOnly ? "active" : ""} onClick={() => updateFilters({ status: "all", unreadOnly: true })} type="button">
-            No leidos
-          </button>
-          <button className={`filters-toggle ${filtersOpen ? "open" : ""}`} onClick={() => setFiltersOpen(!filtersOpen)} type="button">
-            <Filter size={16} />
-            Filtros
-            {activeFiltersCount ? <span>{activeFiltersCount}</span> : null}
-          </button>
-        </div>
-        <div className="list-quick-actions">
-          <label className="search-field">
-            <Search size={16} />
-            <input
-              placeholder="Buscar"
-              value={filters.query}
-              onChange={(event) => updateFilters({ query: event.target.value })}
-            />
-          </label>
-        </div>
-        {filtersOpen ? (
-          <div className="filters-popover">
+        <div className="conversation-list-sticky">
+          <div className="panel-title">
+            Conversaciones
+          </div>
+          <div className="list-tabs">
+            <label className="conversation-scope-control">
+              <select
+                aria-label="Alcance de conversaciones"
+                value={filters.assignedTo === "mine" ? "mine" : "all"}
+                onChange={(event) => updateFilters({ assignedTo: event.target.value === "mine" ? "mine" : "all" })}
+              >
+                <option value="all">Todos</option>
+                <option value="mine">Mis chats</option>
+              </select>
+              <ChevronDown size={15} />
+            </label>
+            <button className={filters.unreadOnly ? "active" : ""} onClick={() => updateFilters({ status: "all", unreadOnly: !filters.unreadOnly })} type="button">
+              <BellRing size={16} />
+              No leidos
+              {unreadConversationCount ? <span>{unreadConversationCount}</span> : null}
+            </button>
+            <button className={`filters-toggle icon-only ${filtersOpen ? "open" : ""}`} onClick={() => setFiltersOpen(!filtersOpen)} title="Filtros" type="button">
+              <Filter size={17} />
+              {activeFiltersCount ? <span>{activeFiltersCount}</span> : null}
+            </button>
+            <button
+              className={`tag-visibility-toggle icon-only ${conversationTagsVisible ? "active" : ""}`}
+              onClick={() => setConversationTagsVisible((visible) => !visible)}
+              title={conversationTagsVisible ? "Ocultar etiquetas" : "Mostrar etiquetas"}
+              type="button"
+            >
+              <Tags size={17} />
+            </button>
+          </div>
+          <div className="list-quick-actions">
+            <label className="search-field">
+              <Search size={16} />
+              <input
+                placeholder="Buscar"
+                value={filters.query}
+                onChange={(event) => updateFilters({ query: event.target.value })}
+              />
+            </label>
+          </div>
+          {filtersOpen ? (
+            <div className="filters-popover">
             <div className="filters-head">
               <strong>Filtros</strong>
               <button onClick={resetFilters} type="button">Limpiar</button>
@@ -5914,7 +5931,8 @@ function InboxList({
               ))}
             </div>
           </div>
-        ) : null}
+          ) : null}
+        </div>
         {items.length ? (
           items.map((conversation) => {
             const channelMeta = getConversationChannelMeta(conversation);
@@ -5935,7 +5953,9 @@ function InboxList({
                 </span>
                 <strong>{conversation.display_name || conversation.phone}</strong>
                 <small>Sentimiento: {conversation.sentiment || "neutro"}</small>
-                <span className={`tag ${conversation.consultype}`}>{labelBySlug.get(conversation.consultype)?.name ?? getConsultypeLabel(conversation.consultype)}</span>
+                {conversationTagsVisible ? (
+                  <span className={`tag ${conversation.consultype}`}>{labelBySlug.get(conversation.consultype)?.name ?? getConsultypeLabel(conversation.consultype)}</span>
+                ) : null}
                 {conversation.pending_followups ? (
                   <span className={`followup-pill ${conversation.overdue_followups ? "due" : ""}`}>
                     <Clock3 size={12} />

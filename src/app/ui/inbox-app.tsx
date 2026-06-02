@@ -3573,7 +3573,7 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
   }
 
   return (
-    <section className="admin-panel">
+    <section className="admin-panel templates-panel">
       <div className="panel-title compact-panel-title">
         <MessageSquareText size={16} />
         Plantillas de WhatsApp

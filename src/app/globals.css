@@ -4432,6 +4432,107 @@ select option:hover {
   justify-self: start;
 }
 
+.templates-panel {
+  align-content: start;
+}
+
+.templates-panel .compact-panel-title {
+  min-height: 34px;
+  padding: 6px 12px;
+}
+
+.templates-panel .compact-tabs {
+  border-bottom: 1px solid rgba(142, 213, 245, 0.18);
+  gap: 5px;
+  padding: 7px 10px;
+}
+
+.templates-panel .compact-tabs button {
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 650;
+  min-height: 28px;
+  padding: 0 9px;
+}
+
+.templates-panel .template-form {
+  gap: 8px;
+  padding: 10px;
+}
+
+.templates-panel .form-grid {
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+}
+
+.templates-panel .form-grid .field:has(select) {
+  grid-column: span 2;
+}
+
+.templates-panel .form-grid .field:has(input[type="number"]) {
+  grid-column: span 1;
+}
+
+.templates-panel .field {
+  gap: 4px;
+  font-size: 12px;
+}
+
+.templates-panel .field input,
+.templates-panel .field select,
+.templates-panel .field textarea {
+  border-radius: 5px;
+  font-size: 12px;
+  min-height: 32px;
+  padding: 7px 9px;
+}
+
+.templates-panel .field textarea {
+  min-height: 64px;
+}
+
+.templates-panel .check-field {
+  font-size: 12px;
+  min-height: 28px;
+}
+
+.templates-panel .template-actions {
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.templates-panel .template-actions button,
+.templates-panel .primary,
+.templates-panel .secondary,
+.templates-panel .danger {
+  border-radius: 6px;
+  font-size: 12px;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.templates-panel .template-list {
+  gap: 7px;
+  padding: 10px;
+}
+
+.templates-panel .template-row {
+  border-radius: 7px;
+  gap: 3px;
+  min-height: 0;
+  padding: 8px 10px;
+}
+
+.templates-panel .template-row strong,
+.templates-panel .scheduled-template-body strong {
+  font-size: 13px;
+}
+
+.templates-panel .template-row span,
+.templates-panel .template-row small {
+  font-size: 11px;
+}
+
 .compact-panel-title {
   gap: 7px;
   min-height: 40px;

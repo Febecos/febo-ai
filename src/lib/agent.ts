@@ -236,7 +236,7 @@ export async function runFebecosAgent(input: {
       "Regla de brevedad WhatsApp: por defecto responde en 1 a 3 frases cortas. Evita parrafos largos, listas extensas y explicaciones completas si el cliente no las pidio.",
       "Solo podes extenderte cuando estas dando una cotizacion nueva, explicando una falla tecnica importante o dejando instrucciones concretas para cerrar la compra. Aun asi, usa bloques cortos.",
       "Si el cliente responde corto despues de una cotizacion (por ejemplo 'si', 'dale', 'ok', '6 cuotas', 'contado', 'me interesa', 'pasame datos'), asumilo como continuidad de la cotizacion previa. No reinicies la venta ni vuelvas a pedir datos tecnicos.",
-      "Si en history ya dijiste que lo pasabas/derivabas a un asesor, no vuelvas a preguntar si quiere asesor. Confirma que ya quedo derivado o que le responderan en horario de atencion, salvo que el cliente pida seguir con la IA.",
+      "Si en history ya dijiste que lo pasabas/derivabas a un asesor, no vuelvas a preguntar si quiere asesor. Confirma que ya quedo derivado y aclara que la atencion de asesores es de 9 a 19 hs, en horario comercial, salvo que el cliente pida seguir con la IA.",
       "Usa etiquetasDisponibles para entender que significa cada etiqueta operativa y como deberia clasificarse o priorizarse el contacto.",
       "El campo consultype debe ser el slug exacto de una etiqueta activa de etiquetasDisponibles o uno de los tipos base permitidos. Si una etiqueta indica transferir/asignar a un vendedor, usa ese slug y deja escalar=true.",
       "No repreguntes datos que el cliente ya dio en el historial. Si faltan datos, pregunta solo el dato faltante mas importante.",
@@ -430,7 +430,7 @@ function buildSelectorCheckoutResult(message: string): AgentResult | null {
     return {
       respuesta: [
         `Perfecto, recibimos tu seleccion del selector de Febecos. ${summaryParts.join(", ")}.`,
-        "Como el caso requiere solucion a medida, ya lo derivamos a un asesor de Febecos para que lo revise bien. Cuando este disponible te va a responder por este mismo WhatsApp."
+        "Como el caso requiere solucion a medida, ya lo derivamos a un asesor de Febecos para que lo revise bien. Tene en cuenta que la atencion de asesores es de 9 a 19 hs, en horario comercial; te van a contactar en cuanto haya uno disponible."
       ].join("\n\n"),
       sentimiento: "positivo",
       consultype: "caliente",

@@ -159,7 +159,7 @@ function buildSelectorCheckoutConfirmation(input: z.infer<typeof checkoutSchema>
     "Perfecto, recibimos tu seleccion del selector de Febecos.",
     `Equipo: ${equipment}`,
     `Precio total: ${formatARS(input.precio_total)}`,
-    "Te paso con un asesor de Febecos para confirmar disponibilidad, forma de pago, envio y factura. Te escribe en breve."
+    "Te paso con un asesor de Febecos para confirmar disponibilidad, forma de pago, envio y factura. Tene en cuenta que la atencion de asesores es de 9 a 19 hs, en horario comercial; te van a contactar en cuanto haya uno disponible."
   ].join("\n");
 }
 

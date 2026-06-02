@@ -322,6 +322,31 @@ create index if not exists scheduled_template_messages_status_due_idx
 create index if not exists scheduled_template_messages_conversation_idx
   on scheduled_template_messages(conversation_id, scheduled_at desc);
 
+alter table scheduled_template_messages
+  add column if not exists automation_rule_id uuid,
+  add column if not exists automation_source text;
+
+create index if not exists scheduled_template_messages_automation_idx
+  on scheduled_template_messages(automation_rule_id, conversation_id, status)
+  where automation_rule_id is not null;
+
+create table if not exists template_automation_rules (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  consultype text not null,
+  template_id uuid not null references message_templates(id) on delete restrict,
+  delay_amount integer not null default 1 check (delay_amount >= 0),
+  delay_unit text not null default 'days' check (delay_unit in ('minutes', 'hours', 'days')),
+  body_parameters jsonb not null default '[]'::jsonb,
+  active boolean not null default true,
+  created_by uuid references app_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists template_automation_rules_consultype_idx
+  on template_automation_rules(consultype, active);
+
 create table if not exists label_definitions (
   slug text primary key,
   name text not null,
@@ -461,6 +486,11 @@ for each row execute function set_updated_at();
 drop trigger if exists set_scheduled_template_messages_updated_at on scheduled_template_messages;
 create trigger set_scheduled_template_messages_updated_at
 before update on scheduled_template_messages
+for each row execute function set_updated_at();
+
+drop trigger if exists set_template_automation_rules_updated_at on template_automation_rules;
+create trigger set_template_automation_rules_updated_at
+before update on template_automation_rules
 for each row execute function set_updated_at();
 
 drop trigger if exists set_label_definitions_updated_at on label_definitions;

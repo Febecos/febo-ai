@@ -57,6 +57,7 @@ import type {
   DashboardStats,
   LabelDefinition,
   MessageTemplate,
+  TemplateAutomationRule,
   QuickReply,
   ScheduledTemplateMessage,
   UserAdminSummary
@@ -171,6 +172,20 @@ const TAG_FILTERS = [
   "no-leido",
   "pasar-presupuesto",
   "pocero-instalador",
+  "presupuesto-enviado"
+];
+const TEMPLATE_AUTOMATION_CONSULTYPES = [
+  "caliente",
+  "comparador",
+  "sin-perforacion",
+  "proyecto-futuro",
+  "seguimiento",
+  "informacion",
+  "problema",
+  "cotizado",
+  "esperando-respuesta",
+  "reserva-7-dias",
+  "pasar-presupuesto",
   "presupuesto-enviado"
 ];
 const DIRECT_ATTACHMENT_UPLOAD_LIMIT_BYTES = 3.8 * 1024 * 1024;
@@ -3181,13 +3196,24 @@ function getScheduledTemplateStatusLabel(status: ScheduledTemplateMessage["statu
 function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [scheduledTemplates, setScheduledTemplates] = useState<ScheduledTemplateMessage[]>([]);
-  const [activeTab, setActiveTab] = useState<"list" | "edit" | "scheduled">("scheduled");
+  const [automationRules, setAutomationRules] = useState<TemplateAutomationRule[]>([]);
+  const [activeTab, setActiveTab] = useState<"list" | "edit" | "scheduled" | "automation">("scheduled");
   const [form, setForm] = useState({
     label: "",
     name: "",
     languageCode: "es_AR",
     category: "utility",
     body: "",
+    active: true
+  });
+  const [automationForm, setAutomationForm] = useState({
+    id: "",
+    name: "",
+    consultype: "comparador",
+    templateId: "",
+    delayAmount: 1,
+    delayUnit: "days" as "minutes" | "hours" | "days",
+    bodyParameters: "",
     active: true
   });
   const [scheduleForm, setScheduleForm] = useState({
@@ -3201,12 +3227,14 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
   const [syncingTemplates, setSyncingTemplates] = useState(false);
   const [importingTemplates, setImportingTemplates] = useState(false);
   const [schedulingTemplate, setSchedulingTemplate] = useState(false);
+  const [savingAutomationRule, setSavingAutomationRule] = useState(false);
   const [message, setMessage] = useState("");
   const isAdmin = currentUser.role === "admin";
 
   useEffect(() => {
     void loadTemplates();
     void loadScheduledTemplates();
+    void loadAutomationRules();
   }, []);
 
   async function loadTemplates() {
@@ -3218,6 +3246,23 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
       setScheduleForm((current) => ({
         ...current,
         templateId: current.templateId || pickInitialTemplateId(payload?.templates ?? [])
+      }));
+      setAutomationForm((current) => ({
+        ...current,
+        templateId: current.templateId || pickInitialTemplateId(payload?.templates ?? [])
+      }));
+    }
+  }
+
+  async function loadAutomationRules() {
+    const response = await fetch("/api/template-automation-rules");
+    const payload = await readJsonResponse(response);
+
+    if (response.ok) {
+      setAutomationRules(payload?.rules ?? []);
+      setAutomationForm((current) => ({
+        ...current,
+        templateId: current.templateId || pickInitialTemplateId(payload?.templates ?? templates)
       }));
     }
   }
@@ -3369,6 +3414,98 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
     await loadScheduledTemplates();
   }
 
+  async function saveAutomationRule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!isAdmin) {
+      setMessage("Solo administrador puede configurar automatizaciones.");
+      return;
+    }
+
+    if (!automationForm.templateId) {
+      setMessage("Selecciona una plantilla para la automatizacion.");
+      return;
+    }
+
+    setMessage("");
+    setSavingAutomationRule(true);
+    const response = await fetch("/api/template-automation-rules", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "upsert",
+        id: automationForm.id || undefined,
+        name: automationForm.name,
+        consultype: automationForm.consultype,
+        templateId: automationForm.templateId,
+        delayAmount: Number(automationForm.delayAmount),
+        delayUnit: automationForm.delayUnit,
+        bodyParameters: automationForm.bodyParameters
+          .split(/\r?\n|,/)
+          .map((value) => value.trim())
+          .filter(Boolean),
+        active: automationForm.active
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setSavingAutomationRule(false);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos guardar la automatizacion.");
+      return;
+    }
+
+    setAutomationRules(payload?.rules ?? []);
+    setAutomationForm({
+      id: "",
+      name: "",
+      consultype: "comparador",
+      templateId: automationForm.templateId,
+      delayAmount: 1,
+      delayUnit: "days",
+      bodyParameters: "",
+      active: true
+    });
+    setMessage("Automatizacion guardada.");
+  }
+
+  function editAutomationRule(rule: TemplateAutomationRule) {
+    setAutomationForm({
+      id: rule.id,
+      name: rule.name,
+      consultype: rule.consultype,
+      templateId: rule.template_id,
+      delayAmount: rule.delay_amount,
+      delayUnit: rule.delay_unit,
+      bodyParameters: rule.body_parameters.join("\n"),
+      active: rule.active
+    });
+    setActiveTab("automation");
+  }
+
+  async function disableAutomationRule(id: string) {
+    if (!isAdmin) {
+      setMessage("Solo administrador puede desactivar automatizaciones.");
+      return;
+    }
+
+    setMessage("");
+    const response = await fetch("/api/template-automation-rules", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "disable", id })
+    });
+    const payload = await readJsonResponse(response);
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos desactivar la automatizacion.");
+      return;
+    }
+
+    setAutomationRules(payload?.rules ?? []);
+    setMessage("Automatizacion desactivada.");
+  }
+
   return (
     <section className="admin-panel">
       <div className="panel-title compact-panel-title">
@@ -3383,6 +3520,11 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
         <button className={activeTab === "list" ? "active" : ""} onClick={() => setActiveTab("list")} type="button">
           <MessageSquareText size={16} /> Listado de plantillas
         </button>
+        {isAdmin ? (
+          <button className={activeTab === "automation" ? "active" : ""} onClick={() => setActiveTab("automation")} type="button">
+            <BellRing size={16} /> Automatizacion por estado
+          </button>
+        ) : null}
         {isAdmin ? (
           <button className={activeTab === "edit" ? "active" : ""} onClick={() => setActiveTab("edit")} type="button">
             <RefreshCcw size={16} /> Sincronizar / crear
@@ -3493,6 +3635,129 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
             </div>
           ))}
         </div>
+      ) : null}
+
+      {activeTab === "automation" && isAdmin ? (
+        <>
+          <form className="template-form" onSubmit={saveAutomationRule}>
+            <div className="form-grid">
+              <label className="field">
+                Nombre de regla
+                <input
+                  placeholder="Comparador - seguimiento 24 hs"
+                  value={automationForm.name}
+                  onChange={(event) => setAutomationForm({ ...automationForm, name: event.target.value })}
+                  required
+                />
+              </label>
+              <label className="field">
+                Estado del contacto
+                <select
+                  value={automationForm.consultype}
+                  onChange={(event) => setAutomationForm({ ...automationForm, consultype: event.target.value })}
+                  required
+                >
+                  {TEMPLATE_AUTOMATION_CONSULTYPES.map((value) => (
+                    <option key={value} value={value}>{humanizeTemplateName(value)}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                Plantilla
+                <select
+                  value={automationForm.templateId}
+                  onChange={(event) => setAutomationForm({ ...automationForm, templateId: event.target.value })}
+                  required
+                >
+                  <option value="">Seleccionar...</option>
+                  {templates.filter((template) => template.active).map((template) => (
+                    <option key={template.id} value={template.id}>{template.label} / {template.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                Demora
+                <input
+                  min={0}
+                  type="number"
+                  value={automationForm.delayAmount}
+                  onChange={(event) => setAutomationForm({ ...automationForm, delayAmount: Number(event.target.value) })}
+                  required
+                />
+              </label>
+              <label className="field">
+                Unidad
+                <select
+                  value={automationForm.delayUnit}
+                  onChange={(event) => setAutomationForm({ ...automationForm, delayUnit: event.target.value as "minutes" | "hours" | "days" })}
+                >
+                  <option value="minutes">Minutos</option>
+                  <option value="hours">Horas</option>
+                  <option value="days">Dias</option>
+                </select>
+              </label>
+            </div>
+            <label className="field">
+              Variables del body
+              <textarea
+                placeholder="Una variable por linea o separadas por coma"
+                value={automationForm.bodyParameters}
+                onChange={(event) => setAutomationForm({ ...automationForm, bodyParameters: event.target.value })}
+              />
+            </label>
+            <label className="check-field">
+              <input checked={automationForm.active} onChange={(event) => setAutomationForm({ ...automationForm, active: event.target.checked })} type="checkbox" />
+              Activa
+            </label>
+            <div className="template-actions">
+              <button className="primary" disabled={savingAutomationRule} type="submit">
+                <Save size={18} />
+                {savingAutomationRule ? "Guardando" : automationForm.id ? "Actualizar regla" : "Guardar regla"}
+              </button>
+              <button
+                className="secondary"
+                onClick={() => setAutomationForm({
+                  id: "",
+                  name: "",
+                  consultype: "comparador",
+                  templateId: automationForm.templateId,
+                  delayAmount: 1,
+                  delayUnit: "days",
+                  bodyParameters: "",
+                  active: true
+                })}
+                type="button"
+              >
+                <RefreshCcw size={17} />
+                Nueva regla
+              </button>
+            </div>
+          </form>
+          <div className="template-list">
+            {automationRules.length ? automationRules.map((rule) => (
+              <div className="template-row" key={rule.id}>
+                <strong>{rule.name}</strong>
+                <span>
+                  {humanizeTemplateName(rule.consultype)} - {rule.template_label} - {rule.delay_amount} {rule.delay_unit}
+                </span>
+                <small>
+                  {rule.active ? "activa" : "inactiva"} - {rule.template_name} / {rule.template_language_code}
+                  {rule.body_parameters.length ? ` - Variables: ${rule.body_parameters.join(", ")}` : ""}
+                </small>
+                <div className="template-actions">
+                  <button className="secondary" onClick={() => editAutomationRule(rule)} type="button">
+                    <FilePenLine size={15} />
+                    Editar
+                  </button>
+                  <button className="danger" disabled={!rule.active} onClick={() => void disableAutomationRule(rule.id)} type="button">
+                    <Trash2 size={15} />
+                    Desactivar
+                  </button>
+                </div>
+              </div>
+            )) : <div className="empty-state">No hay automatizaciones configuradas.</div>}
+          </div>
+        </>
       ) : null}
 
       {activeTab === "edit" && isAdmin ? (

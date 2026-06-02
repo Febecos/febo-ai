@@ -124,6 +124,24 @@ export type ScheduledTemplateMessage = {
   updated_at: string;
 };
 
+export type TemplateAutomationRule = {
+  id: string;
+  name: string;
+  consultype: string;
+  template_id: string;
+  template_label: string;
+  template_name: string;
+  template_language_code: string;
+  delay_amount: number;
+  delay_unit: "minutes" | "hours" | "days";
+  body_parameters: string[];
+  active: boolean;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type QuickReply = {
   id: string;
   name: string;
@@ -1513,6 +1531,97 @@ export async function upsertMessageTemplates(
   return saved;
 }
 
+export async function listTemplateAutomationRules() {
+  if (!isDbConfigured()) {
+    return [] as TemplateAutomationRule[];
+  }
+
+  const sql = getSql();
+  return (await sql`
+    select
+      r.id::text,
+      r.name,
+      r.consultype,
+      r.template_id::text,
+      t.label as template_label,
+      t.name as template_name,
+      t.language_code as template_language_code,
+      r.delay_amount,
+      r.delay_unit,
+      r.body_parameters,
+      r.active,
+      r.created_by::text,
+      u.full_name as created_by_name,
+      r.created_at::text,
+      r.updated_at::text
+    from template_automation_rules r
+    join message_templates t on t.id = r.template_id
+    left join app_users u on u.id = r.created_by
+    order by r.active desc, r.consultype, r.delay_amount, r.name
+  `) as TemplateAutomationRule[];
+}
+
+export async function upsertTemplateAutomationRule(input: {
+  id?: string | null;
+  name: string;
+  consultype: string;
+  templateId: string;
+  delayAmount: number;
+  delayUnit: "minutes" | "hours" | "days";
+  bodyParameters?: string[];
+  active: boolean;
+  createdBy?: string | null;
+}) {
+  const sql = getSql();
+  const id = input.id || null;
+  const rows = (await sql`
+    insert into template_automation_rules (
+      id,
+      name,
+      consultype,
+      template_id,
+      delay_amount,
+      delay_unit,
+      body_parameters,
+      active,
+      created_by
+    )
+    values (
+      coalesce(${id}::uuid, gen_random_uuid()),
+      ${input.name.trim()},
+      ${normalizeConsultype(input.consultype)},
+      ${input.templateId}::uuid,
+      ${Math.max(0, Math.trunc(input.delayAmount))},
+      ${input.delayUnit},
+      ${JSON.stringify(input.bodyParameters ?? [])}::jsonb,
+      ${input.active},
+      ${input.createdBy ?? null}::uuid
+    )
+    on conflict (id) do update
+    set name = excluded.name,
+        consultype = excluded.consultype,
+        template_id = excluded.template_id,
+        delay_amount = excluded.delay_amount,
+        delay_unit = excluded.delay_unit,
+        body_parameters = excluded.body_parameters,
+        active = excluded.active,
+        updated_at = now()
+    returning id::text
+  `) as Array<{ id: string }>;
+
+  return rows[0]?.id ?? null;
+}
+
+export async function disableTemplateAutomationRule(id: string) {
+  const sql = getSql();
+  await sql`
+    update template_automation_rules
+    set active = false,
+        updated_at = now()
+    where id = ${id}::uuid
+  `;
+}
+
 export async function scheduleTemplateMessage(input: {
   conversationId: string;
   contactId: string;
@@ -1521,7 +1630,9 @@ export async function scheduleTemplateMessage(input: {
   bodyParameters?: string[];
   scheduledAt: Date;
   timezone?: string;
-  createdBy: string;
+  createdBy: string | null;
+  automationRuleId?: string | null;
+  automationSource?: string | null;
 }) {
   const sql = getSql();
   const rows = (await sql`
@@ -1533,7 +1644,9 @@ export async function scheduleTemplateMessage(input: {
       body_parameters,
       scheduled_at,
       timezone,
-      created_by
+      created_by,
+      automation_rule_id,
+      automation_source
     )
     values (
       ${input.conversationId},
@@ -1543,7 +1656,9 @@ export async function scheduleTemplateMessage(input: {
       ${JSON.stringify(input.bodyParameters ?? [])}::jsonb,
       ${input.scheduledAt.toISOString()},
       ${input.timezone ?? "America/Argentina/Buenos_Aires"},
-      ${input.createdBy}
+      ${input.createdBy ?? null},
+      ${input.automationRuleId ?? null}::uuid,
+      ${input.automationSource ?? null}
     )
     returning id::text
   `) as Array<{ id: string }>;
@@ -1559,12 +1674,137 @@ export async function scheduleTemplateMessage(input: {
         templateId: input.templateId,
         scheduledAt: input.scheduledAt.toISOString(),
         timezone: input.timezone ?? "America/Argentina/Buenos_Aires",
-        createdBy: input.createdBy
+        createdBy: input.createdBy ?? null,
+        automationRuleId: input.automationRuleId ?? null,
+        automationSource: input.automationSource ?? null
       })}::jsonb
     )
   `;
 
   return rows[0]?.id ?? "";
+}
+
+export async function applyTemplateAutomationRules(input: {
+  conversationId: string;
+  consultype: string;
+  actorUserId?: string | null;
+}) {
+  if (!isDbConfigured() || !input.conversationId || !input.consultype) {
+    return [];
+  }
+
+  const sql = getSql();
+  const targetRows = (await sql`
+    select c.contact_id::text, ct.phone
+    from conversations c
+    join contacts ct on ct.id = c.contact_id
+    where c.id = ${input.conversationId}
+    limit 1
+  `) as Array<{ contact_id: string; phone: string | null }>;
+  const target = targetRows[0];
+
+  if (!target?.phone) {
+    return [];
+  }
+
+  const rules = (await sql`
+    select id::text, name, template_id::text, delay_amount, delay_unit, body_parameters
+    from template_automation_rules
+    where active = true
+      and consultype = ${normalizeConsultype(input.consultype)}
+    order by delay_amount, name
+  `) as Array<{
+    id: string;
+    name: string;
+    template_id: string;
+    delay_amount: number;
+    delay_unit: "minutes" | "hours" | "days";
+    body_parameters: string[];
+  }>;
+  const scheduled: string[] = [];
+
+  for (const rule of rules) {
+    const existing = (await sql`
+      select id::text
+      from scheduled_template_messages
+      where conversation_id = ${input.conversationId}
+        and automation_rule_id = ${rule.id}::uuid
+        and status in ('pending', 'processing', 'sent')
+      limit 1
+    `) as Array<{ id: string }>;
+
+    if (existing[0]) {
+      continue;
+    }
+
+    const scheduledAt = addDelay(new Date(), rule.delay_amount, rule.delay_unit);
+    const id = await scheduleTemplateMessage({
+      conversationId: input.conversationId,
+      contactId: target.contact_id,
+      templateId: rule.template_id,
+      phone: normalizePhone(target.phone),
+      bodyParameters: Array.isArray(rule.body_parameters) ? rule.body_parameters : [],
+      scheduledAt,
+      timezone: "America/Argentina/Buenos_Aires",
+      createdBy: input.actorUserId ?? (await getSystemAutomationUserId()),
+      automationRuleId: rule.id,
+      automationSource: `consultype:${normalizeConsultype(input.consultype)}`
+    });
+
+    if (id) {
+      scheduled.push(id);
+    }
+  }
+
+  if (scheduled.length) {
+    await sql`
+      insert into platform_events (contact_id, phone, event, payload)
+      values (
+        ${target.contact_id},
+        ${normalizePhone(target.phone)},
+        'template_automation_scheduled',
+        ${JSON.stringify({
+          conversationId: input.conversationId,
+          consultype: normalizeConsultype(input.consultype),
+          scheduledIds: scheduled,
+          actorUserId: input.actorUserId ?? null
+        })}::jsonb
+      )
+    `;
+  }
+
+  return scheduled;
+}
+
+function addDelay(date: Date, amount: number, unit: "minutes" | "hours" | "days") {
+  const next = new Date(date);
+  const safeAmount = Math.max(0, Math.trunc(amount));
+
+  if (unit === "minutes") {
+    next.setUTCMinutes(next.getUTCMinutes() + safeAmount);
+  } else if (unit === "hours") {
+    next.setUTCHours(next.getUTCHours() + safeAmount);
+  } else {
+    next.setUTCDate(next.getUTCDate() + safeAmount);
+  }
+
+  return next;
+}
+
+async function getSystemAutomationUserId() {
+  const sql = getSql();
+  const rows = (await sql`
+    select id::text
+    from app_users
+    where active = true
+    order by
+      case when role = 'admin' then 0 else 1 end,
+      sales_priority,
+      full_name
+    limit 1
+  `) as Array<{ id: string }>;
+
+  return rows[0]?.id ?? null;
 }
 
 export async function listDueScheduledTemplateMessages(limit = 20) {
@@ -2347,6 +2587,12 @@ export async function recordAgentReply(input: {
       assignedName: labelAssignment.user.full_name
     }).catch((error) => console.error("outgoing webhook asesor_asignado failed", error));
   }
+
+  await applyTemplateAutomationRules({
+    conversationId: input.threadId,
+    consultype,
+    actorUserId: null
+  }).catch((error) => console.error("template automation scheduling failed", error));
 }
 
 export async function recordFollowUpSuggestion(input: {
@@ -3929,6 +4175,12 @@ export async function updateConversation(input: {
       fromLabel: before.consultype,
       toLabel: after.consultype
     });
+
+    await applyTemplateAutomationRules({
+      conversationId: input.conversationId,
+      consultype: after.consultype,
+      actorUserId: input.actorUserId ?? null
+    }).catch((error) => console.error("template automation scheduling failed", error));
   }
 
   if (before && after && displayName !== undefined && before.display_name !== after.display_name) {

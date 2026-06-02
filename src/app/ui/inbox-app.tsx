@@ -7038,6 +7038,7 @@ function humanizeTemplateName(name: string) {
 
 function DeliveryStatus({ message }: { message: ConversationMessage }) {
   const failed = message.whatsapp_status === "failed";
+  const deliveryError = getFriendlyWhatsAppError(message.whatsapp_error);
   const statusIcon =
     message.whatsapp_status === "read" || message.whatsapp_status === "delivered" ? (
       <CheckCheck size={14} />
@@ -7050,7 +7051,7 @@ function DeliveryStatus({ message }: { message: ConversationMessage }) {
     );
 
   return (
-    <span className={`delivery-status ${failed ? "failed" : message.whatsapp_status ?? ""}`} title={message.whatsapp_error ?? undefined}>
+    <span className={`delivery-status ${failed ? "failed" : message.whatsapp_status ?? ""}`} title={deliveryError ?? message.whatsapp_error ?? undefined}>
       {statusIcon}
       {formatDeliveryStatus(message)}
     </span>
@@ -7063,7 +7064,7 @@ function getReplyOptions(message: ConversationMessage) {
 
 function formatDeliveryStatus(message: ConversationMessage) {
   if (message.whatsapp_status === "failed") {
-    return `Fallo WhatsApp: ${message.whatsapp_error ?? "Meta no lo entrego"}`;
+    return `Fallo WhatsApp: ${getFriendlyWhatsAppError(message.whatsapp_error)}`;
   }
 
   const labels: Record<string, string> = {
@@ -7074,6 +7075,20 @@ function formatDeliveryStatus(message: ConversationMessage) {
   };
 
   return labels[message.whatsapp_status ?? ""] ?? message.whatsapp_status ?? "";
+}
+
+function getFriendlyWhatsAppError(error?: string | null) {
+  const normalized = (error ?? "").toLowerCase();
+
+  if (normalized.includes("part of an experiment") || normalized.includes("130472")) {
+    return "Meta bloqueo esta plantilla para este numero. Pedile al cliente que escriba primero o intenten luego.";
+  }
+
+  if (!error) {
+    return "Meta no lo entrego.";
+  }
+
+  return error;
 }
 
 function MessageMedia({

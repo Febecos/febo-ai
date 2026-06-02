@@ -2694,6 +2694,78 @@ export async function listConversationEvents(conversationId: string, limit = 80)
   return rows.reverse();
 }
 
+export async function createManualConversationEvent(input: {
+  conversationId: string;
+  event: "manual_selector_febecos" | "manual_purchase" | "manual_lead";
+  actorUserId: string | null;
+  actorName?: string | null;
+}) {
+  if (!isDbConfigured() || !input.conversationId) {
+    return null;
+  }
+
+  const sql = getSql();
+  const target = (await sql`
+    select
+      c.id::text as conversation_id,
+      c.channel,
+      c.contact_id::text,
+      ct.phone,
+      ct.display_name,
+      ca.slug as account_slug,
+      ca.name as account_name
+    from conversations c
+    join contacts ct on ct.id = c.contact_id
+    left join channel_accounts ca on ca.id = c.account_id
+    where c.id = ${input.conversationId}
+    limit 1
+  `) as Array<{
+    conversation_id: string;
+    channel: string | null;
+    contact_id: string;
+    phone: string | null;
+    display_name: string | null;
+    account_slug: string | null;
+    account_name: string | null;
+  }>;
+
+  const conversation = target[0];
+
+  if (!conversation) {
+    return null;
+  }
+
+  const eventLabels = {
+    manual_selector_febecos: "Selector Febecos",
+    manual_purchase: "Purchase",
+    manual_lead: "Lead"
+  };
+  const payload = {
+    source: "manual",
+    eventName: eventLabels[input.event],
+    conversationId: conversation.conversation_id,
+    contactId: conversation.contact_id,
+    phone: conversation.phone,
+    displayName: conversation.display_name,
+    channel: conversation.channel ?? "whatsapp",
+    accountSlug: conversation.account_slug,
+    accountName: conversation.account_name,
+    actorUserId: input.actorUserId,
+    actorName: input.actorName ?? null,
+    createdAt: new Date().toISOString()
+  };
+
+  const rows = (await sql`
+    insert into platform_events (contact_id, phone, event, payload)
+    values (${conversation.contact_id}, ${conversation.phone ? normalizePhone(conversation.phone) : null}, ${input.event}, ${JSON.stringify(payload)}::jsonb)
+    returning id::text, event, payload, created_at::text
+  `) as ConversationEvent[];
+
+  await deliverOutgoingWebhooks(input.event, payload);
+
+  return rows[0] ?? null;
+}
+
 export async function listConversationFollowUps(conversationId: string, limit = 80) {
   if (!isDbConfigured() || !conversationId) {
     return [];

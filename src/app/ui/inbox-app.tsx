@@ -189,6 +189,9 @@ const OUTGOING_WEBHOOK_EVENTS = [
   { value: "mensaje_entrante", label: "Mensaje entrante" },
   { value: "mensaje_saliente", label: "Mensaje saliente" },
   { value: "nota_interna",    label: "Nota interna" },
+  { value: "manual_selector_febecos", label: "Manual: Selector Febecos" },
+  { value: "manual_purchase", label: "Manual: Purchase" },
+  { value: "manual_lead", label: "Manual: Lead" },
   { value: "follow_up_proposed", label: "Seguimiento propuesto" },
   { value: "presupuesto_enviado", label: "Presupuesto enviado" },
   { value: "venta_cerrada", label: "Venta cerrada" },
@@ -3896,6 +3899,8 @@ function InboxList({
   const [templateScheduledAt, setTemplateScheduledAt] = useState("");
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const [templateMessage, setTemplateMessage] = useState("");
+  const [sendingManualEvent, setSendingManualEvent] = useState("");
+  const [manualEventMessage, setManualEventMessage] = useState("");
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioProcessorRef = useRef<ScriptProcessorNode | null>(null);
@@ -4790,6 +4795,37 @@ function InboxList({
     setMessages(payload?.messages ?? []);
     setEventMenuOpen(false);
     await refreshConversations(filters, { silent: true });
+  }
+
+  async function sendManualEventToSelected(eventName: "manual_selector_febecos" | "manual_purchase" | "manual_lead") {
+    if (!selected?.id) {
+      return;
+    }
+
+    setSendingManualEvent(eventName);
+    setManualEventMessage("");
+    setReplyError("");
+
+    const response = await fetch("/api/conversation-events", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        conversationId: selected.id,
+        event: eventName
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setSendingManualEvent("");
+
+    if (!response.ok) {
+      setManualEventMessage(payload?.error ?? "No pudimos enviar el evento manual.");
+      return;
+    }
+
+    setEvents(payload?.events ?? []);
+    setActiveConversationTab("audit");
+    setEventMenuOpen(false);
+    setManualEventMessage("Evento manual enviado.");
   }
 
   function updateFilters(next: Partial<typeof filters>) {
@@ -5832,11 +5868,16 @@ function InboxList({
                   </summary>
                   <div>
                     <strong>ENVIAR EVENTO</strong>
-                    <button onClick={() => void sendSelectorFlowToSelected()} type="button">
-                      <Calendar size={17} /> <span>Selector Febecos<small>WhatsApp Flow</small></span><b>Enviar</b>
+                    <button disabled={Boolean(sendingManualEvent)} onClick={() => void sendManualEventToSelected("manual_selector_febecos")} type="button">
+                      <Calendar size={17} /> <span>Selector Febecos<small>Manual</small></span><b>{sendingManualEvent === "manual_selector_febecos" ? "Enviando" : "Enviar"}</b>
                     </button>
-                    <button type="button"><Calendar size={17} /> <span>Compra<small>Purchase</small></span><b>Enviar</b></button>
-                    <button type="button"><Calendar size={17} /> <span>Lead</span><b>Enviar</b></button>
+                    <button disabled={Boolean(sendingManualEvent)} onClick={() => void sendManualEventToSelected("manual_purchase")} type="button">
+                      <Calendar size={17} /> <span>Compra<small>Purchase manual</small></span><b>{sendingManualEvent === "manual_purchase" ? "Enviando" : "Enviar"}</b>
+                    </button>
+                    <button disabled={Boolean(sendingManualEvent)} onClick={() => void sendManualEventToSelected("manual_lead")} type="button">
+                      <Calendar size={17} /> <span>Lead<small>Manual</small></span><b>{sendingManualEvent === "manual_lead" ? "Enviando" : "Enviar"}</b>
+                    </button>
+                    {manualEventMessage ? <em>{manualEventMessage}</em> : null}
                   </div>
                 </details>
               </div>
@@ -6532,6 +6573,18 @@ function getConversationEventTitle(event: ConversationEvent) {
     return "Click a WhatsApp desde selector";
   }
 
+  if (event.event === "manual_selector_febecos") {
+    return "Evento manual: Selector Febecos";
+  }
+
+  if (event.event === "manual_purchase") {
+    return "Evento manual: Purchase";
+  }
+
+  if (event.event === "manual_lead") {
+    return "Evento manual: Lead";
+  }
+
   return humanizeTemplateName(event.event);
 }
 
@@ -6585,6 +6638,11 @@ function getConversationEventDescription(event: ConversationEvent) {
     const click = payload.whatsapp_click as Record<string, unknown> | undefined;
     const zone = typeof click?.zona === "string" && click.zona ? ` Zona: ${click.zona}.` : "";
     return `El cliente toco el boton de WhatsApp del selector, pero todavia puede no haber enviado mensaje.${zone}`;
+  }
+
+  if (event.event === "manual_selector_febecos" || event.event === "manual_purchase" || event.event === "manual_lead") {
+    const eventName = typeof payload.eventName === "string" ? payload.eventName : humanizeTemplateName(event.event);
+    return `${actorName} envio manualmente el evento ${eventName}.`;
   }
 
   return JSON.stringify(payload);

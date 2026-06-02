@@ -3264,6 +3264,7 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
   const [scheduledTemplates, setScheduledTemplates] = useState<ScheduledTemplateMessage[]>([]);
   const [automationRules, setAutomationRules] = useState<TemplateAutomationRule[]>([]);
   const [activeTab, setActiveTab] = useState<"list" | "edit" | "scheduled" | "automation">("scheduled");
+  const [selectedAutomationState, setSelectedAutomationState] = useState("comparador");
   const [form, setForm] = useState({
     label: "",
     name: "",
@@ -3296,6 +3297,17 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
   const [savingAutomationRule, setSavingAutomationRule] = useState(false);
   const [message, setMessage] = useState("");
   const isAdmin = currentUser.role === "admin";
+  const automationRulesByState = useMemo(() => {
+    const groups = new Map<string, TemplateAutomationRule[]>();
+
+    for (const rule of automationRules) {
+      const key = rule.consultype || "otro";
+      groups.set(key, [...(groups.get(key) ?? []), rule]);
+    }
+
+    return groups;
+  }, [automationRules]);
+  const selectedAutomationRules = automationRulesByState.get(selectedAutomationState) ?? [];
 
   useEffect(() => {
     void loadTemplates();
@@ -3525,7 +3537,7 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
     setAutomationForm({
       id: "",
       name: "",
-      consultype: "comparador",
+      consultype: automationForm.consultype,
       templateId: automationForm.templateId,
       delayAmount: 1,
       delayUnit: "days",
@@ -3546,7 +3558,23 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
       bodyParameters: rule.body_parameters.join("\n"),
       active: rule.active
     });
+    setSelectedAutomationState(rule.consultype);
     setActiveTab("automation");
+  }
+
+  function newAutomationRuleForState(consultype = selectedAutomationState) {
+    setSelectedAutomationState(consultype);
+    setAutomationForm({
+      id: "",
+      name: `${humanizeTemplateName(consultype)} - `,
+      consultype,
+      templateId: automationForm.templateId || pickInitialTemplateId(templates),
+      delayAmount: 1,
+      delayUnit: "days",
+      bodyParameters: "",
+      active: true
+    });
+    setMessage("");
   }
 
   async function disableAutomationRule(id: string) {
@@ -3704,43 +3732,105 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
       ) : null}
 
       {activeTab === "automation" && isAdmin ? (
-        <>
-          <form className="template-form" onSubmit={saveAutomationRule}>
-            <div className="form-grid">
-              <label className="field">
-                Nombre de regla
-                <input
-                  placeholder="Comparador - seguimiento 24 hs"
-                  value={automationForm.name}
-                  onChange={(event) => setAutomationForm({ ...automationForm, name: event.target.value })}
-                  required
-                />
-              </label>
-              <label className="field">
-                Estado del contacto
-                <select
-                  value={automationForm.consultype}
-                  onChange={(event) => setAutomationForm({ ...automationForm, consultype: event.target.value })}
-                  required
+        <div className="automation-workspace">
+          <aside className="automation-state-list">
+            <div className="automation-column-head">
+              <strong>Estados</strong>
+              <small>{automationRules.length} reglas</small>
+            </div>
+            {TEMPLATE_AUTOMATION_CONSULTYPES.map((consultype) => {
+              const stateRules = automationRulesByState.get(consultype) ?? [];
+              return (
+                <button
+                  className={selectedAutomationState === consultype ? "active" : ""}
+                  key={consultype}
+                  onClick={() => {
+                    setSelectedAutomationState(consultype);
+                    if (!automationForm.id) {
+                      setAutomationForm((current) => ({ ...current, consultype }));
+                    }
+                  }}
+                  type="button"
                 >
-                  {TEMPLATE_AUTOMATION_CONSULTYPES.map((value) => (
-                    <option key={value} value={value}>{humanizeTemplateName(value)}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                Plantilla
-                <select
-                  value={automationForm.templateId}
-                  onChange={(event) => setAutomationForm({ ...automationForm, templateId: event.target.value })}
-                  required
-                >
-                  <option value="">Seleccionar...</option>
-                  {templates.filter((template) => template.active).map((template) => (
-                    <option key={template.id} value={template.id}>{template.label} / {template.name}</option>
-                  ))}
-                </select>
-              </label>
+                  <span>{humanizeTemplateName(consultype)}</span>
+                  <small>{stateRules.length}</small>
+                </button>
+              );
+            })}
+          </aside>
+
+          <section className="automation-rules-column">
+            <div className="automation-column-head">
+              <div>
+                <strong>{humanizeTemplateName(selectedAutomationState)}</strong>
+                <small>Reglas dentro de este estado</small>
+              </div>
+              <button className="secondary" onClick={() => newAutomationRuleForState()} type="button">
+                <UserPlus size={14} />
+                Agregar
+              </button>
+            </div>
+            <div className="automation-rule-list">
+              {selectedAutomationRules.length ? selectedAutomationRules.map((rule) => (
+                <article className={`automation-rule-card ${automationForm.id === rule.id ? "active" : ""}`} key={rule.id}>
+                  <button onClick={() => editAutomationRule(rule)} type="button">
+                    <strong>{rule.name}</strong>
+                    <span>{rule.template_label}</span>
+                    <small>{rule.delay_amount} {rule.delay_unit} - {rule.active ? "activa" : "inactiva"}</small>
+                  </button>
+                  <button className="danger icon-only" disabled={!rule.active} onClick={() => void disableAutomationRule(rule.id)} title="Desactivar" type="button">
+                    <Trash2 size={14} />
+                  </button>
+                </article>
+              )) : <div className="empty-state compact">No hay reglas para este estado.</div>}
+            </div>
+          </section>
+
+          <form className="template-form automation-rule-form" onSubmit={saveAutomationRule}>
+            <div className="automation-column-head">
+              <div>
+                <strong>{automationForm.id ? "Editar regla" : "Nueva regla"}</strong>
+                <small>{humanizeTemplateName(automationForm.consultype || selectedAutomationState)}</small>
+              </div>
+            </div>
+            <label className="field">
+              Nombre de regla
+              <input
+                placeholder={`${humanizeTemplateName(selectedAutomationState)} - seguimiento`}
+                value={automationForm.name}
+                onChange={(event) => setAutomationForm({ ...automationForm, name: event.target.value })}
+                required
+              />
+            </label>
+            <label className="field">
+              Estado del contacto
+              <select
+                value={automationForm.consultype}
+                onChange={(event) => {
+                  setSelectedAutomationState(event.target.value);
+                  setAutomationForm({ ...automationForm, consultype: event.target.value });
+                }}
+                required
+              >
+                {TEMPLATE_AUTOMATION_CONSULTYPES.map((value) => (
+                  <option key={value} value={value}>{humanizeTemplateName(value)}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Plantilla
+              <select
+                value={automationForm.templateId}
+                onChange={(event) => setAutomationForm({ ...automationForm, templateId: event.target.value })}
+                required
+              >
+                <option value="">Seleccionar...</option>
+                {templates.filter((template) => template.active).map((template) => (
+                  <option key={template.id} value={template.id}>{template.label} / {template.name}</option>
+                ))}
+              </select>
+            </label>
+            <div className="automation-delay-grid">
               <label className="field">
                 Demora
                 <input
@@ -3777,53 +3867,17 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
             </label>
             <div className="template-actions">
               <button className="primary" disabled={savingAutomationRule} type="submit">
-                <Save size={18} />
-                {savingAutomationRule ? "Guardando" : automationForm.id ? "Actualizar regla" : "Guardar regla"}
+                <Save size={15} />
+                {savingAutomationRule ? "Guardando" : automationForm.id ? "Actualizar" : "Guardar"}
               </button>
-              <button
-                className="secondary"
-                onClick={() => setAutomationForm({
-                  id: "",
-                  name: "",
-                  consultype: "comparador",
-                  templateId: automationForm.templateId,
-                  delayAmount: 1,
-                  delayUnit: "days",
-                  bodyParameters: "",
-                  active: true
-                })}
-                type="button"
-              >
-                <RefreshCcw size={17} />
-                Nueva regla
+              <button className="secondary" onClick={() => newAutomationRuleForState()} type="button">
+                <RefreshCcw size={14} />
+                Nueva
               </button>
             </div>
+            {message ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
           </form>
-          <div className="template-list">
-            {automationRules.length ? automationRules.map((rule) => (
-              <div className="template-row" key={rule.id}>
-                <strong>{rule.name}</strong>
-                <span>
-                  {humanizeTemplateName(rule.consultype)} - {rule.template_label} - {rule.delay_amount} {rule.delay_unit}
-                </span>
-                <small>
-                  {rule.active ? "activa" : "inactiva"} - {rule.template_name} / {rule.template_language_code}
-                  {rule.body_parameters.length ? ` - Variables: ${rule.body_parameters.join(", ")}` : ""}
-                </small>
-                <div className="template-actions">
-                  <button className="secondary" onClick={() => editAutomationRule(rule)} type="button">
-                    <FilePenLine size={15} />
-                    Editar
-                  </button>
-                  <button className="danger" disabled={!rule.active} onClick={() => void disableAutomationRule(rule.id)} type="button">
-                    <Trash2 size={15} />
-                    Desactivar
-                  </button>
-                </div>
-              </div>
-            )) : <div className="empty-state">No hay automatizaciones configuradas.</div>}
-          </div>
-        </>
+        </div>
       ) : null}
 
       {activeTab === "edit" && isAdmin ? (
@@ -3881,7 +3935,7 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
           </form>
         </>
       ) : null}
-      {message ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
+      {message && activeTab !== "automation" ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
     </section>
   );
 }

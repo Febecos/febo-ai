@@ -4067,6 +4067,14 @@ button:disabled {
 }
 
 @media (max-width: 980px) {
+  .automation-workspace {
+    grid-template-columns: minmax(180px, 0.8fr) minmax(260px, 1.2fr);
+  }
+
+  .automation-rule-form {
+    grid-column: 1 / -1;
+  }
+
   .label-config-workspace,
   .label-editor-grid {
     grid-template-columns: 1fr;
@@ -4531,6 +4539,161 @@ select option:hover {
 .templates-panel .template-row span,
 .templates-panel .template-row small {
   font-size: 11px;
+}
+
+.automation-workspace {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 0.72fr) minmax(260px, 1fr) minmax(330px, 1.28fr);
+  min-height: 0;
+  padding: 10px;
+}
+
+.automation-state-list,
+.automation-rules-column,
+.automation-rule-form {
+  background: rgba(6, 38, 68, 0.28);
+  border: 1px solid rgba(142, 213, 245, 0.2);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.automation-state-list,
+.automation-rules-column {
+  align-content: start;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+}
+
+.automation-column-head {
+  align-items: center;
+  border-bottom: 1px solid rgba(142, 213, 245, 0.14);
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-height: 30px;
+  padding-bottom: 6px;
+}
+
+.automation-column-head strong {
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.automation-column-head small {
+  color: var(--muted);
+  display: block;
+  font-size: 10px;
+}
+
+.automation-state-list > button {
+  align-items: center;
+  background: rgba(12, 55, 91, 0.52);
+  border: 1px solid rgba(142, 213, 245, 0.18);
+  border-radius: 6px;
+  color: #eef8ff;
+  display: grid;
+  font-size: 12px;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 32px;
+  padding: 0 8px;
+  text-align: left;
+}
+
+.automation-state-list > button.active {
+  background: linear-gradient(180deg, #8ed5f5, #69bfdf);
+  border-color: rgba(202, 239, 255, 0.82);
+  color: #05243b;
+  font-weight: 800;
+}
+
+.automation-state-list > button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-state-list > button small {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  font-size: 10px;
+  min-width: 20px;
+  padding: 2px 6px;
+  text-align: center;
+}
+
+.automation-rule-list {
+  display: grid;
+  gap: 6px;
+}
+
+.automation-rule-card {
+  align-items: stretch;
+  background: rgba(2, 22, 42, 0.32);
+  border: 1px solid rgba(142, 213, 245, 0.18);
+  border-radius: 7px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 6px;
+}
+
+.automation-rule-card.active {
+  border-color: rgba(142, 213, 245, 0.72);
+  box-shadow: inset 2px 0 0 #8ed5f5;
+}
+
+.automation-rule-card > button:first-child {
+  background: transparent;
+  border: 0;
+  color: #f8fbff;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.automation-rule-card strong {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-rule-card span,
+.automation-rule-card small {
+  color: var(--muted);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-rule-card .icon-only {
+  align-self: center;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0;
+}
+
+.templates-panel .automation-rule-form {
+  border-bottom: 1px solid rgba(142, 213, 245, 0.2);
+  gap: 7px;
+  padding: 8px;
+}
+
+.automation-delay-grid {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: minmax(0, 0.6fr) minmax(0, 1fr);
+}
+
+.automation-workspace .empty-state.compact {
+  min-height: 42px;
+  padding: 10px;
 }
 
 .compact-panel-title {

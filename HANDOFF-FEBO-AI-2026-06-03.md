@@ -1,5 +1,48 @@
 # FEBO AI handoff - 2026-06-03
 
+## Cambio 2026-06-03 (sesion transportistas): Panel de transportistas por zona
+
+Se agrego un nuevo panel "Transportistas" al CRM FEBO AI.
+
+### Ubicacion en la UI
+
+Barra lateral izquierda → icono 🚚 `Transportistas` (debajo de "Probar IA").
+
+### Funcionalidad
+
+- Selector de provincia (24 provincias de Argentina).
+- Campo de localidad con autocomplete en tiempo real (llama a `selector.febecos.com/api/localidades`).
+- Boton "Buscar" que consulta `selector.febecos.com/api/transportistas?provincia=X[&localidad=Y]`.
+- Resultados muestran: nombre, contacto principal (WA/tel linkeable), confianza, zonas asignadas, notas.
+
+### Archivos modificados
+
+- `src/app/ui/inbox-app.tsx`:
+  - Agrego `"transportistas"` a `ToolKey`
+  - Agrego icono `Truck` de lucide-react
+  - Agrego boton en sidebar
+  - Agrego `{activeTool === "transportistas" ? <TransportistasPanel /> : null}`
+  - Agrego funciones cliente `fetchTransportistas` / `fetchLocalidades` (llaman directo a selector.febecos.com, CORS ya configurado en `*`)
+  - Agrego componente `TransportistasPanel` al final del archivo
+  - Agrego `import type { TransportistaRow, LocalidadRow }` desde `@/lib/febecos`
+
+- `src/lib/febecos.ts`:
+  - Agrego tipos exportados: `TransportistaRow`, `LocalidadRow`, `TransportistaContacto`, `TransportistaZona`
+  - Agrego funciones server-side: `searchTransportistas`, `searchLocalidades` (para uso futuro en API routes, no en client components)
+
+### Importante: separacion client/server
+
+Las funciones en `febecos.ts` usan `config.FEBECOS_SELECTOR_API_BASE_URL` (que lee `process.env`, server-only).
+El componente `TransportistasPanel` esta en un archivo `"use client"`, por lo que llama directo a `https://selector.febecos.com/api` desde el browser. Solo importa los tipos de `febecos.ts` con `import type` (sin ejecutar codigo de servidor).
+
+### Dependencias en selector.febecos.com
+
+El panel depende de:
+- `GET /api/transportistas?provincia=X[&localidad=Y]` (ya existente, publico)
+- `GET /api/localidades?q=texto[&provincia=X]` (nuevo endpoint, agregar a vercel.json si no esta)
+
+Si `api/localidades.mjs` no esta en `vercel.json`, agregarlo antes de deploy.
+
 ## Proyecto
 
 - Workspace local: `D:\Dropbox\FEBECOS - FULL CLAUDE\FEBO AI`

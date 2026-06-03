@@ -89,6 +89,87 @@ export async function recordPlatformEvent(input: {
   });
 }
 
+// ── Transportistas — consulta pública a selector.febecos.com ─────────────────
+
+export type TransportistaContacto = {
+  type: "phone" | "whatsapp" | "email" | "web" | "address" | "other";
+  value: string;
+  label: string | null;
+  is_primary: boolean;
+};
+
+export type TransportistaZona = {
+  province: string;
+  locality: string | null;
+  coverage_type: "province_wide" | "locality_specific" | "zone_label";
+  confidence: "alta" | "media" | "baja" | "manual";
+  historical_uses: number;
+};
+
+export type TransportistaRow = {
+  id: number;
+  slug: string;
+  nombre: string;
+  activo: boolean;
+  contactos: TransportistaContacto[];
+  provincias: string[];
+  zonas_detalle: TransportistaZona[];
+  notas: string | null;
+  source: string;
+};
+
+export type LocalidadRow = {
+  id: string;
+  name: string;
+  province: string;
+  municipality?: string;
+  category?: string;
+};
+
+/** Busca transportistas por provincia y opcionalmente localidad.
+ *  Llama a selector.febecos.com/api/transportistas (endpoint público GET). */
+export async function searchTransportistas(
+  provincia: string,
+  localidad?: string
+): Promise<ConnectorResult<TransportistaRow[]>> {
+  const base = config.FEBECOS_SELECTOR_API_BASE_URL;
+  const qs = new URLSearchParams({ provincia });
+  if (localidad) qs.set("localidad", localidad);
+  try {
+    const r = await fetch(`${base}/transportistas?${qs}`, {
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 60 },           // caché 60s en Next.js
+    });
+    if (!r.ok) return { ok: false, configured: true, error: `selector respondio ${r.status}` };
+    const d = await r.json() as { ok: boolean; rows?: TransportistaRow[]; error?: string };
+    if (!d.ok) return { ok: false, configured: true, error: d.error ?? "error desconocido" };
+    return { ok: true, configured: true, data: d.rows ?? [] };
+  } catch (e) {
+    return { ok: false, configured: true, error: (e as Error).message };
+  }
+}
+
+/** Autocomplete de localidades desde selector.febecos.com/api/localidades. */
+export async function searchLocalidades(
+  q: string,
+  provincia?: string
+): Promise<ConnectorResult<LocalidadRow[]>> {
+  const base = config.FEBECOS_SELECTOR_API_BASE_URL;
+  const qs = new URLSearchParams({ q: q.trim() });
+  if (provincia) qs.set("provincia", provincia);
+  try {
+    const r = await fetch(`${base}/localidades?${qs}`, {
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!r.ok) return { ok: false, configured: true, error: `localidades: ${r.status}` };
+    const d = await r.json() as { ok: boolean; localidades?: LocalidadRow[]; error?: string };
+    if (!d.ok) return { ok: false, configured: true, error: d.error ?? "error" };
+    return { ok: true, configured: true, data: d.localidades ?? [] };
+  } catch (e) {
+    return { ok: false, configured: true, error: (e as Error).message };
+  }
+}
+
 export function platformFallbackContext() {
   return {
     publicUrl: config.FEBECOS_PUBLIC_URL,

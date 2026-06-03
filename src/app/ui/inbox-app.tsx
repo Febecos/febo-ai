@@ -38,12 +38,36 @@ import {
   Star,
   Tags,
   Trash2,
+  Truck,
   UserCheck,
   UserPlus,
   UsersRound,
   X
 } from "lucide-react";
-import { CSSProperties, DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { TransportistaRow, LocalidadRow } from "@/lib/febecos";
+
+// URL pública del selector — GET endpoints son públicos, CORS: *
+const SELECTOR_API = "https://selector.febecos.com/api";
+
+async function fetchTransportistas(provincia: string, localidad?: string): Promise<TransportistaRow[]> {
+  const qs = new URLSearchParams({ provincia });
+  if (localidad) qs.set("localidad", localidad);
+  const r = await fetch(`${SELECTOR_API}/transportistas?${qs}`);
+  if (!r.ok) throw new Error(`Error ${r.status}`);
+  const d = await r.json() as { ok: boolean; rows?: TransportistaRow[]; error?: string };
+  if (!d.ok) throw new Error(d.error ?? "Error desconocido");
+  return d.rows ?? [];
+}
+
+async function fetchLocalidades(q: string, provincia?: string): Promise<LocalidadRow[]> {
+  const qs = new URLSearchParams({ q });
+  if (provincia) qs.set("provincia", provincia);
+  const r = await fetch(`${SELECTOR_API}/localidades?${qs}`);
+  if (!r.ok) throw new Error(`Error ${r.status}`);
+  const d = await r.json() as { ok: boolean; localidades?: LocalidadRow[]; error?: string };
+  return d.localidades ?? [];
+}
 import type {
   AppUser,
   ChannelAccount,
@@ -128,7 +152,7 @@ type AgentTestResponse = {
   escalar: boolean;
 };
 
-type ToolKey = "conversations" | "metrics" | "contacts" | "crm" | "templates" | "labels" | "settings" | "users" | "ai";
+type ToolKey = "conversations" | "metrics" | "contacts" | "crm" | "templates" | "labels" | "settings" | "users" | "ai" | "transportistas";
 type SettingKey =
   | "auto_reply_delay_seconds"
   | "hot_lead_default_assignee_id"
@@ -558,6 +582,10 @@ function ToolWorkspace({
           <Bot size={18} />
           Probar IA
         </button>
+        <button className={activeTool === "transportistas" ? "active" : ""} onClick={() => setActiveTool("transportistas")} type="button">
+          <Truck size={18} />
+          Transportistas
+        </button>
         {isAdmin ? (
           <>
             <button className={activeTool === "users" ? "active" : ""} onClick={() => setActiveTool("users")} type="button">
@@ -670,6 +698,7 @@ function ToolWorkspace({
         ) : null}
         {activeTool === "settings" && isAdmin ? <SettingsPanel users={adminUsers.length ? adminUsers : users} /> : null}
         {activeTool === "ai" ? <AgentTester /> : null}
+        {activeTool === "transportistas" ? <TransportistasPanel /> : null}
       </div>
     </section>
   );
@@ -8285,4 +8314,254 @@ function getReplySendError(response: Response, payload: { error?: string } | nul
   }
 
   return `No pudimos enviar el mensaje (${response.status}).`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Panel: Transportistas por zona
+// Permite buscar qué transportista cubre una provincia / localidad.
+// Útil mientras se atiende una consulta de envío por WhatsApp.
+// ══════════════════════════════════════════════════════════════════
+
+const PROVINCIAS_AR = [
+  "Buenos Aires","CABA","Catamarca","Chaco","Chubut","Córdoba","Corrientes",
+  "Entre Ríos","Formosa","Jujuy","La Pampa","La Rioja","Mendoza","Misiones",
+  "Neuquén","Río Negro","Salta","San Juan","San Luis","Santa Cruz","Santa Fe",
+  "Santiago del Estero","Tierra del Fuego","Tucumán",
+];
+
+const CONFIDENCE_LABEL: Record<string, string> = {
+  alta: "✅ Alta confianza",
+  media: "🟡 Media",
+  baja: "🔴 Baja",
+  manual: "✏️ Manual",
+};
+
+function TransportistasPanel() {
+  const [provincia, setProvincia] = useState("");
+  const [localidadInput, setLocalidadInput] = useState("");
+  const [localidadSel, setLocalidadSel] = useState<LocalidadRow | null>(null);
+  const [localidadOpts, setLocalidadOpts] = useState<LocalidadRow[]>([]);
+  const [dropOpen, setDropOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<TransportistaRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Autocomplete de localidades
+  useEffect(() => {
+    if (!localidadInput || localidadInput.length < 2) {
+      setLocalidadOpts([]);
+      setDropOpen(false);
+      return;
+    }
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(async () => {
+      try {
+        const locs = await fetchLocalidades(localidadInput, provincia || undefined);
+        setLocalidadOpts(locs.slice(0, 8));
+        setDropOpen(locs.length > 0);
+      } catch { /* silenciar en autocomplete */ }
+    }, 280);
+  }, [localidadInput, provincia]);
+
+  const buscar = useCallback(async () => {
+    if (!provincia) return;
+    setLoading(true);
+    setError(null);
+    setResults(null);
+    try {
+      const loc = localidadSel?.name || undefined;
+      const rows = await fetchTransportistas(provincia, loc);
+      setResults(rows);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [provincia, localidadSel]);
+
+  function pickLocalidad(loc: LocalidadRow) {
+    setLocalidadSel(loc);
+    setLocalidadInput(loc.name);
+    setDropOpen(false);
+  }
+
+  function clearLocalidad() {
+    setLocalidadSel(null);
+    setLocalidadInput("");
+    setLocalidadOpts([]);
+    setDropOpen(false);
+  }
+
+  function getContactoPrincipal(t: TransportistaRow) {
+    const wa  = t.contactos.find(c => c.type === "whatsapp");
+    const tel = t.contactos.find(c => c.type === "phone");
+    return wa || tel || t.contactos[0] || null;
+  }
+
+  const topConfidence = (zonas: TransportistaRow["zonas_detalle"]) => {
+    const order = ["alta","media","baja","manual"];
+    const found = order.find(c => zonas.some(z => z.confidence === c));
+    return found ?? "manual";
+  };
+
+  return (
+    <section className="admin-panel" style={{ maxWidth: 680 }}>
+      <div className="panel-title">
+        <h2>🚚 Transportistas por zona</h2>
+        <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
+          Consultá qué transportista cubre una provincia o localidad para informarle al cliente.
+        </p>
+      </div>
+
+      {/* Formulario de búsqueda */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 20 }}>
+        <label className="field" style={{ flex: "1 1 180px", minWidth: 160 }}>
+          Provincia *
+          <select
+            value={provincia}
+            onChange={e => { setProvincia(e.target.value); setResults(null); }}
+          >
+            <option value="">— Seleccioná —</option>
+            {PROVINCIAS_AR.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </label>
+
+        <label className="field" style={{ flex: "2 1 220px", minWidth: 180, position: "relative" }}>
+          Localidad (opcional)
+          <div style={{ position: "relative" }}>
+            <input
+              placeholder="Ej: Bahía Blanca, Colón…"
+              value={localidadInput}
+              disabled={!provincia}
+              onChange={e => { setLocalidadInput(e.target.value); setLocalidadSel(null); }}
+              onBlur={() => setTimeout(() => setDropOpen(false), 180)}
+              onFocus={() => localidadOpts.length > 0 && setDropOpen(true)}
+              style={{ paddingRight: localidadSel ? 28 : undefined }}
+            />
+            {localidadSel && (
+              <button
+                type="button"
+                onClick={clearLocalidad}
+                style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--muted)", lineHeight: 1 }}
+                title="Limpiar localidad"
+              >×</button>
+            )}
+            {dropOpen && localidadOpts.length > 0 && (
+              <div style={{ position: "absolute", top: "calc(100% + 2px)", left: 0, right: 0, background: "#fff", border: "1.5px solid #e2e8f0", borderRadius: 8, boxShadow: "0 6px 18px rgba(0,0,0,.1)", zIndex: 200, maxHeight: 200, overflowY: "auto" }}>
+                {localidadOpts.map(loc => (
+                  <button
+                    key={loc.id}
+                    type="button"
+                    onMouseDown={() => pickLocalidad(loc)}
+                    style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 14px", background: "none", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: 13 }}
+                  >
+                    <strong>{loc.name}</strong>
+                    <span style={{ marginLeft: 6, fontSize: 11, color: "#94a3b8" }}>{loc.province}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </label>
+
+        <button
+          className="primary"
+          type="button"
+          disabled={!provincia || loading}
+          onClick={buscar}
+          style={{ alignSelf: "flex-end", minWidth: 100, height: 38 }}
+        >
+          {loading ? "Buscando…" : "Buscar"}
+        </button>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div style={{ background: "#fff0f4", border: "1px solid #fca5a5", borderRadius: 8, padding: "10px 14px", color: "#dc2626", fontSize: 13, marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
+
+      {/* Sin resultados */}
+      {results !== null && results.length === 0 && (
+        <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--muted)", fontSize: 14 }}>
+          Sin transportistas registrados para esa zona.
+          <br />
+          <span style={{ fontSize: 12 }}>Intentá buscar solo por provincia.</span>
+        </div>
+      )}
+
+      {/* Resultados */}
+      {results && results.length > 0 && (
+        <div>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
+            {results.length} transportista{results.length !== 1 ? "s" : ""} encontrado{results.length !== 1 ? "s" : ""}
+            {localidadSel ? ` para ${localidadSel.name}, ${provincia}` : ` en ${provincia}`}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {results.map(t => {
+              const ct = getContactoPrincipal(t);
+              const conf = topConfidence(t.zonas_detalle);
+              const zonaLabel = t.zonas_detalle.some(z => !z.locality || z.coverage_type === "province_wide")
+                ? `${provincia} (provincia entera)`
+                : t.zonas_detalle.filter(z => z.locality).map(z => z.locality).join(", ");
+
+              return (
+                <div key={t.id} style={{ background: "#f8fafc", border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "14px 16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+                    <strong style={{ fontSize: 14, color: "#1e293b", lineHeight: 1.3 }}>{t.nombre}</strong>
+                    <span style={{ fontSize: 11, whiteSpace: "nowrap", color: conf === "alta" ? "#166534" : conf === "media" ? "#92400e" : "#9ca3af", background: conf === "alta" ? "#dcfce7" : conf === "media" ? "#fef9c3" : "#f1f5f9", borderRadius: 5, padding: "2px 7px", fontWeight: 600 }}>
+                      {CONFIDENCE_LABEL[conf] ?? conf}
+                    </span>
+                  </div>
+
+                  {/* Contacto principal */}
+                  {ct && (
+                    <div style={{ fontSize: 13, marginBottom: 5 }}>
+                      {ct.type === "whatsapp" ? (
+                        <a href={`https://wa.me/${ct.value.replace(/\D/g,"")}`} target="_blank" rel="noreferrer" style={{ color: "#16a34a", fontWeight: 600 }}>
+                          📱 {ct.value}
+                        </a>
+                      ) : ct.type === "phone" ? (
+                        <a href={`tel:${ct.value}`} style={{ color: "#1e40af" }}>☎ {ct.value}</a>
+                      ) : ct.type === "email" ? (
+                        <a href={`mailto:${ct.value}`} style={{ color: "#1e40af" }}>✉ {ct.value}</a>
+                      ) : (
+                        <span>{ct.value}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Todos los contactos (si hay más) */}
+                  {t.contactos.length > 1 && (
+                    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 5, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {t.contactos.filter((c, i) => i > 0 || c !== ct).slice(0, 4).map((c, i) => (
+                        <span key={i}>
+                          {c.type === "whatsapp" ? "📱" : c.type === "phone" ? "☎" : c.type === "email" ? "✉" : c.type === "web" ? "🌐" : "•"} {c.value}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Zona */}
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                    📍 {zonaLabel || provincia}
+                    {t.zonas_detalle[0]?.historical_uses ? ` · ${t.zonas_detalle[0].historical_uses} usos en Táctica` : ""}
+                  </div>
+
+                  {/* Notas */}
+                  {t.notas && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: "#78350f", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "6px 10px" }}>
+                      {t.notas}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </section>
+  );
 }

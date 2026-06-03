@@ -207,6 +207,18 @@ export async function runFebecosAgent(input: {
     return paymentPreferenceResult;
   }
 
+  const farewellResult = buildFarewellResult(input.message, conversationHistory);
+
+  if (farewellResult) {
+    await executeAgentAction({
+      phone: input.phone,
+      message: input.message,
+      result: farewellResult
+    });
+
+    return farewellResult;
+  }
+
   const quoteExtraction = await extractQuoteRequest({
     message: input.message,
     history: conversationHistory,
@@ -458,6 +470,57 @@ function buildSelectorCheckoutResult(message: string): AgentResult | null {
     archivos: [],
     action: "create_ticket",
     actionSubject: "compra desde selector Febecos"
+  };
+}
+
+function buildFarewellResult(
+  message: string,
+  history: ReturnType<typeof buildConversationHistory>
+): AgentResult | null {
+  // Solo aplicar si ya hay historial previo (no es el primer mensaje)
+  if (history.length < 2) {
+    return null;
+  }
+
+  const normalized = normalizeSpanish(message).trim();
+
+  // Los mensajes de despedida son cortos
+  if (normalized.length > 100) {
+    return null;
+  }
+
+  const farewellPatterns = [
+    /\bte\s+aviso\b/,
+    /\blos\s+aviso\b/,
+    /\bya\s+aviso\b/,
+    /\bcualquier\s+cosa\s+te\s+(aviso|escribo|llamo|contacto)\b/,
+    /\bestamos\s+en\s+contacto\b/,
+    /\bquedamos\s+en\s+contacto\b/,
+    /\bchau+\b/,
+    /\bhasta\s+luego\b/,
+    /\bnosv?\s*vemos\b/,
+    /\bhasta\s+pronto\b/,
+    /^dale[,!\s]*(?:muchas?\s*)?gracias[,!\s.]*(?:saludos)?[.!]*$/,
+    /^(?:muchas?\s*)?gracias[,!\s.]*(?:saludos|hasta\s+luego|chau)?[.!]*$/,
+    /^saludos[.!]*$/
+  ];
+
+  const isFarewell = farewellPatterns.some((pattern) => pattern.test(normalized));
+
+  if (!isFarewell) {
+    return null;
+  }
+
+  return {
+    respuesta: "¡Dale! Acá estamos cuando quieras. 👋",
+    sentimiento: "positivo",
+    consultype: "seguimiento",
+    escalar: false,
+    nombre: null,
+    imagenes: [],
+    archivos: [],
+    action: "none",
+    actionSubject: null
   };
 }
 

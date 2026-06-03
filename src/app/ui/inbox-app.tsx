@@ -132,12 +132,40 @@ type ToolKey = "conversations" | "metrics" | "contacts" | "crm" | "templates" | 
 type SettingKey =
   | "auto_reply_delay_seconds"
   | "hot_lead_default_assignee_id"
+  | "notification_sound"
+  | "notification_sound_users"
   | "whatsapp_selector_flow_id"
   | "whatsapp_selector_flow_screen"
   | "whatsapp_selector_flow_header"
   | "whatsapp_selector_flow_body"
   | "whatsapp_selector_flow_footer"
   | "whatsapp_selector_flow_cta";
+
+type NotificationSoundName = "chime" | "ping" | "soft" | "alert" | "none";
+
+type NotificationSoundConfig = {
+  sound: NotificationSoundName;
+  volume: number;
+};
+
+type UserNotificationSoundSetting = {
+  mode: "default" | "custom";
+  sound?: NotificationSoundName;
+  volume?: number;
+};
+
+const DEFAULT_NOTIFICATION_SOUND_CONFIG: NotificationSoundConfig = {
+  sound: "chime",
+  volume: 0.55
+};
+
+const NOTIFICATION_SOUND_OPTIONS: Array<{ value: NotificationSoundName; label: string }> = [
+  { value: "chime", label: "Campanita" },
+  { value: "ping", label: "Ping corto" },
+  { value: "soft", label: "Suave" },
+  { value: "alert", label: "Alerta" },
+  { value: "none", label: "Silencio" }
+];
 
 const CONSULTYPE_OPTIONS = [
   { value: "caliente", label: "Caliente" },
@@ -640,7 +668,7 @@ function ToolWorkspace({
         {activeTool === "users" && isAdmin ? (
           <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} />
         ) : null}
-        {activeTool === "settings" && isAdmin ? <SettingsPanel users={users} /> : null}
+        {activeTool === "settings" && isAdmin ? <SettingsPanel users={adminUsers.length ? adminUsers : users} /> : null}
         {activeTool === "ai" ? <AgentTester /> : null}
       </div>
     </section>
@@ -1213,6 +1241,7 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
   });
   const [savingKey, setSavingKey] = useState("");
   const [message, setMessage] = useState("");
+  const settingsNotificationAudioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     void loadSettings();
@@ -1252,7 +1281,10 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
     return settings.find((setting) => setting.key === key)?.value ?? fallback;
   }
 
-  async function saveSetting(key: SettingKey, value: string | number | null) {
+  async function saveSetting(
+    key: SettingKey,
+    value: string | number | null | NotificationSoundConfig | Record<string, UserNotificationSoundSetting>
+  ) {
     setSavingKey(key);
     setMessage("");
 
@@ -1274,7 +1306,10 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
     return true;
   }
 
-  async function saveSettingsBatch(items: Array<{ key: SettingKey; value: string | number | null }>, savingId: string) {
+  async function saveSettingsBatch(
+    items: Array<{ key: SettingKey; value: string | number | null | NotificationSoundConfig | Record<string, UserNotificationSoundSetting> }>,
+    savingId: string
+  ) {
     setSavingKey(savingId);
     setMessage("");
 
@@ -1359,6 +1394,44 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
       autoReplyEnabled: false,
       active: false
     });
+  }
+
+  function updateSoundUser(userId: string, notificationSound: UserNotificationSoundSetting) {
+    setSettings((current) => {
+      const currentMap = normalizeUserNotificationSoundMap(
+        current.find((setting) => setting.key === "notification_sound_users")?.value ?? {}
+      );
+
+      return upsertLocalSetting(current, "notification_sound_users", {
+        ...currentMap,
+        [userId]: notificationSound
+      });
+    });
+  }
+
+  async function saveUserNotificationSound(user: AppUser) {
+    const notificationSoundUsers = normalizeUserNotificationSoundMap(getValue("notification_sound_users", {}));
+    setSavingKey(`notification-user-${user.id}`);
+    setMessage("");
+
+    const response = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        key: "notification_sound_users",
+        value: notificationSoundUsers
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setSavingKey("");
+
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos guardar el sonido del usuario.");
+      return;
+    }
+
+    setSettings(payload?.settings ?? settings);
+    setMessage("Sonido del usuario guardado.");
   }
 
   async function saveChannelAccount() {
@@ -1532,6 +1605,10 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
   );
   const selectorFlowFooter = String(getValue("whatsapp_selector_flow_footer", "Febecos bombas solares") ?? "Febecos bombas solares");
   const selectorFlowCta = String(getValue("whatsapp_selector_flow_cta", "Abrir selector") ?? "Abrir selector");
+  const notificationSound = normalizeNotificationSoundConfig(getValue("notification_sound", DEFAULT_NOTIFICATION_SOUND_CONFIG));
+  const notificationSoundUsers = normalizeUserNotificationSoundMap(getValue("notification_sound_users", {}));
+  const notificationSoundLabel =
+    NOTIFICATION_SOUND_OPTIONS.find((option) => option.value === notificationSound.sound)?.label ?? "Campanita";
 
   return (
     <section className="admin-panel settings-panel">
@@ -1573,6 +1650,21 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
             <span className="settings-card-meta">
               {users.find((user) => user.id === hotLeadAssignee)?.full_name ?? "Automatico"}
             </span>
+            <ChevronDown size={18} />
+          </button>
+        </article>
+
+        <article className={`settings-card settings-accordion ${openSettingsSection === "sound" ? "is-open" : ""}`}>
+          <button
+            className="settings-card-header"
+            onClick={() => setOpenSettingsSection((current) => (current === "sound" ? "" : "sound"))}
+            type="button"
+          >
+            <span>
+              <h3>Sonido de notificaciones</h3>
+              <p>Sonido global y excepciones por usuario para chats y tareas.</p>
+            </span>
+            <span className="settings-card-meta">{notificationSoundLabel} · {Math.round(notificationSound.volume * 100)}%</span>
             <ChevronDown size={18} />
           </button>
         </article>
@@ -1685,6 +1777,155 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
                 >
                   {savingKey === "hot_lead_default_assignee_id" ? "Guardando" : "Guardar vendedor"}
                 </button>
+              </div>
+            ) : null}
+
+            {openSettingsSection === "sound" ? (
+              <div className="settings-card-body notification-sound-settings">
+                <div className="notification-sound-global">
+                  <label className="field">
+                    <FieldHelpLabel
+                      help="Sonido por defecto para todos los usuarios. Si un usuario no tiene configuracion propia, usa este valor."
+                      label="Sonido global"
+                    />
+                    <select
+                      onChange={(event) => {
+                        setSettings((current) =>
+                          upsertLocalSetting(current, "notification_sound", {
+                            ...notificationSound,
+                            sound: event.target.value as NotificationSoundName
+                          })
+                        );
+                      }}
+                      value={notificationSound.sound}
+                    >
+                      {NOTIFICATION_SOUND_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field sound-volume-field">
+                    <FieldHelpLabel
+                      help="Volumen del sonido global. Los usuarios con configuracion propia pueden tener otro volumen."
+                      label={`Volumen global ${Math.round(notificationSound.volume * 100)}%`}
+                    />
+                    <input
+                      max={100}
+                      min={0}
+                      onChange={(event) => {
+                        setSettings((current) =>
+                          upsertLocalSetting(current, "notification_sound", {
+                            ...notificationSound,
+                            volume: Number(event.target.value) / 100
+                          })
+                        );
+                      }}
+                      type="range"
+                      value={Math.round(notificationSound.volume * 100)}
+                    />
+                  </label>
+                  <div className="settings-actions-row">
+                    <button
+                      className="primary"
+                      disabled={savingKey === "notification_sound"}
+                      onClick={() => void saveSetting("notification_sound", notificationSound)}
+                      type="button"
+                    >
+                      {savingKey === "notification_sound" ? "Guardando" : "Guardar sonido global"}
+                    </button>
+                    <button
+                      onClick={() => void playInboxNotificationSound(settingsNotificationAudioContextRef, notificationSound)}
+                      type="button"
+                    >
+                      <BellRing size={16} />
+                      Probar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="notification-user-sounds">
+                  <h4>Configuracion puntual por usuario</h4>
+                  <div className="notification-user-list">
+                    {users.map((user) => {
+                      const userSound = notificationSoundUsers[user.id] ?? { mode: "default" };
+                      const effectiveSound = resolveUserNotificationSound(notificationSound, userSound);
+                      const savingUser = savingKey === `notification-user-${user.id}`;
+
+                      return (
+                        <div key={user.id} className="notification-user-row">
+                          <div className="notification-user-info">
+                            <strong>{user.full_name}</strong>
+                            <span>{user.role} · {userSound.mode === "custom" ? "personalizado" : "usa global"}</span>
+                          </div>
+                          <select
+                            aria-label={`Modo de sonido de ${user.full_name}`}
+                            onChange={(event) => {
+                              const mode = event.target.value as UserNotificationSoundSetting["mode"];
+                              updateSoundUser(
+                                user.id,
+                                mode === "custom"
+                                  ? { mode, sound: effectiveSound.sound, volume: effectiveSound.volume }
+                                  : { mode: "default" }
+                              );
+                            }}
+                            value={userSound.mode}
+                          >
+                            <option value="default">Global</option>
+                            <option value="custom">Propio</option>
+                          </select>
+                          <select
+                            aria-label={`Sonido de ${user.full_name}`}
+                            disabled={userSound.mode !== "custom"}
+                            onChange={(event) =>
+                              updateSoundUser(user.id, {
+                                mode: "custom",
+                                sound: event.target.value as NotificationSoundName,
+                                volume: effectiveSound.volume
+                              })
+                            }
+                            value={effectiveSound.sound}
+                          >
+                            {NOTIFICATION_SOUND_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                          <label className="notification-user-volume">
+                            <span>{Math.round(effectiveSound.volume * 100)}%</span>
+                            <input
+                              disabled={userSound.mode !== "custom"}
+                              max={100}
+                              min={0}
+                              onChange={(event) =>
+                                updateSoundUser(user.id, {
+                                  mode: "custom",
+                                  sound: effectiveSound.sound,
+                                  volume: Number(event.target.value) / 100
+                                })
+                              }
+                              type="range"
+                              value={Math.round(effectiveSound.volume * 100)}
+                            />
+                          </label>
+                          <div className="notification-user-actions">
+                            <button
+                              disabled={savingUser}
+                              onClick={() => void saveUserNotificationSound(user)}
+                              type="button"
+                            >
+                              {savingUser ? "Guardando" : "Guardar"}
+                            </button>
+                            <button
+                              onClick={() => void playInboxNotificationSound(settingsNotificationAudioContextRef, effectiveSound)}
+                              type="button"
+                            >
+                              Probar
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             ) : null}
 
@@ -2140,6 +2381,75 @@ function FieldHelpLabel({ help, label }: { help: string; label: string }) {
       </span>
     </span>
   );
+}
+
+function normalizeNotificationSoundName(value: unknown): NotificationSoundName {
+  return NOTIFICATION_SOUND_OPTIONS.some((option) => option.value === value) ? (value as NotificationSoundName) : "chime";
+}
+
+function normalizeNotificationVolume(value: unknown, fallback = DEFAULT_NOTIFICATION_SOUND_CONFIG.volume) {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+
+  return Math.min(1, Math.max(0, numericValue));
+}
+
+function normalizeNotificationSoundConfig(value: unknown): NotificationSoundConfig {
+  if (!value || typeof value !== "object") {
+    return DEFAULT_NOTIFICATION_SOUND_CONFIG;
+  }
+
+  const config = value as Record<string, unknown>;
+
+  return {
+    sound: normalizeNotificationSoundName(config.sound),
+    volume: normalizeNotificationVolume(config.volume)
+  };
+}
+
+function normalizeUserNotificationSound(value: unknown): UserNotificationSoundSetting {
+  if (!value || typeof value !== "object") {
+    return { mode: "default" };
+  }
+
+  const setting = value as Record<string, unknown>;
+
+  if (setting.mode !== "custom") {
+    return { mode: "default" };
+  }
+
+  return {
+    mode: "custom",
+    sound: normalizeNotificationSoundName(setting.sound),
+    volume: normalizeNotificationVolume(setting.volume)
+  };
+}
+
+function normalizeUserNotificationSoundMap(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return {} as Record<string, UserNotificationSoundSetting>;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([userId, setting]) => [
+      userId,
+      normalizeUserNotificationSound(setting)
+    ])
+  ) as Record<string, UserNotificationSoundSetting>;
+}
+
+function resolveUserNotificationSound(globalSound: NotificationSoundConfig, userSound: UserNotificationSoundSetting) {
+  if (userSound.mode !== "custom") {
+    return globalSound;
+  }
+
+  return {
+    sound: userSound.sound ?? globalSound.sound,
+    volume: normalizeNotificationVolume(userSound.volume, globalSound.volume)
+  };
 }
 
 function upsertLocalSetting(settings: AppSetting[], key: string, value: unknown) {
@@ -4308,6 +4618,7 @@ function InboxList({
     latestByConversation: new Map<string, string>()
   });
   const dueFollowUpIdsRef = useRef<Set<string>>(new Set());
+  const [notificationSoundConfig, setNotificationSoundConfig] = useState(DEFAULT_NOTIFICATION_SOUND_CONFIG);
   const [filters, setFilters] = useState({
     query: "",
     consultype: "all",
@@ -4475,6 +4786,27 @@ function InboxList({
   useEffect(() => {
     primeNotificationBaseline(conversations);
   }, []);
+
+  useEffect(() => {
+    async function loadNotificationSettings() {
+      const response = await fetch("/api/settings");
+      const payload = await readJsonResponse(response);
+
+      if (!response.ok) {
+        return;
+      }
+
+      const globalSound = normalizeNotificationSoundConfig(
+        (payload?.settings ?? []).find((setting: AppSetting) => setting.key === "notification_sound")?.value
+      );
+      const userSounds = normalizeUserNotificationSoundMap(
+        (payload?.settings ?? []).find((setting: AppSetting) => setting.key === "notification_sound_users")?.value
+      );
+      setNotificationSoundConfig(resolveUserNotificationSound(globalSound, userSounds[currentUser.id] ?? { mode: "default" }));
+    }
+
+    void loadNotificationSettings();
+  }, [currentUser, users]);
 
   useEffect(() => {
     function unlockNotificationAudio() {
@@ -4646,7 +4978,7 @@ function InboxList({
       window.removeEventListener("focus", refreshVisibleInbox);
       document.removeEventListener("visibilitychange", refreshVisibleInbox);
     };
-  }, [filters, recording, sendingReply]);
+  }, [filters, notificationSoundConfig, recording, sendingReply]);
 
   async function loadConversationMessages(conversationId?: string, options: { silent?: boolean } = {}) {
     if (!conversationId) {
@@ -4800,7 +5132,7 @@ function InboxList({
     setDueFollowUps(nextFollowUps);
 
     if (hasNewDueFollowUp) {
-      void playInboxNotificationSound(notificationAudioContextRef);
+      void playInboxNotificationSound(notificationAudioContextRef, notificationSoundConfig);
     }
   }
 
@@ -4832,7 +5164,7 @@ function InboxList({
     state.latestByConversation = new Map(nextItems.map((conversation) => [conversation.id, conversation.last_message_at]));
 
     if (canPlaySound && hasNewInbound) {
-      void playInboxNotificationSound(notificationAudioContextRef);
+      void playInboxNotificationSound(notificationAudioContextRef, notificationSoundConfig);
     }
   }
 
@@ -7818,7 +8150,16 @@ async function unlockInboxNotificationSound(audioContextRef: { current: AudioCon
   return true;
 }
 
-async function playInboxNotificationSound(audioContextRef: { current: AudioContext | null }) {
+async function playInboxNotificationSound(
+  audioContextRef: { current: AudioContext | null },
+  config: NotificationSoundConfig = DEFAULT_NOTIFICATION_SOUND_CONFIG
+) {
+  const normalizedConfig = normalizeNotificationSoundConfig(config);
+
+  if (normalizedConfig.sound === "none" || normalizedConfig.volume <= 0) {
+    return;
+  }
+
   const unlocked = await unlockInboxNotificationSound(audioContextRef);
 
   if (!unlocked) {
@@ -7831,19 +8172,58 @@ async function playInboxNotificationSound(audioContextRef: { current: AudioConte
   }
   const now = context.currentTime;
   const gain = context.createGain();
+  const targetGain = Math.max(0.0001, Math.min(0.28, normalizedConfig.volume * 0.28));
+  const pattern = getNotificationSoundPattern(normalizedConfig.sound);
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.22, now + 0.015);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.36);
+  gain.gain.exponentialRampToValueAtTime(targetGain, now + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + pattern.duration);
   gain.connect(context.destination);
 
-  for (const [index, frequency] of [880, 1175].entries()) {
+  for (const tone of pattern.tones) {
     const oscillator = context.createOscillator();
-    const startAt = now + index * 0.14;
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(frequency, startAt);
+    const startAt = now + tone.offset;
+    oscillator.type = tone.type;
+    oscillator.frequency.setValueAtTime(tone.frequency, startAt);
     oscillator.connect(gain);
     oscillator.start(startAt);
-    oscillator.stop(startAt + 0.12);
+    oscillator.stop(startAt + tone.length);
+  }
+}
+
+function getNotificationSoundPattern(sound: NotificationSoundName) {
+  switch (sound) {
+    case "ping":
+      return {
+        duration: 0.24,
+        tones: [{ frequency: 980, length: 0.16, offset: 0, type: "triangle" as OscillatorType }]
+      };
+    case "soft":
+      return {
+        duration: 0.44,
+        tones: [
+          { frequency: 523, length: 0.18, offset: 0, type: "sine" as OscillatorType },
+          { frequency: 659, length: 0.2, offset: 0.16, type: "sine" as OscillatorType }
+        ]
+      };
+    case "alert":
+      return {
+        duration: 0.42,
+        tones: [
+          { frequency: 740, length: 0.12, offset: 0, type: "square" as OscillatorType },
+          { frequency: 988, length: 0.12, offset: 0.15, type: "square" as OscillatorType }
+        ]
+      };
+    case "none":
+      return { duration: 0, tones: [] };
+    case "chime":
+    default:
+      return {
+        duration: 0.36,
+        tones: [
+          { frequency: 880, length: 0.12, offset: 0, type: "sine" as OscillatorType },
+          { frequency: 1175, length: 0.12, offset: 0.14, type: "sine" as OscillatorType }
+        ]
+      };
   }
 }
 

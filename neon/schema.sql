@@ -398,6 +398,8 @@ insert into app_settings (key, value, label, description)
 values
   ('auto_reply_delay_seconds', '90'::jsonb, 'Demora de respuesta IA', 'Segundos que FEBO espera antes de responder automaticamente.'),
   ('hot_lead_default_assignee_id', 'null'::jsonb, 'Vendedor por defecto de calientes', 'Usuario asignado por defecto para leads calientes si no hay regla especifica.'),
+  ('notification_sound', '{"sound":"chime","volume":0.55}'::jsonb, 'Sonido de notificaciones', 'Sonido y volumen global para notificaciones del inbox.'),
+  ('notification_sound_users', '{}'::jsonb, 'Sonidos por usuario', 'Excepciones de sonido por usuario del inbox.'),
   ('whatsapp_selector_flow_id', '"890862800687247"'::jsonb, 'Flow ID del selector', 'Identificador publicado del WhatsApp Flow usado para abrir el selector.'),
   ('whatsapp_selector_flow_screen', '"DATOS_CAMPO"'::jsonb, 'Pantalla inicial del Flow', 'Screen ID inicial del WhatsApp Flow del selector.'),
   ('whatsapp_selector_flow_header', '"Selector Febecos"'::jsonb, 'Titulo del Flow', 'Texto de encabezado del mensaje interactivo del selector.'),

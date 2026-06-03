@@ -3646,6 +3646,88 @@ button:disabled {
   gap: 8px;
 }
 
+.notification-sound-settings {
+  grid-template-columns: minmax(260px, 0.72fr) minmax(360px, 1.28fr);
+}
+
+.notification-sound-global,
+.notification-user-sounds {
+  background: rgba(6, 38, 68, 0.34);
+  border: 1px solid rgba(142, 213, 245, 0.18);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.notification-user-sounds h4 {
+  font-size: 13px;
+  margin: 0;
+}
+
+.notification-user-list {
+  display: grid;
+  gap: 7px;
+  max-height: min(48vh, 460px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.notification-user-row {
+  align-items: center;
+  background: rgba(9, 51, 83, 0.72);
+  border: 1px solid rgba(142, 213, 245, 0.16);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(150px, 1fr) 98px minmax(118px, 0.8fr) minmax(140px, 0.9fr) auto;
+  min-height: 44px;
+  padding: 7px 8px;
+}
+
+.notification-user-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notification-user-info strong,
+.notification-user-info span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-user-info span,
+.notification-user-volume span {
+  color: #b9dcf1;
+  font-size: 11px;
+}
+
+.sound-volume-field input,
+.notification-user-volume input {
+  accent-color: #8dc63f;
+  width: 100%;
+}
+
+.notification-user-volume {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 38px minmax(80px, 1fr);
+}
+
+.notification-user-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.notification-user-actions button {
+  min-height: 30px;
+  padding: 6px 9px;
+}
+
 .webhook-settings-card h4 {
   font-size: 13px;
   margin: 0 0 8px;
@@ -5157,8 +5239,18 @@ select option:hover {
     grid-template-columns: 1fr;
   }
 
+  .notification-sound-settings,
   .webhook-layout {
     grid-template-columns: 1fr;
+  }
+
+  .notification-user-row {
+    grid-template-columns: minmax(160px, 1fr) 110px minmax(130px, 1fr);
+  }
+
+  .notification-user-volume,
+  .notification-user-actions {
+    grid-column: 1 / -1;
   }
 
   .webhook-item {
@@ -5207,6 +5299,14 @@ select option:hover {
     aspect-ratio: auto;
     min-height: 132px;
     padding: 10px;
+  }
+
+  .notification-user-row {
+    grid-template-columns: 1fr;
+  }
+
+  .notification-user-actions {
+    justify-content: flex-start;
   }
 
   .followup-alert-stack {

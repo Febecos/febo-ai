@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
-import { getConversationReplyTarget, listConversationMessages, recordManualOutboundMessage, saveMessageMedia } from "@/lib/crm";
+import { getConversationReplyTarget, listConversationMessages, recordManualOutboundMessage, saveMessageMedia, softDeleteMessage, updateMessageBody } from "@/lib/crm";
 import { getWhatsAppQrSentMessageId, isWhatsAppQrBridge, sendWhatsAppQrText } from "@/lib/whatsapp-qr";
 import {
   sendWhatsAppAudio,
@@ -23,7 +23,9 @@ const schema = z.object({
 });
 
 const sendSchema = schema.extend({
-  text: z.string().trim().min(1).max(4000)
+  text: z.string().trim().min(1).max(4000),
+  replyToMessageId: z.string().uuid().optional(),
+  replyToWaMessageId: z.string().optional()
 });
 
 const linkedMediaSchema = schema.extend({
@@ -85,6 +87,47 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     messages: await listConversationMessages(parsed.data.conversationId)
   });
+}
+
+export async function PATCH(request: NextRequest) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const parsed = z.object({
+    messageId: z.string().uuid(),
+    body: z.string().trim().min(1).max(4000)
+  }).safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Datos invalidos." }, { status: 400 });
+  }
+
+  await updateMessageBody(parsed.data.messageId, parsed.data.body);
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(request: NextRequest) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const parsed = z.object({
+    messageId: z.string().uuid()
+  }).safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Datos invalidos." }, { status: 400 });
+  }
+
+  await softDeleteMessage(parsed.data.messageId);
+  return NextResponse.json({ ok: true });
 }
 
 export async function POST(request: NextRequest) {
@@ -235,6 +278,8 @@ export async function POST(request: NextRequest) {
         preserveAiEnabled: true
       });
     } else if ("text" in parsed.data) {
+      const replyToWaMessageId = "replyToWaMessageId" in parsed.data ? parsed.data.replyToWaMessageId : undefined;
+      const replyToMessageId = "replyToMessageId" in parsed.data ? parsed.data.replyToMessageId : undefined;
       const sent = usesQrBridge
         ? await sendWhatsAppQrText({
             bridgeUrl: target.bridge_url ?? "",
@@ -243,13 +288,14 @@ export async function POST(request: NextRequest) {
             body: parsed.data.text,
             conversationId: parsed.data.conversationId
           })
-        : await sendWhatsAppText(target.phone, parsed.data.text);
+        : await sendWhatsAppText(target.phone, parsed.data.text, replyToWaMessageId);
       await recordManualOutboundMessage({
         conversationId: parsed.data.conversationId,
         contactId: target.contact_id,
         userId: user.id,
         body: parsed.data.text,
-        waMessageId: usesQrBridge ? getWhatsAppQrSentMessageId(sent) : getSentMessageId(sent)
+        waMessageId: usesQrBridge ? getWhatsAppQrSentMessageId(sent) : getSentMessageId(sent),
+        replyToMessageId: replyToMessageId ?? null
       });
     }
   } catch (error) {

@@ -4583,6 +4583,9 @@ function InboxList({
   const [savingFollowUp, setSavingFollowUp] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [replyFile, setReplyFile] = useState<File | null>(null);
+  const [replyingTo, setReplyingTo] = useState<ConversationMessage | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingBody, setEditingBody] = useState("");
   const [replyFilePreviewUrl, setReplyFilePreviewUrl] = useState("");
   const [imagePreview, setImagePreview] = useState<{ alt: string; src: string } | null>(null);
   const [sendingReply, setSendingReply] = useState(false);
@@ -5904,6 +5907,38 @@ function InboxList({
     setTransferOpen(false);
   }
 
+  async function deleteMessage(messageId: string) {
+    if (!window.confirm("¿Eliminar este mensaje? Solo se ocultará localmente.")) {
+      return;
+    }
+
+    await fetch("/api/conversation-messages", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messageId })
+    });
+
+    setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, deleted_at: new Date().toISOString() } : m));
+  }
+
+  async function saveEditedMessage(messageId: string) {
+    const trimmed = editingBody.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    await fetch("/api/conversation-messages", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messageId, body: trimmed })
+    });
+
+    setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, body: trimmed } : m));
+    setEditingMessageId(null);
+    setEditingBody("");
+  }
+
   async function sendManualReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -5957,10 +5992,23 @@ function InboxList({
           });
         }
       } else {
+        const textPayload: Record<string, unknown> = {
+          conversationId: selected.id,
+          text: replyText.trim()
+        };
+
+        if (replyingTo) {
+          textPayload.replyToMessageId = replyingTo.id;
+
+          if (replyingTo.wa_message_id) {
+            textPayload.replyToWaMessageId = replyingTo.wa_message_id;
+          }
+        }
+
         const body =
           replyFile ?
             buildAttachmentFormData(selected.id, replyFile, replyText.trim())
-          : JSON.stringify({ conversationId: selected.id, text: replyText.trim() });
+          : JSON.stringify(textPayload);
 
         setReplyProgress("Enviando...");
         response = await fetchWithTimeout("/api/conversation-messages", {
@@ -5988,6 +6036,7 @@ function InboxList({
 
     setReplyText("");
     setReplyFile(null);
+    setReplyingTo(null);
     setMessages(markLatestManualReply(payload?.messages ?? [], currentUser));
     await refreshConversations();
   }
@@ -6950,13 +6999,69 @@ function InboxList({
                     {messages.map((message) => {
                       const authorLabel = getMessageAuthorLabel(message);
                       const isHumanOutbound = isHumanOutboundMessage(message);
+                      const isEditing = editingMessageId === message.id;
 
                       return (
                         <article
                           className={`chat-bubble ${message.direction} ${isHumanOutbound ? "human-outbound" : ""} ${isAudioMessage(message) ? "audio-bubble" : ""}`}
                           key={message.id}
                         >
-                          {!isAudioMessage(message) && message.body ? <p>{message.body}</p> : null}
+                          <div className="message-actions">
+                            {message.direction === "outbound" && !message.deleted_at && (
+                              <>
+                                <button
+                                  aria-label="Editar mensaje"
+                                  onClick={() => { setEditingMessageId(message.id); setEditingBody(message.body); }}
+                                  title="Editar"
+                                  type="button"
+                                >
+                                  <FilePenLine size={13} />
+                                </button>
+                                <button
+                                  aria-label="Eliminar mensaje"
+                                  onClick={() => deleteMessage(message.id)}
+                                  title="Eliminar"
+                                  type="button"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </>
+                            )}
+                            {message.direction === "inbound" && (
+                              <button
+                                aria-label="Responder mensaje"
+                                onClick={() => setReplyingTo(message)}
+                                title="Responder"
+                                type="button"
+                              >
+                                <MessageCircleMore size={13} />
+                              </button>
+                            )}
+                          </div>
+                          {message.reply_to_body ? (
+                            <div className="reply-preview">
+                              <span>{message.reply_to_body}</span>
+                            </div>
+                          ) : null}
+                          {message.deleted_at ? (
+                            <em className="msg-deleted">Mensaje eliminado</em>
+                          ) : isEditing ? (
+                            <div className="msg-edit-area">
+                              <textarea
+                                autoFocus
+                                onChange={(e) => setEditingBody(e.target.value)}
+                                value={editingBody}
+                              />
+                              <div className="msg-edit-actions">
+                                <button className="primary" onClick={() => saveEditedMessage(message.id)} type="button">Guardar</button>
+                                <button className="secondary" onClick={() => { setEditingMessageId(null); setEditingBody(""); }} type="button">Cancelar</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              {!isAudioMessage(message) && message.body ? <p>{message.body}</p> : null}
+                            </>
+                          )}
                           {getReplyOptions(message).length ? (
                             <div className="reply-options-log">
                               <span>Opciones enviadas:</span>
@@ -7105,6 +7210,14 @@ function InboxList({
                 ref={attachmentInputRef}
                 type="file"
               />
+              {replyingTo ? (
+                <div className="reply-bar">
+                  <span className="reply-bar-text">{replyingTo.body}</span>
+                  <button aria-label="Cancelar respuesta" onClick={() => setReplyingTo(null)} type="button">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : null}
               <div className="drop-zone">
                 <Paperclip size={18} />
                 <span>Solta aca una imagen, video, PDF o archivo</span>

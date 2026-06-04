@@ -514,3 +514,8 @@ drop trigger if exists set_quick_replies_updated_at on quick_replies;
 create trigger set_quick_replies_updated_at
 before update on quick_replies
 for each row execute function set_updated_at();
+
+-- 2026-06-04: soft delete and reply threading
+alter table messages
+  add column if not exists deleted_at timestamptz,
+  add column if not exists reply_to_message_id uuid references messages(id) on delete set null;

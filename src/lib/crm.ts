@@ -271,6 +271,10 @@ export type ConversationMessage = {
   media_storage_provider: string | null;
   created_by: string | null;
   created_by_name: string | null;
+  deleted_at: string | null;
+  reply_to_message_id: string | null;
+  reply_to_body: string | null;
+  reply_to_direction: string | null;
 };
 
 export type ConversationNote = {
@@ -2483,6 +2487,22 @@ export async function updateMessageBody(messageId: string | null | undefined, bo
   `;
 }
 
+export async function softDeleteMessage(messageId: string) {
+  if (!isDbConfigured() || !messageId) {
+    return;
+  }
+
+  const sql = getSql();
+
+  await sql`
+    update messages
+    set deleted_at = now()
+    where id = ${messageId}::uuid
+      and direction = 'outbound'
+      and deleted_at is null
+  `;
+}
+
 export async function recordAgentReply(input: {
   contactId?: string | null;
   threadId?: string | null;
@@ -2889,7 +2909,11 @@ export async function listConversationMessages(conversationId: string, limit = 1
       mm.media_url,
       mm.storage_provider as media_storage_provider,
       m.created_by::text,
-      u.full_name as created_by_name
+      u.full_name as created_by_name,
+      m.deleted_at::text,
+      m.reply_to_message_id::text,
+      reply_msg.body as reply_to_body,
+      reply_msg.direction as reply_to_direction
     from messages m
     left join app_users u on u.id = m.created_by
     left join lateral (
@@ -2899,6 +2923,7 @@ export async function listConversationMessages(conversationId: string, limit = 1
       order by created_at desc
       limit 1
     ) mm on true
+    left join messages reply_msg on reply_msg.id = m.reply_to_message_id
     where m.conversation_id = ${conversationId}
     order by m.created_at asc
     limit ${safeLimit}
@@ -3530,6 +3555,7 @@ export async function recordManualOutboundMessage(input: {
   waMessageId?: string | null;
   metadata?: Record<string, unknown>;
   preserveAiEnabled?: boolean;
+  replyToMessageId?: string | null;
 }) {
   const sql = getSql();
   const metadata = {
@@ -3537,9 +3563,10 @@ export async function recordManualOutboundMessage(input: {
     whatsapp_status: input.waMessageId ? "accepted" : undefined,
     ...(input.metadata ?? {})
   };
+  const replyToMessageId = input.replyToMessageId ?? null;
 
   const rows = (await sql`
-    insert into messages (conversation_id, contact_id, account_id, channel, direction, wa_message_id, external_message_id, body, created_by, metadata)
+    insert into messages (conversation_id, contact_id, account_id, channel, direction, wa_message_id, external_message_id, body, created_by, metadata, reply_to_message_id)
     values (
       ${input.conversationId},
       ${input.contactId},
@@ -3550,7 +3577,8 @@ export async function recordManualOutboundMessage(input: {
       ${input.waMessageId ?? null},
       ${input.body},
       ${input.userId},
-      ${JSON.stringify(metadata)}::jsonb
+      ${JSON.stringify(metadata)}::jsonb,
+      ${replyToMessageId}::uuid
     )
     returning id::text
   `) as Array<{ id: string }>;

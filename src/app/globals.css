@@ -6463,3 +6463,130 @@ select {
 .tag-editor-row {
   background: #0e3b63;
 }
+
+/* ── Message action buttons (delete / edit / reply) ─────────────────── */
+.message-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: none;
+  gap: 3px;
+  background: rgba(10, 30, 55, 0.82);
+  border-radius: 6px;
+  padding: 2px 4px;
+  z-index: 2;
+}
+
+.chat-bubble {
+  position: relative;
+}
+
+.chat-bubble:hover .message-actions {
+  display: flex;
+}
+
+.message-actions button {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.message-actions button:hover {
+  color: #e2e8f0;
+  background: rgba(255,255,255,0.08);
+}
+
+/* ── Reply preview inside message bubble ─────────────────────────────── */
+.reply-preview {
+  border-left: 3px solid #f97316;
+  background: rgba(249, 115, 22, 0.12);
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin-bottom: 4px;
+  font-size: 0.8em;
+  color: #cbd5e1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.outbound .reply-preview {
+  border-left-color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+}
+
+/* ── Reply bar in composer ───────────────────────────────────────────── */
+.reply-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0b2a4a;
+  border-left: 3px solid #f97316;
+  padding: 6px 10px;
+  font-size: 0.82em;
+  color: #94a3b8;
+}
+
+.reply-bar-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-bar button {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.reply-bar button:hover {
+  color: #e2e8f0;
+}
+
+/* ── Deleted message ─────────────────────────────────────────────────── */
+.msg-deleted {
+  color: #64748b;
+  font-style: italic;
+  font-size: 0.88em;
+}
+
+/* ── Inline edit area ────────────────────────────────────────────────── */
+.msg-edit-area {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.msg-edit-area textarea {
+  width: 100%;
+  min-height: 60px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 0.9em;
+  padding: 6px 8px;
+  resize: vertical;
+}
+
+.msg-edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.msg-edit-actions button {
+  font-size: 0.82em;
+  padding: 3px 10px;
+}

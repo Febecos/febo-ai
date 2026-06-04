@@ -405,9 +405,24 @@ export async function downloadWhatsAppMedia(mediaId: string) {
   };
 }
 
-export async function sendWhatsAppText(to: string, body: string) {
+export async function sendWhatsAppText(to: string, body: string, replyToWaMessageId?: string | null) {
   const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
   const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+
+  const payload: Record<string, unknown> = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to,
+    type: "text",
+    text: {
+      preview_url: false,
+      body
+    }
+  };
+
+  if (replyToWaMessageId) {
+    payload.context = { message_id: replyToWaMessageId };
+  }
 
   const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
     method: "POST",
@@ -415,16 +430,7 @@ export async function sendWhatsAppText(to: string, body: string) {
       authorization: `Bearer ${accessToken}`,
       "content-type": "application/json"
     },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      recipient_type: "individual",
-      to,
-      type: "text",
-      text: {
-        preview_url: false,
-        body
-      }
-    })
+    body: JSON.stringify(payload)
   });
 
   if (!response.ok) {

@@ -1093,7 +1093,7 @@ No agregar campos. No agregar `score_cierre`, `score`, `origen`, ni ningún otro
 ## 25. Casos rápidos
 
 **Pocero / instalador / revendedor:**
-> "¡Buenísimo, gracias por el contacto! Crearte una cuenta demo en https://revendedores.febecos.com/unirse, probás el portal y nos contactamos. Cualquier duda nos escribís por WhatsApp al número del gremio que lo encontrás ahí."
+> "¡Buenísimo, gracias por el contacto!\n{nombre}, crearte una cuenta demo en https://revendedores.febecos.com/unirse, probás el portal y nos contactamos.\nCualquier duda nos escribís por WhatsApp al número del gremio que lo encontrás ahí.\n¡Bienvenido!"
 No seguir con cotización.
 
 **Sin perforación (cliente sin experiencia):**

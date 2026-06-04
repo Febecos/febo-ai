@@ -6467,13 +6467,10 @@ select {
 /* ── Message action buttons (delete / edit / reply) ─────────────────── */
 .message-actions {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  bottom: 6px;
+  right: 6px;
   display: none;
-  gap: 3px;
-  background: rgba(10, 30, 55, 0.82);
-  border-radius: 6px;
-  padding: 2px 4px;
+  gap: 4px;
   z-index: 2;
 }
 
@@ -6486,19 +6483,23 @@ select {
 }
 
 .message-actions button {
-  background: none;
+  background: rgba(0, 0, 0, 0.72);
   border: none;
-  color: #94a3b8;
+  color: #e2e8f0;
   cursor: pointer;
-  padding: 2px;
-  border-radius: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  backdrop-filter: blur(4px);
 }
 
 .message-actions button:hover {
-  color: #e2e8f0;
-  background: rgba(255,255,255,0.08);
+  background: rgba(0, 0, 0, 0.88);
+  color: #fff;
 }
 
 /* ── Reply preview inside message bubble ─────────────────────────────── */

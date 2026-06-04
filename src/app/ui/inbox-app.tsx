@@ -7031,10 +7031,10 @@ function InboxList({
                               <button
                                 aria-label="Responder mensaje"
                                 onClick={() => setReplyingTo(message)}
-                                title="Responder"
                                 type="button"
                               >
                                 <MessageCircleMore size={13} />
+                                Responder
                               </button>
                             )}
                           </div>

@@ -5450,6 +5450,19 @@ function InboxList({
   }
 
   function handleReplyKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    // Enviar el mensaje con Ctrl+Enter (o Cmd+Enter en Mac) para cualquier usuario.
+    if (
+      event.key === "Enter" &&
+      (event.ctrlKey || event.metaKey) &&
+      quickReplyQuery === null
+    ) {
+      event.preventDefault();
+      if (!sendingReply && (replyText.trim() || replyFile)) {
+        event.currentTarget.form?.requestSubmit();
+      }
+      return;
+    }
+
     if (quickReplyQuery === null || !matchingQuickReplies.length) {
       return;
     }

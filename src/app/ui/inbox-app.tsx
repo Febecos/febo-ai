@@ -5592,7 +5592,7 @@ function InboxList({
     setEvents(payload?.events ?? []);
     setActiveConversationTab("audit");
     setSentManualEvent(eventName);
-    setManualEventMessage("Evento manual enviado.");
+    setManualEventMessage("");
   }
 
   function updateFilters(next: Partial<typeof filters>) {

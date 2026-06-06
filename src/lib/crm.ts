@@ -2145,14 +2145,7 @@ export async function recordIncomingMessage(input: {
           ${channel},
           'open',
           now(),
-          coalesce(
-            (
-              select ca.auto_reply_enabled
-              from channel_accounts ca
-              where ca.id = (select account_id from contacts where id = ${contactId})
-            ),
-            true
-          )
+          true
         )
         returning id, ai_enabled
       `) as Array<{ id: string; ai_enabled: boolean }>

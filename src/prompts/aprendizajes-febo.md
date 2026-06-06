@@ -59,6 +59,12 @@ Si hay contexto de anuncio (bloque `[Vino de un anuncio de Meta — ...]`) y el 
 - **Pozo bueno y caño ancho (ej. 18 m, 150 mm):** *"Con ese pozo y ese caño entra cualquier bomba sin problema."*
 - **Pozo tipo aljibe ancho de cemento, agua a poca profundidad, salida a acequia, uso esporádico (ej. lagarto/reservorio 2-3 veces/semana, ~15.000 L/día):** dimensionar por litros/día + altura; ej. real validado → **3" 300W + 1 panel 550W, kit completo** (entrega ~18.150 L/día en verano a esa altura). Confirmar siempre con `selectorQuote`.
 
+## Etiqueta cotizado vs pasar-presupuesto (no confundir)
+
+- Apenas le pasás el **precio/cotización** al cliente, la etiqueta (consultype) pasa a **`cotizado`** (o `caliente` si además dijo que quiere avanzar/comprar/pagar).
+- **`pasar-presupuesto` es SOLO mientras el precio está pendiente** (pidió precio pero todavía no se lo diste). Nunca dejes `pasar-presupuesto` después de haber pasado el precio.
+- Caso real (mal): a Ángel se le pasó la cotización completa (equipo + $1.660.477) pero quedó como "Pasar Presupuesto". Debió quedar `cotizado`.
+
 ## Tono / criterio
 
 - Cuando los datos entran, confirmá corto y seguro: *"Sí, con este modelo andaría bien."* No re-preguntes lo que ya está claro.

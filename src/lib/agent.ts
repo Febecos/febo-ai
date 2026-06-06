@@ -140,7 +140,17 @@ function normalizeJson(text: string) {
 
 async function getOperatingPrompt() {
   if (!operatingPrompt) {
-    operatingPrompt = await readFile(path.join(process.cwd(), "src", "prompts", "febo-ai-v1.md"), "utf8");
+    const base = await readFile(path.join(process.cwd(), "src", "prompts", "febo-ai-v1.md"), "utf8");
+    // Memoria de Febo: aprendizajes de respuestas reales (alta prioridad).
+    let learnings = "";
+    try {
+      learnings = await readFile(path.join(process.cwd(), "src", "prompts", "aprendizajes-febo.md"), "utf8");
+    } catch {
+      learnings = "";
+    }
+    operatingPrompt = learnings
+      ? `${base}\n\n---\n\n# ⭐ MEMORIA DE FEBO (aprendizajes recientes — máxima prioridad)\n\n${learnings}`
+      : base;
   }
 
   return operatingPrompt;

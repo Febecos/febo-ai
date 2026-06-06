@@ -774,6 +774,13 @@ Usar los bloques literales del sistema:
 
 **Nunca redactar el precio con palabras propias** ("orden de", "aprox", "estamos hablando de") si el sistema devolvió la cotización completa.
 
+**SIEMPRE incluir el link de la ficha del modelo cotizado (OBLIGATORIO en toda cotización/recomendación de un equipo):**
+- Tomá el slug exacto de `selectorQuote.result.sugerencia.url_slug` y armá: `https://selector.febecos.com/catalogo-v2/{url_slug}`.
+- Si no tenés el url_slug pero sí el modelo, armalo por potencia + diámetro: `https://selector.febecos.com/catalogo-v2/kit-bomba-solar-{diametro}-{watts}w` (ej. 3" 300W → `kit-bomba-solar-3-300w`).
+- Pasalo con una frase del estilo:
+> *"Podés ver todos los datos de este equipo online acá: {link}"*
+- Va junto con el precio, en el mismo mensaje de la cotización. Así el cliente confirma fotos, ficha técnica y componentes por su cuenta.
+
 **Después del precio, reencuadrar obligatoriamente:**
 > *"Ahora, lo importante: con este sistema eliminás gasto de combustible y mantenimiento. La diferencia no es el precio del equipo, es cuánto dejás de gastar después."*
 

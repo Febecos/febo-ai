@@ -26,6 +26,7 @@ export type SelectorPumpResult = {
   };
   sugerencia: {
     codigo: string;
+    url_slug?: string;
     marca?: string;
     tipo?: string;
     energia?: string;

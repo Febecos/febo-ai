@@ -622,7 +622,9 @@ async function extractQuoteRequest(input: {
       "Usa memoriaComercial para recuperar datos previos aunque no aparezcan en los ultimos mensajes.",
       "shouldQuote=true si el cliente pide precio/cotizacion/modelo o si ya dio datos suficientes para cotizar.",
       "hasEnoughData=true solo si hay altura/profundidad, consumo diario y diametro maximo de bomba compatible.",
-      "Para ganado calcula litrosPerDay = animales * 60.",
+      "Consumo por animal: SOLO para BOVINOS (vacas, terneros, novillos, vaquillonas, hacienda de cria/engorde/tambo) calcula litrosPerDay = animales * 60. Para OTROS animales (chanchos/cerdos, ovejas, cabras, aves/pollos, caballos) NO asumas litros: deja litersPerDay=null y agrega 'litros por dia' a missingData, porque su consumo es distinto al de las vacas y hay que preguntarlo.",
+      "Medida ambigua altura vs distancia: si el cliente dice 'X metros al tanque / hasta el tanque / al lugar' y NO aclara si es altura vertical (lo que sube el agua) o distancia horizontal, NO uses esa medida como heightMeters ni como altura de tanque: deja heightMeters sin definir por esa medida y agrega 'confirmar si los X m son altura o distancia' a missingData. La distancia horizontal NO es altura.",
+      "Fuente abierta: si el cliente dice que NO tiene perforacion, o que es un lago/laguna/represa/canal/acequia/tajamar/pozo abierto/a cielo abierto, es una FUENTE ABIERTA. La bomba va sumergida dentro de una camisa de PVC y entra cualquier diametro. En ese caso NO exijas diametro de perforacion: usa maxPumpDiameterInches=4 y no lo pongas en missingData por ese motivo.",
       "Distingui profundidad total del pozo/perforacion de nivel de agua/espejo de agua. Si el cliente dice que el agua esta a X metros, eso es waterLevelMeters y manda para calcular heightMeters.",
       "La profundidad total del pozo solo sirve como fallback si no hay nivel de agua. No sumes profundidad total si el cliente ya dio nivel de agua.",
       "Si hay nivel de agua y altura de tanque, usa heightMeters = nivel de agua + altura de tanque. Si hay nivel de agua pero no altura de tanque, usa nivel de agua + 5 y agrega esa suposicion.",
@@ -806,9 +808,12 @@ function inferPerforationDepthMeters(sourceText: string) {
 }
 
 function inferTankHeightMeters(sourceText: string) {
+  // Solo contar como ALTURA de tanque cuando el cliente lo dice explicito
+  // (altura/alto/torre). "X m al tanque" a secas es ambiguo (puede ser
+  // distancia horizontal) -> no asumir, que el agente pregunte.
   return findMeters(sourceText, [
-    /(?:tanque|deposito|depósito)[^.\n]{0,60}?([0-9]+(?:[.,][0-9]+)?|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:m|mts|metros?)\s*(?:de\s+)?(?:altura|alto)?/i,
-    /([0-9]+(?:[.,][0-9]+)?|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:m|mts|metros?)\s+(?:de\s+)?(?:altura\s+)?(?:al\s+)?(?:tanque|deposito|depósito)/i
+    /(?:tanque|deposito|depósito|torre)[^.\n]{0,40}?([0-9]+(?:[.,][0-9]+)?|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:m|mts|metros?)\s*(?:de\s+)?(?:altura|alto)/i,
+    /([0-9]+(?:[.,][0-9]+)?|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:m|mts|metros?)\s+(?:de\s+)?(?:altura|alto)\s+(?:al\s+|del\s+|en\s+)?(?:tanque|deposito|depósito|torre)/i
   ]);
 }
 

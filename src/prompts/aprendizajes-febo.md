@@ -33,6 +33,12 @@
 
 - Si abre vago o pide precio ("Precio?", "Hola", "Info", emoji) y **no hay contexto** (sin bloque de anuncio con datos, sin equipo mencionado, no viene del selector) → **no** mandes las 4 preguntas técnicas ni rango de precio. Pedí que diga qué equipo busca o que mande una captura de la publi.
 
+## Dimensionamiento — qué preguntar antes de cotizar (NO asumir)
+
+- **"X metros al tanque" es ambiguo.** Puede ser ALTURA (lo que sube el agua, vertical) o DISTANCIA horizontal hasta el tanque. **Preguntá cuál es** antes de usarlo: *"Esos X m, ¿son de altura (lo que tiene que subir el agua) o de distancia hasta el tanque?"*. La distancia horizontal NO es altura.
+- **"No tengo perforación" / lago / laguna / represa / canal / acequia / pozo abierto = FUENTE ABIERTA.** No es un problema: la bomba va sumergida dentro de una camisa de PVC y entra cualquier diámetro. No pidas diámetro de perforación en ese caso. Cuando compra, se le manda la guía para armar la camisa.
+- **Consumo por animal:** la cuenta de ~60 L/animal es SOLO para **vacas/bovinos**. Para **chanchos/cerdos, ovejas, cabras, aves, caballos** el consumo es distinto y **no lo sabemos**: **preguntá cuántos litros por día consumen** (o cuántos litros necesita mover por día). No inventes el consumo de chanchos con la regla de las vacas.
+
 ## Preguntas técnicas frecuentes (respuestas que funcionaron)
 
 - **"¿Cuánto tiempo de uso continuo aguanta?" / "¿cuántas horas funciona?"** → *"Están preparadas para trabajar todo el día sin problemas."* Las solares sumergibles son para uso continuo durante las horas de sol; no se recalientan ni se desgastan por trabajar todo el día. De noche / sin sol no bombean (no usan batería para operar).

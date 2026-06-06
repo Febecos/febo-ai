@@ -13,6 +13,7 @@ import {
   upsertConversationMemory
 } from "./crm";
 import { createLead, createSupportTicket, getProfileByPhone, platformFallbackContext, recordPlatformEvent } from "./febecos";
+import { getApprovedLearningsText } from "./learnings";
 import { SelectorPumpResult, suggestPump } from "./selector";
 
 const consultypeValues = [
@@ -183,7 +184,12 @@ export async function runFebecosAgent(input: {
 }): Promise<AgentResult> {
   const profile = await getProfileByPhone(input.phone);
   const fallback = platformFallbackContext();
-  const prompt = await getOperatingPrompt();
+  const basePrompt = await getOperatingPrompt();
+  // Aprendizajes APROBADOS (revisados por un humano) que se inyectan en vivo.
+  const approvedLearnings = await getApprovedLearningsText(Date.now()).catch(() => "");
+  const prompt = approvedLearnings
+    ? `${basePrompt}\n\n---\n\n# ⭐ APRENDIZAJES APROBADOS (alta prioridad — revisados por el equipo)\n\n${approvedLearnings}`
+    : basePrompt;
   const history = await listAgentConversationContext(input.conversationId, 50);
   const memory = await getConversationMemory(input.conversationId);
   const contactContext = await getAgentContactContext(input.conversationId);

@@ -152,7 +152,7 @@ type AgentTestResponse = {
   escalar: boolean;
 };
 
-type ToolKey = "conversations" | "metrics" | "contacts" | "crm" | "templates" | "labels" | "settings" | "users" | "ai" | "transportistas";
+type ToolKey = "conversations" | "metrics" | "contacts" | "crm" | "templates" | "labels" | "settings" | "users" | "ai" | "transportistas" | "aprendizajes";
 type SettingKey =
   | "auto_reply_delay_seconds"
   | "hot_lead_default_assignee_id"
@@ -588,6 +588,10 @@ function ToolWorkspace({
         </button>
         {isAdmin ? (
           <>
+            <button className={activeTool === "aprendizajes" ? "active" : ""} onClick={() => setActiveTool("aprendizajes")} type="button">
+              <Bot size={18} />
+              Aprendizajes IA
+            </button>
             <button className={activeTool === "users" ? "active" : ""} onClick={() => setActiveTool("users")} type="button">
               <ShieldCheck size={18} />
               Usuarios y accesos
@@ -698,6 +702,7 @@ function ToolWorkspace({
         ) : null}
         {activeTool === "settings" && isAdmin ? <SettingsPanel users={adminUsers.length ? adminUsers : users} /> : null}
         {activeTool === "ai" ? <AgentTester /> : null}
+        {activeTool === "aprendizajes" && isAdmin ? <LearningsPanel /> : null}
         {activeTool === "transportistas" ? <TransportistasPanel /> : null}
       </div>
     </section>
@@ -8096,6 +8101,108 @@ function Info({ label, value }: { label: string; value: string }) {
     <div className="info-cell">
       <small>{label}</small>
       <strong>{value}</strong>
+    </div>
+  );
+}
+
+type LearningItem = {
+  id: string;
+  topic: string;
+  customer_pattern: string;
+  how_to_respond: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+};
+
+function LearningsPanel() {
+  const [items, setItems] = useState<LearningItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
+
+  async function load() {
+    setLoading(true);
+    const response = await fetch("/api/learnings");
+    const payload = await readJsonResponse(response);
+    setItems(payload?.learnings ?? []);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function setStatus(id: string, status: "approved" | "rejected" | "pending") {
+    setBusy(id);
+    await fetch("/api/learnings", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, status })
+    });
+    setBusy("");
+    await load();
+  }
+
+  async function runDistill() {
+    setBusy("distill");
+    setMessage("Analizando respuestas del equipo...");
+    const response = await fetch("/api/learnings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "distill", sinceHours: 72 })
+    });
+    const payload = await readJsonResponse(response);
+    setBusy("");
+    setMessage(payload?.ok ? `Listo. ${payload.inserted ?? 0} aprendizajes nuevos para revisar.` : (payload?.error ?? "No pudimos analizar."));
+    await load();
+  }
+
+  const pending = items.filter((i) => i.status === "pending");
+  const approved = items.filter((i) => i.status === "approved");
+  const rejected = items.filter((i) => i.status === "rejected");
+
+  function card(item: LearningItem) {
+    return (
+      <article className="learning-card" key={item.id}>
+        <strong>{item.topic}</strong>
+        <p><em>Cuando:</em> {item.customer_pattern}</p>
+        <p><em>Cómo responder:</em> {item.how_to_respond}</p>
+        <div className="learning-actions">
+          {item.status !== "approved" ? (
+            <button className="primary" disabled={busy === item.id} onClick={() => void setStatus(item.id, "approved")} type="button">Aprobar</button>
+          ) : null}
+          {item.status !== "rejected" ? (
+            <button className="secondary" disabled={busy === item.id} onClick={() => void setStatus(item.id, "rejected")} type="button">Rechazar</button>
+          ) : null}
+          {item.status !== "pending" ? (
+            <button className="secondary" disabled={busy === item.id} onClick={() => void setStatus(item.id, "pending")} type="button">Volver a pendiente</button>
+          ) : null}
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <div className="tool-panel learnings-panel">
+      <div className="learnings-head">
+        <div>
+          <h2>Aprendizajes de la IA</h2>
+          <p>Febo propone aprendizajes leyendo cómo responde el equipo. Vos los aprobás y recién ahí los usa con los clientes.</p>
+        </div>
+        <button className="primary" disabled={busy === "distill"} onClick={() => void runDistill()} type="button">
+          {busy === "distill" ? "Analizando..." : "Analizar respuestas ahora"}
+        </button>
+      </div>
+      {message ? <p className="learnings-msg">{message}</p> : null}
+      {loading ? <p>Cargando...</p> : null}
+
+      <h3>Pendientes de revisar ({pending.length})</h3>
+      {pending.length ? pending.map(card) : <p className="empty-state">No hay aprendizajes pendientes. Tocá "Analizar respuestas ahora" o esperá la corrida automática diaria.</p>}
+
+      <h3>Aprobados — activos en el bot ({approved.length})</h3>
+      {approved.length ? approved.map(card) : <p className="empty-state">Todavía no aprobaste ninguno.</p>}
+
+      {rejected.length ? (<><h3>Rechazados ({rejected.length})</h3>{rejected.map(card)}</>) : null}
     </div>
   );
 }

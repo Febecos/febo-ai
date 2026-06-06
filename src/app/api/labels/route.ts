@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
-import { listConversationConsultypeLabels, listLabelDefinitions, restoreBaseLabelDefinitions, upsertLabelDefinition } from "@/lib/crm";
+import { applyRecommendedLabelInstructions, listConversationConsultypeLabels, listLabelDefinitions, restoreBaseLabelDefinitions, upsertLabelDefinition } from "@/lib/crm";
 
 const labelSchema = z.object({
   slug: z.string().trim().max(60).optional(),
@@ -13,6 +13,9 @@ const labelSchema = z.object({
 });
 const restoreSchema = z.object({
   action: z.literal("restore-base")
+});
+const applyAiSchema = z.object({
+  action: z.literal("apply-ai-descriptions")
 });
 
 export async function GET(request: NextRequest) {
@@ -36,6 +39,15 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
+
+  const applyAi = applyAiSchema.safeParse(body);
+  if (applyAi.success) {
+    if (user.role !== "admin") {
+      return NextResponse.json({ error: "Solo administrador." }, { status: 403 });
+    }
+    return NextResponse.json({ labels: await applyRecommendedLabelInstructions() });
+  }
+
   const restore = restoreSchema.safeParse(body);
 
   if (restore.success) {

@@ -1466,6 +1466,46 @@ export async function upsertLabelDefinition(input: {
   return rows[0] ?? null;
 }
 
+// Descripciones para la IA recomendadas (acordadas con el equipo). Actualiza
+// SOLO el campo instructions de las etiquetas existentes (no toca nombre/color/
+// activo) e inserta las del embudo que falten.
+const RECOMMENDED_LABEL_INSTRUCTIONS: Array<{ slug: string; name: string; color: string; instructions: string; sortOrder: number }> = [
+  { slug: "saludo", name: "Saludo", color: "#94a3b8", sortOrder: 5, instructions: "Primer mensaje sin contenido sustantivo (hola, un emoji). Todavia no pregunto nada concreto ni dijo que busca." },
+  { slug: "informacion", name: "Informacion", color: "#38bdf8", sortOrder: 6, instructions: "Pregunta general que NO es de producto/precio: horarios, direccion, formas de pago, datos de la empresa." },
+  { slug: "disponibilidad", name: "Disponibilidad", color: "#38bdf8", sortOrder: 7, instructions: "Consulta sobre stock o tiempos de entrega." },
+  { slug: "accion", name: "Accion", color: "#38bdf8", sortOrder: 8, instructions: "Esta dando datos tecnicos en el flujo, pero todavia NO pidio precio ni se le paso cotizacion." },
+  { slug: "pasar-presupuesto", name: "Pasar Presupuesto", color: "#38bdf8", sortOrder: 90, instructions: "Pidio precio/presupuesto pero todavia NO se lo pasaste (faltan datos o esta pendiente de cotizar). Apenas le pasas el precio, deja de ser esta." },
+  { slug: "cotizado", name: "Cotizado", color: "#16a34a", sortOrder: 50, instructions: "Ya se le paso la cotizacion con precio por el chat y todavia no dijo claramente que quiere avanzar." },
+  { slug: "caliente", name: "Caliente", color: "#f43f5e", sortOrder: 10, instructions: "Ya cotizado Y el cliente dijo que quiere avanzar/comprar/pagar/reservar o que lo llamen. Maxima prioridad comercial." },
+  { slug: "comparador", name: "Comparador", color: "#fbbf24", sortOrder: 30, instructions: "Ya cotizado pero esta comparando opciones/precios, dice 'lo pienso' o 'es caro' antes de decidir." },
+  { slug: "cliente", name: "Cliente", color: "#42c767", sortOrder: 20, instructions: "Ya compro o debe tratarse como cliente activo." },
+  { slug: "presupuesto-enviado", name: "Presupuesto enviado", color: "#38bdf8", sortOrder: 110, instructions: "Ya se envio un presupuesto formal (PDF o por un asesor humano). Distinta de 'cotizado', que es la cotizacion por chat de la IA." },
+  { slug: "pocero-instalador", name: "Pocero / instalador", color: "#38bdf8", sortOrder: 100, instructions: "Es instalador, pocero, perforista o revendedor: canal profesional, no consumidor final." },
+  { slug: "sin-perforacion", name: "Sin perforacion", color: "#94a3b8", sortOrder: 120, instructions: "No tiene perforacion y esta en exploracion inicial, sin cotizacion. Si es fuente abierta (lago/represa/canal), NO va aca: ahi se cotiza igual." },
+  { slug: "proyecto-futuro", name: "Proyecto futuro", color: "#94a3b8", sortOrder: 130, instructions: "Sin urgencia: lo hara mas adelante / cuando junte plata / proxima temporada. Pospuso explicitamente." },
+  { slug: "seguimiento", name: "Seguimiento", color: "#f97316", sortOrder: 140, instructions: "Continuacion de un caso ya iniciado; retoma una charla previa." },
+  { slug: "problema", name: "Problema", color: "#f43f5e", sortOrder: 150, instructions: "Reclamo o falla tecnica de un equipo ya comprado." },
+  { slug: "otro", name: "Otro", color: "#94a3b8", sortOrder: 999, instructions: "No encaja en ninguna otra etiqueta." }
+];
+
+export async function applyRecommendedLabelInstructions() {
+  if (!isDbConfigured()) {
+    return [];
+  }
+  const sql = getSql();
+  for (const label of RECOMMENDED_LABEL_INSTRUCTIONS) {
+    // En conflicto SOLO actualiza instructions; preserva nombre/color/activo si ya existe.
+    await sql`
+      insert into label_definitions (slug, name, color, instructions, active, sort_order)
+      values (${label.slug}, ${label.name}, ${label.color}, ${label.instructions}, true, ${label.sortOrder})
+      on conflict (slug) do update
+      set instructions = excluded.instructions,
+          updated_at = now()
+    `;
+  }
+  return listLabelDefinitions(true);
+}
+
 export async function restoreBaseLabelDefinitions() {
   if (!isDbConfigured()) {
     return [];

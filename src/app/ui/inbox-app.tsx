@@ -2670,6 +2670,28 @@ function LabelsPanel({
     setMessage("Etiquetas base restauradas.");
   }
 
+  async function applyAiDescriptions() {
+    setSaving(true);
+    setMessage("");
+    const response = await fetch("/api/labels", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "apply-ai-descriptions" })
+    });
+    const payload = await readJsonResponse(response);
+    setSaving(false);
+    if (!response.ok) {
+      setMessage(payload?.error ?? "No pudimos cargar las descripciones.");
+      return;
+    }
+    if (Array.isArray(payload?.labels)) {
+      onLabelsChange(payload.labels);
+      const current = payload.labels.find((label: LabelDefinition) => label.slug === selectedSlug) ?? payload.labels[0];
+      if (current) editLabel(current);
+    }
+    setMessage("Descripciones para la IA actualizadas (solo se tocó la descripción, no nombre/color).");
+  }
+
   if (!isAdmin) {
     return (
       <section className="admin-panel labels-panel">
@@ -2727,6 +2749,10 @@ function LabelsPanel({
         <div className="label-panel-actions">
           <button className="secondary compact" disabled={saving} onClick={restoreBaseLabels} type="button">
             Restaurar base
+          </button>
+          <button className="primary compact" disabled={saving} onClick={applyAiDescriptions} type="button" title="Carga las descripciones para la IA recomendadas (solo la descripción, no toca nombre/color)">
+            <Bot size={15} />
+            Cargar descripciones IA
           </button>
           <button className="secondary compact" onClick={newLabel} type="button">
             <UserPlus size={15} />

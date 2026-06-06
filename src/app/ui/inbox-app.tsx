@@ -4628,6 +4628,7 @@ function InboxList({
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const [templateMessage, setTemplateMessage] = useState("");
   const [sendingManualEvent, setSendingManualEvent] = useState("");
+  const [sentManualEvent, setSentManualEvent] = useState("");
   const [manualEventMessage, setManualEventMessage] = useState("");
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -4918,6 +4919,7 @@ function InboxList({
     setSummaryOpen(false);
     setQuickRepliesOpen(false);
     setEventMenuOpen(false);
+    setSentManualEvent("");
     setTransferOpen(false);
     setTransferUserId(selected?.assigned_to ?? users[0]?.id ?? "");
     setTemplateComposerOpen(false);
@@ -5567,6 +5569,7 @@ function InboxList({
     }
 
     setSendingManualEvent(eventName);
+    setSentManualEvent("");
     setManualEventMessage("");
     setReplyError("");
 
@@ -5588,7 +5591,7 @@ function InboxList({
 
     setEvents(payload?.events ?? []);
     setActiveConversationTab("audit");
-    setEventMenuOpen(false);
+    setSentManualEvent(eventName);
     setManualEventMessage("Evento manual enviado.");
   }
 
@@ -6696,14 +6699,14 @@ function InboxList({
                   </summary>
                   <div>
                     <strong>ENVIAR EVENTO</strong>
-                    <button disabled={Boolean(sendingManualEvent)} onClick={() => void sendManualEventToSelected("manual_selector_febecos")} type="button">
-                      <Calendar size={17} /> <span>Selector Febecos<small>Manual</small></span><b>{sendingManualEvent === "manual_selector_febecos" ? "Enviando" : "Enviar"}</b>
+                    <button className={sentManualEvent === "manual_selector_febecos" ? "event-sent" : ""} disabled={Boolean(sendingManualEvent)} onClick={() => void sendManualEventToSelected("manual_selector_febecos")} type="button">
+                      <Calendar size={17} /> <span>Selector Febecos<small>Manual</small></span><b>{sendingManualEvent === "manual_selector_febecos" ? "Enviando" : sentManualEvent === "manual_selector_febecos" ? "✓ Enviado" : "Enviar"}</b>
                     </button>
-                    <button disabled={Boolean(sendingManualEvent)} onClick={() => void sendManualEventToSelected("manual_purchase")} type="button">
-                      <Calendar size={17} /> <span>Compra<small>Purchase manual</small></span><b>{sendingManualEvent === "manual_purchase" ? "Enviando" : "Enviar"}</b>
+                    <button className={sentManualEvent === "manual_purchase" ? "event-sent" : ""} disabled={Boolean(sendingManualEvent)} onClick={() => void sendManualEventToSelected("manual_purchase")} type="button">
+                      <Calendar size={17} /> <span>Compra<small>Purchase manual</small></span><b>{sendingManualEvent === "manual_purchase" ? "Enviando" : sentManualEvent === "manual_purchase" ? "✓ Enviado" : "Enviar"}</b>
                     </button>
-                    <button disabled={Boolean(sendingManualEvent)} onClick={() => void sendManualEventToSelected("manual_lead")} type="button">
-                      <Calendar size={17} /> <span>Lead<small>Manual</small></span><b>{sendingManualEvent === "manual_lead" ? "Enviando" : "Enviar"}</b>
+                    <button className={sentManualEvent === "manual_lead" ? "event-sent" : ""} disabled={Boolean(sendingManualEvent)} onClick={() => void sendManualEventToSelected("manual_lead")} type="button">
+                      <Calendar size={17} /> <span>Lead<small>Manual</small></span><b>{sendingManualEvent === "manual_lead" ? "Enviando" : sentManualEvent === "manual_lead" ? "✓ Enviado" : "Enviar"}</b>
                     </button>
                     {manualEventMessage ? <em>{manualEventMessage}</em> : null}
                   </div>

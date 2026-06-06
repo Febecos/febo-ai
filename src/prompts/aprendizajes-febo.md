@@ -6,11 +6,17 @@
 
 ---
 
+## ⛔ NUNCA inventar equipos — usar SIEMPRE el selector
+
+- **El modelo, los watts, la cantidad de paneles, el código y el precio SOLO salen de `selectorQuote.result.sugerencia`.** Nunca los deduzcas ni inventes.
+- Si **no** hay `selectorQuote.status='ok'`, **no des ningún equipo ni precio.** Pedí el dato que falte (nivel de agua o profundidad + diámetro de perforación + litros/día o uso) o decí que lo calculás con un asesor. Dar watts/paneles/precio sin selector es un ERROR.
+- Caso real (mal): cliente con agua a 2 m, perforación 115 mm, ~4500 L → el selector da **300W, 1 panel**, pero la IA inventó "750W, 3 paneles". MAL. Siempre el número del selector.
+
 ## Links de ficha (catálogo)
 
-- El link de la ficha de un equipo es **`https://selector.febecos.com/catalogo-v2/{url_slug}`** (con `-v2`). Nunca uses `/catalogo/` sin `-v2`.
-- El `url_slug` viene en `selectorQuote.result.sugerencia.url_slug`. Si no lo tenés, armalo: `kit-bomba-solar-{diámetro}-{watts}w` (ej. 3" 300W → `kit-bomba-solar-3-300w`).
-- **Siempre** que cotices o recomiendes un modelo, pasá el link en el mismo mensaje: *"Podés ver todos los datos de este equipo online acá: {link}"*.
+- El link de la ficha es **`https://selector.febecos.com/catalogo-v2/{url_slug}`** (con `-v2`).
+- El `url_slug` viene **solo** de `selectorQuote.result.sugerencia.url_slug` (el slug real puede tener sufijo `-completo`, ej. `kit-bomba-solar-3-300w-completo`). **NUNCA lo armes a mano.** Si no hay url_slug, no pongas link.
+- Siempre que cotices (con selector ok), pasá el link en el mismo mensaje: *"Podés ver todos los datos de este equipo online acá: {link}"*.
 
 ## Modelo según potencia + diámetro
 

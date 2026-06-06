@@ -2,6 +2,17 @@ import crypto from "node:crypto";
 import { config, requireEnv } from "./config";
 import { getSettingValue } from "./crm";
 
+export type WhatsAppAdReferral = {
+  sourceUrl?: string;
+  sourceType?: string;
+  headline?: string;
+  body?: string;
+  mediaType?: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  ctwaClid?: string;
+};
+
 export type WhatsAppTextMessage = {
   from: string;
   id: string;
@@ -9,6 +20,7 @@ export type WhatsAppTextMessage = {
   contactName?: string;
   interactiveId?: string;
   flowResponse?: Record<string, unknown>;
+  referral?: WhatsAppAdReferral;
 };
 
 export type WhatsAppAudioMessage = {
@@ -20,6 +32,7 @@ export type WhatsAppAudioMessage = {
   sha256?: string;
   voice?: boolean;
   contactName?: string;
+  referral?: WhatsAppAdReferral;
 };
 
 export type WhatsAppMediaMessage = {
@@ -32,6 +45,7 @@ export type WhatsAppMediaMessage = {
   caption?: string;
   filename?: string;
   contactName?: string;
+  referral?: WhatsAppAdReferral;
 };
 
 export type WhatsAppInboundMessage = WhatsAppTextMessage | WhatsAppAudioMessage | WhatsAppMediaMessage;
@@ -67,6 +81,17 @@ type WhatsAppWebhookBody = {
           from?: string;
           id?: string;
           type?: string;
+          referral?: {
+            source_url?: string;
+            source_id?: string;
+            source_type?: string;
+            headline?: string;
+            body?: string;
+            media_type?: string;
+            image_url?: string;
+            video_url?: string;
+            ctwa_clid?: string;
+          };
           text?: { body?: string };
           audio?: { id?: string; mime_type?: string; sha256?: string; voice?: boolean };
           image?: { id?: string; mime_type?: string; sha256?: string; caption?: string };
@@ -148,12 +173,15 @@ export function extractInboundMessages(body: WhatsAppWebhookBody): WhatsAppInbou
           continue;
         }
 
+        const referral = mapAdReferral(message.referral);
+
         if (message.type === "text" && message.text?.body) {
           messages.push({
             from: message.from,
             id: message.id,
             text: message.text.body,
-            contactName: contact?.profile?.name
+            contactName: contact?.profile?.name,
+            referral
           });
         }
 
@@ -201,7 +229,8 @@ export function extractInboundMessages(body: WhatsAppWebhookBody): WhatsAppInbou
             mimeType: message.image.mime_type,
             sha256: message.image.sha256,
             caption: message.image.caption,
-            contactName: contact?.profile?.name
+            contactName: contact?.profile?.name,
+            referral
           });
         }
 
@@ -214,7 +243,8 @@ export function extractInboundMessages(body: WhatsAppWebhookBody): WhatsAppInbou
             mimeType: message.video.mime_type,
             sha256: message.video.sha256,
             caption: message.video.caption,
-            contactName: contact?.profile?.name
+            contactName: contact?.profile?.name,
+            referral
           });
         }
 
@@ -236,6 +266,57 @@ export function extractInboundMessages(body: WhatsAppWebhookBody): WhatsAppInbou
   }
 
   return messages;
+}
+
+function mapAdReferral(referral?: {
+  source_url?: string;
+  source_type?: string;
+  headline?: string;
+  body?: string;
+  media_type?: string;
+  image_url?: string;
+  video_url?: string;
+  ctwa_clid?: string;
+}): WhatsAppAdReferral | undefined {
+  if (!referral) {
+    return undefined;
+  }
+
+  const mapped: WhatsAppAdReferral = {
+    sourceUrl: referral.source_url?.trim() || undefined,
+    sourceType: referral.source_type?.trim() || undefined,
+    headline: referral.headline?.trim() || undefined,
+    body: referral.body?.trim() || undefined,
+    mediaType: referral.media_type?.trim() || undefined,
+    imageUrl: referral.image_url?.trim() || undefined,
+    videoUrl: referral.video_url?.trim() || undefined,
+    ctwaClid: referral.ctwa_clid?.trim() || undefined
+  };
+
+  const hasData = Object.values(mapped).some((value) => Boolean(value));
+  return hasData ? mapped : undefined;
+}
+
+// Texto legible del anuncio para que lo vea tanto el agente IA como el humano en el chat.
+export function formatAdReferralForAgent(referral?: WhatsAppAdReferral): string | null {
+  if (!referral) {
+    return null;
+  }
+
+  const parts: string[] = [];
+  if (referral.headline) parts.push(`titulo: "${referral.headline}"`);
+  if (referral.body) parts.push(`texto: "${referral.body}"`);
+  if (referral.sourceUrl) parts.push(`link: ${referral.sourceUrl}`);
+  if (!referral.headline && !referral.body && referral.mediaType) {
+    parts.push(`tipo de anuncio: ${referral.mediaType}`);
+  }
+
+  if (!parts.length) {
+    // Llegó referral pero sin headline/body/url legibles (Meta no mandó el contenido).
+    return "[Vino de un anuncio/publicación de Meta, pero no llegó el contenido del anuncio]";
+  }
+
+  return `[Vino de un anuncio de Meta — ${parts.join(" · ")}]`;
 }
 
 function parseFlowResponse(responseJson?: string) {

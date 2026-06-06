@@ -7253,31 +7253,39 @@ function InboxList({
                 <div className="composer-tabs">
                   <button
                     className="active"
+                    aria-label="Conversacion"
                     onClick={() => setActiveConversationTab("chat")}
+                    title="Conversacion"
                     type="button"
                   >
-                    Conversacion
+                    <MessageSquareText size={18} />
                   </button>
                   <button
                     className="notes-tab"
+                    aria-label="Notas internas"
                     onClick={() => setActiveConversationTab("notes")}
+                    title="Notas internas"
                     type="button"
                   >
-                    Notas internas
+                    <FileText size={18} />
                   </button>
                   <button
                     className="tasks-tab"
+                    aria-label="Tareas"
                     onClick={() => setActiveConversationTab("tasks")}
+                    title="Tareas"
                     type="button"
                   >
-                    Tareas
+                    <ClipboardList size={18} />
                   </button>
                   <button
                     className="audit-tab"
+                    aria-label="Auditoria"
                     onClick={() => setActiveConversationTab("audit")}
+                    title="Auditoria"
                     type="button"
                   >
-                    Auditoria
+                    <ShieldCheck size={18} />
                   </button>
                 </div>
                 {recording ? (
@@ -7331,6 +7339,18 @@ function InboxList({
                     disabled={sendingReply}
                     onChange={(event) => setReplyText(event.target.value)}
                     onKeyDown={handleReplyKeyDown}
+                    onPaste={(event) => {
+                      const items = Array.from(event.clipboardData?.items ?? []);
+                      const imageItem = items.find((item) => item.type.startsWith("image/"));
+                      if (imageItem) {
+                        const file = imageItem.getAsFile();
+                        if (file) {
+                          event.preventDefault();
+                          const named = new File([file], `captura-${Date.now()}.png`, { type: file.type });
+                          setAttachment(named);
+                        }
+                      }
+                    }}
                     placeholder={replyFile ? "Mensaje opcional para acompanar el archivo" : "Escribir respuesta"}
                     value={replyText}
                   />

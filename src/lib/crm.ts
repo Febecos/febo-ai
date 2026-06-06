@@ -3477,6 +3477,22 @@ export async function getAutomaticReplyCandidate(input: {
   };
 }
 
+export async function isConversationAiEnabled(conversationId: string | null | undefined) {
+  if (!isDbConfigured() || !conversationId) {
+    return false;
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    select ai_enabled
+    from conversations
+    where id = ${conversationId}
+    limit 1
+  `) as Array<{ ai_enabled: boolean }>;
+
+  return Boolean(rows[0]?.ai_enabled);
+}
+
 export async function getConversationReplyTarget(conversationId: string) {
   if (!isDbConfigured()) {
     return null;

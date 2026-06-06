@@ -5,6 +5,7 @@ import {
   deliverOutgoingWebhooks,
   getAutomaticReplyCandidate,
   getSettingValue,
+  isConversationAiEnabled,
   recordAgentReply,
   recordFollowUpSuggestion,
   recordIncomingMessage,
@@ -444,6 +445,12 @@ async function sendAutomaticReply(input: {
   } catch (error) {
     console.error("No pudimos generar respuesta automatica.", error);
     result = buildAgentFallbackResult();
+  }
+
+  // Re-chequeo final: si apagaron "IA Activa" mientras se generaba la respuesta
+  // (la llamada al LLM puede tardar varios segundos), no enviar nada.
+  if (!(await isConversationAiEnabled(stored.threadId))) {
+    return;
   }
 
   const advisorDecisionButtons = getAdvisorDecisionButtons(result.respuesta, result.escalar);

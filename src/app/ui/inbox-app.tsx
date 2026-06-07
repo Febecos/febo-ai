@@ -148,6 +148,7 @@ type ChannelAccountForm = {
 
 type AgentTestResponse = {
   respuesta: string;
+  segundoMensaje?: string | null;
   consultype: string;
   escalar: boolean;
 };
@@ -8302,7 +8303,16 @@ function AgentTester() {
         <div className="answer-box">
           {answer ? (
             <>
+              {answer.segundoMensaje ? (
+                <span className="answer-label">📨 Mensaje 1 (inmediato)</span>
+              ) : null}
               <p>{answer.respuesta}</p>
+              {answer.segundoMensaje ? (
+                <>
+                  <span className="answer-label">📨 Mensaje 2 (30 seg después)</span>
+                  <p>{answer.segundoMensaje}</p>
+                </>
+              ) : null}
               <span>
                 {answer.consultype} - {answer.escalar ? "escala" : "no escala"}
               </span>

@@ -5191,6 +5191,16 @@ select option:hover {
   font-size: 13px;
 }
 
+.answer-label {
+  display: block;
+  margin-top: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #6cb4f5 !important;
+  text-transform: uppercase;
+}
+
 .empty-state {
   color: var(--muted);
   padding: 18px;

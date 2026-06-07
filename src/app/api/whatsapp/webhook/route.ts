@@ -511,10 +511,17 @@ async function sendAutomaticReply(input: {
       )
     : await sendWhatsAppText(message.from, result.respuesta);
 
+    // Si el agente generó un segundo mensaje (ej. publi), enviarlo aparte
+    if (result.segundoMensaje) {
+      await sendWhatsAppText(message.from, result.segundoMensaje);
+    }
+
     await recordAgentReply({
       contactId: stored.contactId,
       threadId: stored.threadId,
-      answer: result.respuesta,
+      answer: result.segundoMensaje
+        ? `${result.respuesta}\n\n---\n\n${result.segundoMensaje}`
+        : result.respuesta,
       intent: result.consultype,
       needsHuman,
       waMessageId: getSentMessageId(sent),
@@ -607,6 +614,7 @@ async function notifyNewInboundMessage(input: { title: string; body: string }) {
 function buildAgentFallbackResult() {
   return {
     respuesta: "Recibimos tu consulta. Te paso con un asesor de Febecos para que lo revise y te responda bien. Tene en cuenta que la atencion de asesores es de 9 a 19 hs, en horario comercial; te van a contactar en cuanto haya uno disponible.",
+    segundoMensaje: null,
     sentimiento: "neutral" as const,
     consultype: "caliente",
     escalar: true,

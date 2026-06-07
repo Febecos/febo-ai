@@ -33,6 +33,7 @@ const consultypeValues = [
 
 const agentSchema = z.object({
   respuesta: z.string(),
+  segundoMensaje: z.string().nullable(),
   sentimiento: z.enum(["positivo", "neutral", "preocupado", "molesto"]),
   consultype: z.string(),
   escalar: z.boolean(),
@@ -274,7 +275,7 @@ export async function runFebecosAgent(input: {
       "Si el historial muestra que un humano ya tomo la conversacion o la IA esta pausada, no intentes cerrar ni avanzar por tu cuenta.",
       "PROHIBIDO INVENTAR EQUIPOS (regla critica): el modelo, los watts, la cantidad de paneles, el codigo y el precio SOLO pueden salir de selectorQuote.result.sugerencia. NUNCA los deduzcas, estimes ni inventes vos. Si selectorQuote.status NO es 'ok', NO des ningun equipo, watts, paneles ni precio: pedi el dato tecnico que falte (nivel de agua o profundidad, diametro de la perforacion, y litros/dia o uso) o deci que lo calculas con un asesor. Dar un equipo o precio sin selectorQuote.status='ok' es un error grave.",
       "Link de ficha: en una COTIZACION (con selectorQuote.status='ok') usa SIEMPRE el url_slug: https://selector.febecos.com/catalogo-v2/{result.sugerencia.url_slug}; nunca lo armes a mano. EXCEPCION: si el cliente viene de una PUBLI que promociona un modelo puntual (sin selectorQuote todavia), si podes linkear la ficha de ESE modelo del anuncio armando https://selector.febecos.com/catalogo-v2/kit-bomba-solar-{diametro}-{watts}w-completo (ej 4\" 500W -> kit-bomba-solar-4-500w-completo). El precio lo ve el cliente en la ficha; vos no lo digas. Eso NO es dimensionar ni inventar: el modelo lo define la publi.",
-      "Cuando el cliente VIENE DE UNA PUBLI (hay bloque [Vino de un anuncio de Meta...] con un modelo), responde CORTO (3-5 renglones): saluda, identifica el modelo del anuncio SOLO por potencia+diametro+'FULL'. NO digas NINGUN numero de specs (litros/dia, metros, animales, caudal, paneles): todos los datos los ve el cliente en la ficha. Nada de '500 animales' ni '25.000 L/dia', ni del anuncio ni inventado. PASA EL LINK de la ficha del modelo del anuncio (kit-bomba-solar-{diam}-{watts}w-completo; el slug debe coincidir con la potencia del anuncio: 1100W->4-1100w, 500W->4-500w, etc) donde esta el precio, y agrega (cada link en su linea): 'Si querés ver otras opciones, mirá el catálogo completo acá: https://selector.febecos.com/catalogo' / 'Si querés hacer un cálculo online para tu campo, ingresá al selector: https://selector.febecos.com/formulario' / 'Cualquier asesoramiento más específico, escribime por acá y seguimos.'. NO mandes las 4 preguntas numeradas. NO te extiendas en rendimiento ni ventajas.",
+      "Cuando el cliente VIENE DE UNA PUBLI (hay bloque [Vino de un anuncio de Meta...] con un modelo), usa DOS mensajes separados. MENSAJE 1 (campo 'respuesta'): saludo + modelo del anuncio SOLO por potencia+diametro+'FULL' + link ficha (cada URL en su propia linea, separada por linea en blanco antes y despues). MENSAJE 2 (campo 'segundoMensaje'): catalogo + selector + 'Cualquier asesoramiento mas especifico, escribime por aca y seguimos.' (cada URL en su propia linea). NO digas NINGUN numero de specs (litros/dia, metros, animales, caudal, paneles). El slug del link: kit-bomba-solar-{diam}-{watts}w-completo (1100W->4-1100w, 500W->4-500w, etc). NO mandes las 4 preguntas numeradas. NO te extiendas en rendimiento ni ventajas.",
       "LINKS: siempre como URL pelada (https://...). NUNCA en formato markdown [texto](url). WhatsApp no renderiza markdown y se ve roto. Un solo link por idea, con el slug correcto.",
       "ELECCION DE ETIQUETA (consultype) — fuente principal: usa la lista 'etiquetasDisponibles' del contexto. Cada etiqueta trae 'instructions' que es su 'Descripcion para la IA' cargada por el equipo. Revisa TODAS y elegi la etiqueta cuyo 'instructions' mejor describa el estado actual de la conversacion. Esas descripciones MANDAN sobre cualquier ejemplo del prompt. Si dos encajan, elegi la mas especifica al momento comercial (ej: si ya cotizaste, 'cotizado' o 'caliente' antes que una generica).",
       "Etiqueta (consultype): apenas le pasas el PRECIO/cotizacion al cliente, consultype='cotizado' (o 'caliente' si ademas dijo que quiere avanzar/comprar/pagar). 'pasar-presupuesto' es SOLO mientras el precio esta pendiente (pidio precio pero todavia no se lo diste). NUNCA dejes 'pasar-presupuesto' despues de haber pasado el precio.",
@@ -327,7 +328,8 @@ export async function runFebecosAgent(input: {
                 selectorQuote
               },
               outputSchema: {
-                respuesta: "respuesta lista para enviar por WhatsApp",
+                respuesta: "primer mensaje WhatsApp (mensaje 1 de 2 cuando viene de publi: saludo + modelo + link ficha). En el resto de casos, el unico mensaje.",
+                segundoMensaje: "segundo mensaje WhatsApp SOLO cuando viene de publi: catalogo + selector + linea de asesoramiento. null en todos los demas casos.",
                 sentimiento: "positivo | neutral | preocupado | molesto",
                 consultype: allowedConsultypes.join(" | "),
                 escalar: "boolean",
@@ -351,6 +353,7 @@ export async function runFebecosAgent(input: {
           additionalProperties: false,
           required: [
             "respuesta",
+            "segundoMensaje",
             "sentimiento",
             "consultype",
             "escalar",
@@ -362,6 +365,7 @@ export async function runFebecosAgent(input: {
           ],
           properties: {
             respuesta: { type: "string" },
+            segundoMensaje: { type: ["string", "null"] },
             sentimiento: {
               type: "string",
               enum: ["positivo", "neutral", "preocupado", "molesto"]
@@ -471,6 +475,7 @@ function buildSelectorCheckoutResult(message: string): AgentResult | null {
         `Perfecto, recibimos tu seleccion del selector de Febecos. ${summaryParts.join(", ")}.`,
         "Como el caso requiere solucion a medida, ya lo derivamos a un asesor de Febecos para que lo revise bien. Tene en cuenta que la atencion de asesores es de 9 a 19 hs, en horario comercial; te van a contactar en cuanto haya uno disponible."
       ].join("\n\n"),
+      segundoMensaje: null,
       sentimiento: "positivo",
       consultype: "caliente",
       escalar: true,
@@ -489,6 +494,7 @@ function buildSelectorCheckoutResult(message: string): AgentResult | null {
         ? "Si queres avanzar o revisar disponibilidad, forma de pago, envio y factura, te ayudo a coordinarlo."
         : "Queres que te pase con un asesor de Febecos para confirmar disponibilidad, forma de pago, envio y factura?"
     ].join("\n\n"),
+    segundoMensaje: null,
     sentimiento: "positivo",
     consultype: "caliente",
     escalar: false,
@@ -540,6 +546,7 @@ function buildFarewellResult(
 
   return {
     respuesta: "¡Dale! Acá estamos cuando quieras. 👋",
+    segundoMensaje: null,
     sentimiento: "positivo",
     consultype: "seguimiento",
     escalar: false,
@@ -576,6 +583,7 @@ function buildPaymentPreferenceResult(
     respuesta: wantsInstallments ?
       "Perfecto, lo vemos en 6 cuotas. Si queres avanzar, podes hablar con un asesor y lo coordinan con vos."
     : "Perfecto, lo vemos de contado. Si queres avanzar, podes hablar con un asesor y lo coordinan con vos.",
+    segundoMensaje: null,
     sentimiento: "positivo",
     consultype: "comparador",
     escalar: false,
@@ -971,6 +979,7 @@ function buildInsufficientCoverageResult(quote: Extract<SelectorQuote, { status:
       coverage ? `El equipo mas cercano cubre aprox. ${coverage} del consumo pedido, asi que no te quiero pasar una cotizacion incorrecta.` : "No te quiero pasar una cotizacion incorrecta.",
       "Te paso a un asesor de Febecos para armarlo a medida y que quede bien resuelto."
     ].join("\n\n"),
+    segundoMensaje: null,
     sentimiento: "neutral",
     consultype: "caliente",
     escalar: true,

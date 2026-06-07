@@ -2767,7 +2767,9 @@ export async function listConversations(filters: ConversationFilters = {}) {
       ct.consultype,
       c.assigned_to::text,
       u.full_name as assigned_name,
-      ct.imported_payload,
+      -- Solo contact_info: el resto del imported_payload no se usa en la lista
+      -- y disparaba egress masivo contra Neon en cada poll (limit 300).
+      jsonb_build_object('contact_info', ct.imported_payload->'contact_info') as imported_payload,
       lm.body as last_message,
       lm.direction as last_direction,
       case when c.unread then 1 else 0 end::int as unread_count,

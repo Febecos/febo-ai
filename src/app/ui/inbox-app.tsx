@@ -5023,11 +5023,28 @@ function InboxList({
         return;
       }
 
+      // No refrescar si la pestaña no esta visible: evita egress contra Neon
+      // cuando el inbox queda abierto en background.
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+
       await refreshConversations(filters, { silent: true });
       await loadConversationMessages(selectedIdRef.current, { silent: true });
-      await loadConversationNotes(selectedIdRef.current, { silent: true });
-      await loadConversationFollowUps(selectedIdRef.current, { silent: true });
-      await loadConversationEvents(selectedIdRef.current, { silent: true });
+
+      // Solo refrescar la pestania activa: antes se traian notes+tasks+audit
+      // en cada ciclo, multiplicando el egress innecesariamente.
+      if (activeConversationTab === "notes") {
+        await loadConversationNotes(selectedIdRef.current, { silent: true });
+      }
+      if (activeConversationTab === "tasks") {
+        await loadConversationFollowUps(selectedIdRef.current, { silent: true });
+      }
+      if (activeConversationTab === "audit") {
+        await loadConversationEvents(selectedIdRef.current, { silent: true });
+      }
+
+      // Alerta global de seguimientos vencidos: corre siempre (no depende del tab).
       await loadDueFollowUps({ silent: true });
     }
 
@@ -5043,7 +5060,7 @@ function InboxList({
       window.removeEventListener("focus", refreshVisibleInbox);
       document.removeEventListener("visibilitychange", refreshVisibleInbox);
     };
-  }, [filters, notificationSoundConfig, recording, sendingReply]);
+  }, [activeConversationTab, filters, notificationSoundConfig, recording, sendingReply]);
 
   async function loadConversationMessages(conversationId?: string, options: { silent?: boolean } = {}) {
     if (!conversationId) {

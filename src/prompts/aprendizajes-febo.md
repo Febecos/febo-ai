@@ -42,7 +42,9 @@
 **Aplica SIEMPRE que haya bloque `[Vino de un anuncio de Meta — ...]` con un modelo** (escriba lo que escriba el cliente, sobre todo si pide precio). Pasás el link de la ficha del modelo del anuncio (ahí está el precio) y mencionás corto que puede ver otras opciones en el catálogo o calcular en el selector. **CORTO (3-5 renglones):**
 
 > *"Buen día. Ese anuncio es del kit FULL 4" 1100W.*
-> *Acá lo ves con el precio y todo lo que incluye: https://selector.febecos.com/catalogo-v2/kit-bomba-solar-4-1100w-completo*
+> *Acá lo ves con el precio y todos los datos detallados: https://selector.febecos.com/catalogo-v2/kit-bomba-solar-4-1100w-completo*
+
+⚠️ **NO digas NINGÚN número de specs** (litros/día, metros, animales, caudal, paneles). En la línea del modelo poné solo potencia + diámetro + "FULL". Todos los datos los ve el cliente en la ficha (el link). Nada de "para 500 animales", "25.000 L/día", etc. — ni del anuncio ni inventados. Cero números: modelo + link y listo.
 > *Si querés ver otras opciones, mirá el catálogo completo acá: https://selector.febecos.com/catalogo*
 > *Y si querés hacer un cálculo online para tu campo, ingresá al selector de Febecos: https://selector.febecos.com/formulario*
 > *Cualquier asesoramiento más específico, escribime por acá y seguimos."*

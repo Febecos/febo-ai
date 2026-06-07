@@ -1,6 +1,8 @@
 .env
 .env.local
 .env*.local
+.env.prod
+.env.prod.*
 .next
 node_modules
 dist
@@ -11,3 +13,7 @@ backups/
 Hariaz/
 .git-broken-old/
 .git-sandbox-old/
+.tmp/
+.vercel/
+.codex-remote-attachments/
+finanzas-administracion/

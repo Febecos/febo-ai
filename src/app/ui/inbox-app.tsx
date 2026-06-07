@@ -8287,46 +8287,48 @@ function AgentTester() {
         Probar IA
       </div>
       <form className="tester" onSubmit={submit}>
+        <div className="tester-row">
+          <label className="field tester-phone">
+            <span>Teléfono</span>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </label>
+          <button className="tester-send" disabled={loading} type="submit">
+            <SendHorizonal size={14} />
+            {loading ? "…" : "Enviar"}
+          </button>
+        </div>
         <label className="field">
-          Telefono
-          <input value={phone} onChange={(event) => setPhone(event.target.value)} />
+          <span>Mensaje</span>
+          <textarea value={message} onChange={(e) => setMessage(e.target.value)} />
         </label>
-        <label className="field">
-          Mensaje
-          <textarea value={message} onChange={(event) => setMessage(event.target.value)} />
-        </label>
-        <button className="primary" disabled={loading} type="submit">
-          <SendHorizonal size={18} />
-          {loading ? "Generando" : "Enviar prueba"}
-        </button>
+
         {error ? <span className="warn">{error}</span> : null}
 
-        <div className="answer-box">
-          {answer ? (
-            <div className="answer-messages">
-              <div className="answer-bubble">
-                {answer.segundoMensaje && (
-                  <span className="bubble-tag">Mensaje 1 · inmediato</span>
-                )}
-                <p>{answer.respuesta}</p>
-              </div>
-
-              {answer.segundoMensaje && (
-                <div className="answer-bubble answer-bubble--delayed">
-                  <span className="bubble-tag">Mensaje 2 · 30 seg después</span>
-                  <p>{answer.segundoMensaje}</p>
-                </div>
-              )}
-
-              <div className="answer-meta">
-                <span className="meta-chip">{answer.consultype}</span>
-                {answer.escalar && <span className="meta-chip meta-chip--warn">escala</span>}
-              </div>
+        {answer && (
+          <div className="tester-result">
+            <div className="tester-chips">
+              <span className="tester-chip">{answer.consultype}</span>
+              {answer.escalar && <span className="tester-chip tester-chip--warn">escala</span>}
+              {answer.segundoMensaje && <span className="tester-chip tester-chip--info">2 mensajes</span>}
             </div>
-          ) : (
-            <p className="answer-placeholder">La respuesta aparece acá.</p>
-          )}
-        </div>
+
+            <div className="tester-msg">
+              {answer.segundoMensaje && <span className="tester-msg-label">Mensaje 1</span>}
+              <p>{answer.respuesta}</p>
+            </div>
+
+            {answer.segundoMensaje && (
+              <div className="tester-msg tester-msg--2">
+                <span className="tester-msg-label">Mensaje 2 · 30 seg después</span>
+                <p>{answer.segundoMensaje}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!answer && (
+          <p className="tester-empty">La respuesta aparece acá.</p>
+        )}
       </form>
     </aside>
   );

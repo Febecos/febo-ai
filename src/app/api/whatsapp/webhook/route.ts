@@ -511,8 +511,9 @@ async function sendAutomaticReply(input: {
       )
     : await sendWhatsAppText(message.from, result.respuesta);
 
-    // Si el agente generó un segundo mensaje (ej. publi), enviarlo aparte
+    // Si el agente generó un segundo mensaje (ej. publi), enviarlo aparte con demora natural
     if (result.segundoMensaje) {
+      await sleep(30_000); // 30 s de pausa para que parezca más humano
       await sendWhatsAppText(message.from, result.segundoMensaje);
     }
 

@@ -8300,25 +8300,31 @@ function AgentTester() {
           {loading ? "Generando" : "Enviar prueba"}
         </button>
         {error ? <span className="warn">{error}</span> : null}
+
         <div className="answer-box">
           {answer ? (
-            <>
-              {answer.segundoMensaje ? (
-                <span className="answer-label">📨 Mensaje 1 (inmediato)</span>
-              ) : null}
-              <p>{answer.respuesta}</p>
-              {answer.segundoMensaje ? (
-                <>
-                  <span className="answer-label">📨 Mensaje 2 (30 seg después)</span>
+            <div className="answer-messages">
+              <div className="answer-bubble">
+                {answer.segundoMensaje && (
+                  <span className="bubble-tag">Mensaje 1 · inmediato</span>
+                )}
+                <p>{answer.respuesta}</p>
+              </div>
+
+              {answer.segundoMensaje && (
+                <div className="answer-bubble answer-bubble--delayed">
+                  <span className="bubble-tag">Mensaje 2 · 30 seg después</span>
                   <p>{answer.segundoMensaje}</p>
-                </>
-              ) : null}
-              <span>
-                {answer.consultype} - {answer.escalar ? "escala" : "no escala"}
-              </span>
-            </>
+                </div>
+              )}
+
+              <div className="answer-meta">
+                <span className="meta-chip">{answer.consultype}</span>
+                {answer.escalar && <span className="meta-chip meta-chip--warn">escala</span>}
+              </div>
+            </div>
           ) : (
-            <span>La respuesta aparece aca.</span>
+            <p className="answer-placeholder">La respuesta aparece acá.</p>
           )}
         </div>
       </form>

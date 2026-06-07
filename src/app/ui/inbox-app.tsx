@@ -8282,10 +8282,6 @@ function AgentTester() {
 
   return (
     <aside className="agent-panel">
-      <div className="panel-title">
-        <Bot size={18} />
-        Probar IA
-      </div>
       <form className="tester" onSubmit={submit}>
         <div className="tester-row">
           <label className="field tester-phone">

@@ -4460,13 +4460,15 @@ select option:hover {
 }
 
 .agent-panel {
-  display: grid;
+  display: flex;
+  flex-direction: column;
 }
 
 .tester {
-  display: grid;
-  gap: 12px;
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
 }
 
 .field {
@@ -5178,6 +5180,26 @@ select option:hover {
 
 .answer-box {
   min-height: 80px;
+}
+
+.tester .field input {
+  height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.tester .field textarea {
+  min-height: 80px;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.tester .field span {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .tester-row {

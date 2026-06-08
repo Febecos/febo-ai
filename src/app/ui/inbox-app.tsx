@@ -570,7 +570,7 @@ function ToolWorkspace({
           type="button"
         >
           <MessageSquareText size={18} />
-          Plantillas
+          Seguimiento
         </button>
         <button
           className={activeTool === "labels" ? "active" : ""}

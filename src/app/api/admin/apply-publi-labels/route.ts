@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
 import { getSql } from "@/lib/db";
 
 const BYPASS_TOKEN = "febo-publi-2026";
@@ -10,33 +9,29 @@ export async function POST(req: NextRequest) { return handler(req); }
 async function handler(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   if (token !== BYPASS_TOKEN) {
-    const user = await getCurrentUser();
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "No autorizado." }, { status: 403 });
-    }
+    return NextResponse.json({ error: "No autorizado." }, { status: 403 });
   }
 
   const sql = getSql();
 
-  await sql`
-    INSERT INTO label_definitions (slug, name, color, instructions, active, sort_order)
-    VALUES (
-      'lead-publi', 'Lead Publi', '#a855f7',
-      'Vino de un anuncio de Meta (Click-to-WhatsApp) y ya recibio la respuesta automatica con el link de la ficha del producto, el catalogo y el selector. Todavia no cotizo ni dio datos tecnicos.',
-      true, 15
-    )
-    ON CONFLICT (slug) DO UPDATE SET
-      name = EXCLUDED.name, color = EXCLUDED.color,
-      instructions = EXCLUDED.instructions, active = true, sort_order = EXCLUDED.sort_order
-  `;
+  // 1. Upsert etiqueta lead-publi
+  const existing = await sql`SELECT id FROM label_definitions WHERE slug = 'lead-publi' LIMIT 1`;
+  if (existing.length === 0) {
+    await sql`
+      INSERT INTO label_definitions (slug, name, color, instructions, active, sort_order)
+      VALUES ('lead-publi', 'Lead Publi', '#a855f7',
+        'Vino de un anuncio de Meta y ya recibio la respuesta automatica con links de ficha, catalogo y selector.',
+        true, 15)
+    `;
+  }
 
+  // 2. Buscar conversaciones de últimas 48hs con contexto de publi
   const candidates = await sql`
     SELECT DISTINCT m.conversation_id, c.consultype, c.contact_name
     FROM messages m
     JOIN conversations c ON c.id = m.conversation_id
     WHERE m.created_at >= NOW() - INTERVAL '48 hours'
       AND m.body ILIKE '%Vino de un anuncio de Meta%'
-    ORDER BY m.conversation_id
   ` as Array<{ conversation_id: string; consultype: string; contact_name: string }>;
 
   if (!candidates.length) {
@@ -45,6 +40,7 @@ async function handler(req: NextRequest) {
 
   const ids = candidates.map((r) => r.conversation_id);
 
+  // 3. Actualizar solo las que no están en estado avanzado
   const updated = await sql`
     UPDATE conversations
     SET consultype = 'lead-publi', updated_at = NOW()
@@ -56,6 +52,7 @@ async function handler(req: NextRequest) {
   return NextResponse.json({
     updated: updated.length,
     total_candidates: candidates.length,
+    skipped: candidates.length - updated.length,
     conversations: updated.map((r) => ({ id: r.id, name: r.contact_name }))
   });
 }

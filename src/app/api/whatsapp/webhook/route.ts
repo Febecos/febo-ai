@@ -469,10 +469,13 @@ async function sendAutomaticReply(input: {
   ` as Array<{ consultype: string }>)[0] : null;
   const isPubliMessage = !!formatAdReferralForAgent(message.referral) || contactRow?.consultype === "lead-publi";
 
-  // Force-split SOLO en el primer mensaje de publi (tiene referral).
-  // Para mensajes de seguimiento de lead-publi, el agente maneja segundoMensaje normalmente (null = un mensaje).
+  // Force-split cuando:
+  // 1. Primer mensaje de publi (tiene referral), O
+  // 2. El agente puso "---" en la respuesta (detectó contexto de publi en historial pero ignoró segundoMensaje)
+  // Para follow-ups normales de lead-publi, el agente devuelve segundoMensaje=null y sin "---" → no splitea.
   const isFirstPubliMessage = !!formatAdReferralForAgent(message.referral);
-  if (isFirstPubliMessage && !result.segundoMensaje) {
+  const agentUsedSeparator = /\n[ \t]*---[ \t]*(\n|$)/.test(result.respuesta);
+  if ((isFirstPubliMessage || agentUsedSeparator) && !result.segundoMensaje) {
     // El segundo mensaje siempre es el template hardcodeado del catálogo.
     const PUBLI_SEGUNDO_MENSAJE =
       "Si queres ver y analizar otras opciones, date una vuelta por el catalogo completo en este link\n" +

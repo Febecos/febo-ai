@@ -1,6 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { refreshConversationMemory, runFebecosAgent, transcribeAudio } from "@/lib/agent";
 import { config } from "@/lib/config";
+import { getSql } from "@/lib/db";
 import {
   deliverOutgoingWebhooks,
   getAutomaticReplyCandidate,
@@ -463,7 +464,12 @@ async function sendAutomaticReply(input: {
 
   // Si vino de publi y el agente metió todo en un solo mensaje (ignoró segundoMensaje),
   // forzamos el split programáticamente en el separador "---" o donde empieza el bloque del catálogo.
-  const isPubliMessage = !!formatAdReferralForAgent(message.referral);
+  // isPubliMessage: mensaje actual con referral, O contacto ya etiquetado como lead-publi (mensajes posteriores)
+  const sql = getSql();
+  const contactRow = stored.contactId ? (await sql`
+    SELECT consultype FROM contacts WHERE id = ${stored.contactId}::uuid LIMIT 1
+  ` as Array<{ consultype: string }>)[0] : null;
+  const isPubliMessage = !!formatAdReferralForAgent(message.referral) || contactRow?.consultype === "lead-publi";
   if (isPubliMessage && !result.segundoMensaje) {
     const sepIdx = result.respuesta.search(/\n[ \t]*---[ \t]*\n/);
     const catalogIdx = result.respuesta.search(/\nSi quer/);
@@ -532,7 +538,7 @@ async function sendAutomaticReply(input: {
 
     // Si el agente generó un segundo mensaje (ej. publi), enviarlo aparte con demora natural
     if (result.segundoMensaje) {
-      await sleep(30_000); // 30 s de pausa para que parezca más humano
+      await sleep(8_000); // 8 s de pausa entre mensajes (30s era demasiado para after())
       await sendWhatsAppText(message.from, result.segundoMensaje);
     }
 

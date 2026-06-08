@@ -4,7 +4,9 @@ import { getSql } from "@/lib/db";
 
 // Endpoint de uso único: aplica etiqueta 'lead-publi' a conversaciones de hoy
 // que recibieron respuesta de publi (tienen bloque [Vino de un anuncio de Meta]).
-export async function POST() {
+export async function GET() { return handler(); }
+export async function POST() { return handler(); }
+async function handler() {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
     return NextResponse.json({ error: "Solo administrador." }, { status: 403 });

@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/window24-followup",
-      "schedule": "0 * * * *"
+      "schedule": "0 */2 * * *"
     }
   ]
 }

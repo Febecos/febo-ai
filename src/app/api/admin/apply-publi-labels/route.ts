@@ -39,13 +39,13 @@ export async function POST() {
     WHERE m.created_at >= NOW() - INTERVAL '48 hours'
       AND m.body ILIKE '%Vino de un anuncio de Meta%'
     ORDER BY m.conversation_id
-  `;
+  ` as Array<{ conversation_id: string; consultype: string; contact_name: string }>;
 
   if (!candidates.length) {
     return NextResponse.json({ updated: 0, conversations: [] });
   }
 
-  const ids = candidates.map((r: { conversation_id: string }) => r.conversation_id);
+  const ids = candidates.map((r) => r.conversation_id);
 
   // 3. Actualizar a lead-publi solo las que NO están en un estado más avanzado
   const updated = await sql`
@@ -54,15 +54,12 @@ export async function POST() {
         updated_at = NOW()
     WHERE id = ANY(${ids})
       AND (consultype IS NULL OR consultype IN ('saludo', 'informacion', 'pasar-presupuesto', 'otro', ''))
-    RETURNING id, contact_name, consultype
-  `;
+    RETURNING id, contact_name
+  ` as Array<{ id: string; contact_name: string }>;
 
   return NextResponse.json({
     updated: updated.length,
     total_candidates: candidates.length,
-    conversations: updated.map((r: { id: string; contact_name: string }) => ({
-      id: r.id,
-      name: r.contact_name
-    }))
+    conversations: updated.map((r) => ({ id: r.id, name: r.contact_name }))
   });
 }

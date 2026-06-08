@@ -53,11 +53,12 @@ https://selector.febecos.com/catalogo-v2/kit-bomba-solar-4-1100w-completo
 
 **Mensaje 2 (`segundoMensaje`) — catálogo + selector + asesoramiento:**
 ```
-Si querés ver otras opciones, mirá el catálogo completo acá:
+Si querés ver y analizar otras opciones, date una vuelta por el catálogo completo en este link
 https://selector.febecos.com/catalogo
 
-Y si querés hacer un cálculo online para tu campo, ingresá al selector de Febecos:
+También te invito a experimentar en 2 minutos, nuestra herramienta gratuita y hacer un cálculo online para tu campo.
 https://selector.febecos.com/formulario
+Probala y dejanos tu comentario.
 
 Cualquier asesoramiento más específico, escribime por acá y seguimos.
 ```

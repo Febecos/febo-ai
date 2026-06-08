@@ -1485,6 +1485,7 @@ const RECOMMENDED_LABEL_INSTRUCTIONS: Array<{ slug: string; name: string; color:
   { slug: "proyecto-futuro", name: "Proyecto futuro", color: "#94a3b8", sortOrder: 130, instructions: "Sin urgencia: lo hara mas adelante / cuando junte plata / proxima temporada. Pospuso explicitamente." },
   { slug: "seguimiento", name: "Seguimiento", color: "#f97316", sortOrder: 140, instructions: "Continuacion de un caso ya iniciado; retoma una charla previa." },
   { slug: "problema", name: "Problema", color: "#f43f5e", sortOrder: 150, instructions: "Reclamo o falla tecnica de un equipo ya comprado." },
+  { slug: "lead-publi", name: "Lead Publi", color: "#a855f7", sortOrder: 15, instructions: "Vino de un anuncio de Meta (Click-to-WhatsApp) y ya recibio la respuesta automatica con el link de la ficha del producto, el catalogo y el selector. Todavia no cotizo ni dio datos tecnicos. Es un lead de publicidad en etapa inicial de contacto." },
   { slug: "otro", name: "Otro", color: "#94a3b8", sortOrder: 999, instructions: "No encaja en ninguna otra etiqueta." }
 ];
 

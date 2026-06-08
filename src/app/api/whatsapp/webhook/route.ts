@@ -461,6 +461,20 @@ async function sendAutomaticReply(input: {
     return;
   }
 
+  // Si vino de publi y el agente metió todo en un solo mensaje (ignoró segundoMensaje),
+  // forzamos el split programáticamente en el separador "---" o en el primer link del catálogo.
+  if (adContext && !result.segundoMensaje) {
+    const SEP = /\n\s*---\s*\n/;
+    const CATALOG_SPLIT = /(Si quer[eé]s ver y analizar|Si quer[eé]s ver otras)/;
+    if (SEP.test(result.respuesta)) {
+      const parts = result.respuesta.split(SEP);
+      result = { ...result, respuesta: parts[0].trim(), segundoMensaje: parts.slice(1).join("\n").trim() };
+    } else if (CATALOG_SPLIT.test(result.respuesta)) {
+      const idx = result.respuesta.search(CATALOG_SPLIT);
+      result = { ...result, respuesta: result.respuesta.slice(0, idx).trim(), segundoMensaje: result.respuesta.slice(idx).trim() };
+    }
+  }
+
   const advisorDecisionButtons = getAdvisorDecisionButtons(result.respuesta, result.escalar);
   const needsHuman = advisorDecisionButtons ? false : shouldPauseForHumanHandoff(result.respuesta, result.escalar);
 

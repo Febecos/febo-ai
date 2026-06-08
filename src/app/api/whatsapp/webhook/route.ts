@@ -462,28 +462,36 @@ async function sendAutomaticReply(input: {
     return;
   }
 
-  // Si vino de publi y el agente metió todo en un solo mensaje (ignoró segundoMensaje),
-  // forzamos el split programáticamente en el separador "---" o donde empieza el bloque del catálogo.
-  // isPubliMessage: mensaje actual con referral, O contacto ya etiquetado como lead-publi (mensajes posteriores)
+  // isPubliMessage: mensaje actual con referral (primer mensaje de publi), O contacto ya etiquetado como lead-publi
   const sql = getSql();
   const contactRow = stored.contactId ? (await sql`
     SELECT consultype FROM contacts WHERE id = ${stored.contactId}::uuid LIMIT 1
   ` as Array<{ consultype: string }>)[0] : null;
   const isPubliMessage = !!formatAdReferralForAgent(message.referral) || contactRow?.consultype === "lead-publi";
-  if (isPubliMessage && !result.segundoMensaje) {
+
+  // Force-split SOLO en el primer mensaje de publi (tiene referral).
+  // Para mensajes de seguimiento de lead-publi, el agente maneja segundoMensaje normalmente (null = un mensaje).
+  const isFirstPubliMessage = !!formatAdReferralForAgent(message.referral);
+  if (isFirstPubliMessage && !result.segundoMensaje) {
+    // El segundo mensaje siempre es el template hardcodeado del catálogo.
+    const PUBLI_SEGUNDO_MENSAJE =
+      "Si queres ver y analizar otras opciones, date una vuelta por el catalogo completo en este link\n" +
+      "https://selector.febecos.com/catalogo\n\n" +
+      "Tambien te invito a experimentar en 2 minutos, nuestra herramienta gratuita y hacer un calculo online para tu campo.\n" +
+      "https://selector.febecos.com/formulario\n" +
+      "Probala y dejanos tu comentario.\n\n" +
+      "Cualquier asesoramiento mas especifico, escribime por aca y seguimos.";
+
+    // Truncar respuesta en el primer punto de corte natural si existe
     const sepIdx = result.respuesta.search(/\n[ \t]*---[ \t]*\n/);
     const catalogIdx = result.respuesta.search(/\nSi quer/);
     const splitAt = sepIdx >= 0 ? sepIdx : catalogIdx;
-    if (splitAt > 0) {
-      const afterSep = sepIdx >= 0
-        ? result.respuesta.indexOf("\n", splitAt + 1) + 1
-        : splitAt + 1;
-      result = {
-        ...result,
-        respuesta: result.respuesta.slice(0, splitAt).trim(),
-        segundoMensaje: result.respuesta.slice(afterSep).trim()
-      };
-    }
+
+    result = {
+      ...result,
+      respuesta: splitAt > 0 ? result.respuesta.slice(0, splitAt).trim() : result.respuesta.trim(),
+      segundoMensaje: PUBLI_SEGUNDO_MENSAJE
+    };
   }
 
   const advisorDecisionButtons = getAdvisorDecisionButtons(result.respuesta, result.escalar);

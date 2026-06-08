@@ -462,17 +462,20 @@ async function sendAutomaticReply(input: {
   }
 
   // Si vino de publi y el agente metió todo en un solo mensaje (ignoró segundoMensaje),
-  // forzamos el split programáticamente en el separador "---" o en el primer link del catálogo.
-  if (adContext && !result.segundoMensaje) {
-    const sepIdx = result.respuesta.search(/\n\s*---\s*\n/);
-    const catalogIdx = result.respuesta.search(/Si quer/);
+  // forzamos el split programáticamente en el separador "---" o donde empieza el bloque del catálogo.
+  const isPubliMessage = !!formatAdReferralForAgent(message.referral);
+  if (isPubliMessage && !result.segundoMensaje) {
+    const sepIdx = result.respuesta.search(/\n[ \t]*---[ \t]*\n/);
+    const catalogIdx = result.respuesta.search(/\nSi quer/);
     const splitAt = sepIdx >= 0 ? sepIdx : catalogIdx;
     if (splitAt > 0) {
-      const breakAt = sepIdx >= 0 ? result.respuesta.indexOf("\n", splitAt + 1) + 1 : splitAt;
+      const afterSep = sepIdx >= 0
+        ? result.respuesta.indexOf("\n", splitAt + 1) + 1
+        : splitAt + 1;
       result = {
         ...result,
         respuesta: result.respuesta.slice(0, splitAt).trim(),
-        segundoMensaje: result.respuesta.slice(breakAt).trim()
+        segundoMensaje: result.respuesta.slice(afterSep).trim()
       };
     }
   }

@@ -32,7 +32,7 @@ async function handler(req: NextRequest) {
     const rowsRaw = await sql`
       SELECT DISTINCT ON (m.conversation_id)
         m.conversation_id as id,
-        ct.name as name,
+        ct.display_name as name,
         c.consultype
       FROM messages m
       JOIN conversations c ON c.id = m.conversation_id

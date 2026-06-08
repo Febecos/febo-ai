@@ -32,10 +32,11 @@ async function handler(req: NextRequest) {
     const rowsRaw = await sql`
       SELECT DISTINCT ON (m.conversation_id)
         m.conversation_id as id,
-        c.contact_name as name,
+        ct.name as name,
         c.consultype
       FROM messages m
       JOIN conversations c ON c.id = m.conversation_id
+      JOIN contacts ct ON ct.id = c.contact_id
       WHERE m.created_at >= NOW() - INTERVAL '48 hours'
         AND m.body ILIKE '%Vino de un anuncio de Meta%'
       ORDER BY m.conversation_id
@@ -55,15 +56,15 @@ async function handler(req: NextRequest) {
       SET consultype = 'lead-publi', updated_at = NOW()
       WHERE id = ANY(${ids})
         AND (consultype IS NULL OR consultype IN ('saludo','informacion','pasar-presupuesto','otro',''))
-      RETURNING id, contact_name as name
+      RETURNING id
     `;
-    const updated = Array.isArray(updatedRaw) ? updatedRaw as Array<{ id: string; name: string }> : [];
+    const updated = Array.isArray(updatedRaw) ? updatedRaw as Array<{ id: string }> : [];
 
     return NextResponse.json({
       updated: updated.length,
       total_candidates: total,
       skipped: total - updated.length,
-      names: updated.map(r => r.name)
+      names: rows.filter(r => updated.some(u => u.id === r.id)).map(r => r.name)
     });
 
   } catch (err) {

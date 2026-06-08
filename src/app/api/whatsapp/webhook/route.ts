@@ -469,38 +469,39 @@ async function sendAutomaticReply(input: {
   ` as Array<{ consultype: string }>)[0] : null;
   const isPubliMessage = !!formatAdReferralForAgent(message.referral) || contactRow?.consultype === "lead-publi";
 
-  // SPLIT DEFINITIVO para lead-publi:
-  // No dependemos de referral ni de que el agente ponga "---".
-  // Regla: si el contacto es lead-publi Y todavía no hubo ningún mensaje saliente
-  // en esta conversación → es la respuesta introductoria → siempre 2 mensajes.
-  // Para follow-ups (ya hay mensajes salientes), no splitea a menos que el agente
-  // haya puesto "---" por error (limpieza de seguridad).
-  const outboundCountRow = stored.threadId ? (await sql`
-    SELECT COUNT(*)::int AS cnt FROM messages
-    WHERE conversation_id = ${stored.threadId}::uuid AND direction = 'outbound'
-  ` as Array<{ cnt: number }>)[0] : null;
-  const outboundCount = outboundCountRow?.cnt ?? 999;
+  // Template hardcodeado para segundo mensaje de publi
+  const PUBLI_SEGUNDO_MENSAJE =
+    "Si queres ver y analizar otras opciones, date una vuelta por el catalogo completo en este link\n" +
+    "https://selector.febecos.com/catalogo\n\n" +
+    "Tambien te invito a experimentar en 2 minutos, nuestra herramienta gratuita y hacer un calculo online para tu campo.\n" +
+    "https://selector.febecos.com/formulario\n" +
+    "Probala y dejanos tu comentario.\n\n" +
+    "Cualquier asesoramiento mas especifico, escribime por aca y seguimos.";
 
-  const isPubliIntro = isPubliMessage && outboundCount === 0;
-  const agentLeftSeparator = /\n[ \t]*---[ \t]*(\n|$)/.test(result.respuesta);
-
-  if ((isPubliIntro || agentLeftSeparator) && !result.segundoMensaje) {
-    const PUBLI_SEGUNDO_MENSAJE =
-      "Si queres ver y analizar otras opciones, date una vuelta por el catalogo completo en este link\n" +
-      "https://selector.febecos.com/catalogo\n\n" +
-      "Tambien te invito a experimentar en 2 minutos, nuestra herramienta gratuita y hacer un calculo online para tu campo.\n" +
-      "https://selector.febecos.com/formulario\n" +
-      "Probala y dejanos tu comentario.\n\n" +
-      "Cualquier asesoramiento mas especifico, escribime por aca y seguimos.";
-
-    // Limpiar respuesta: cortar en --- o en "Si quer" si el agente mezcló todo
-    const sepIdx = result.respuesta.search(/\n[ \t]*---[ \t]*(\n|$)/);
-    const catalogIdx = result.respuesta.search(/\nSi quer/);
-    const splitAt = sepIdx >= 0 ? sepIdx : catalogIdx;
-
+  // PASO 1 — SIEMPRE: si el agente dejó "---" en la respuesta, cortar ahí y usar template.
+  // Esto es incondicional: el "---" NUNCA debe llegar al WhatsApp del cliente.
+  const sepIdxClean = result.respuesta.search(/\n[ \t]*---[ \t]*(\n|$)/);
+  if (sepIdxClean >= 0 && !result.segundoMensaje) {
     result = {
       ...result,
-      respuesta: splitAt > 0 ? result.respuesta.slice(0, splitAt).trim() : result.respuesta.trim(),
+      respuesta: result.respuesta.slice(0, sepIdxClean).trim(),
+      segundoMensaje: PUBLI_SEGUNDO_MENSAJE
+    };
+  }
+
+  // PASO 2 — Para la intro de publi (primer outbound en la conversación):
+  // asegurar siempre dos mensajes, independientemente de si el agente usó segundoMensaje o no.
+  const outboundCountRow = stored.threadId ? (await sql`
+    SELECT COUNT(*) AS cnt FROM messages
+    WHERE conversation_id = ${stored.threadId}::uuid AND direction = 'outbound'
+  ` as Array<{ cnt: string | number }>)[0] : null;
+  const outboundCount = Number(outboundCountRow?.cnt ?? 999);
+  const isPubliIntro = isPubliMessage && outboundCount === 0;
+
+  if (isPubliIntro && !result.segundoMensaje) {
+    // No hubo outbound previo + es lead-publi → siempre template como segundo mensaje
+    result = {
+      ...result,
       segundoMensaje: PUBLI_SEGUNDO_MENSAJE
     };
   }

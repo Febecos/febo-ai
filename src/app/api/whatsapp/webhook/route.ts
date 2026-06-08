@@ -469,14 +469,22 @@ async function sendAutomaticReply(input: {
   ` as Array<{ consultype: string }>)[0] : null;
   const isPubliMessage = !!formatAdReferralForAgent(message.referral) || contactRow?.consultype === "lead-publi";
 
-  // Force-split cuando:
-  // 1. Primer mensaje de publi (tiene referral), O
-  // 2. El agente puso "---" en la respuesta (detectó contexto de publi en historial pero ignoró segundoMensaje)
-  // Para follow-ups normales de lead-publi, el agente devuelve segundoMensaje=null y sin "---" → no splitea.
-  const isFirstPubliMessage = !!formatAdReferralForAgent(message.referral);
-  const agentUsedSeparator = /\n[ \t]*---[ \t]*(\n|$)/.test(result.respuesta);
-  if ((isFirstPubliMessage || agentUsedSeparator) && !result.segundoMensaje) {
-    // El segundo mensaje siempre es el template hardcodeado del catálogo.
+  // SPLIT DEFINITIVO para lead-publi:
+  // No dependemos de referral ni de que el agente ponga "---".
+  // Regla: si el contacto es lead-publi Y todavía no hubo ningún mensaje saliente
+  // en esta conversación → es la respuesta introductoria → siempre 2 mensajes.
+  // Para follow-ups (ya hay mensajes salientes), no splitea a menos que el agente
+  // haya puesto "---" por error (limpieza de seguridad).
+  const outboundCountRow = stored.threadId ? (await sql`
+    SELECT COUNT(*)::int AS cnt FROM messages
+    WHERE conversation_id = ${stored.threadId}::uuid AND direction = 'outbound'
+  ` as Array<{ cnt: number }>)[0] : null;
+  const outboundCount = outboundCountRow?.cnt ?? 999;
+
+  const isPubliIntro = isPubliMessage && outboundCount === 0;
+  const agentLeftSeparator = /\n[ \t]*---[ \t]*(\n|$)/.test(result.respuesta);
+
+  if ((isPubliIntro || agentLeftSeparator) && !result.segundoMensaje) {
     const PUBLI_SEGUNDO_MENSAJE =
       "Si queres ver y analizar otras opciones, date una vuelta por el catalogo completo en este link\n" +
       "https://selector.febecos.com/catalogo\n\n" +
@@ -485,8 +493,8 @@ async function sendAutomaticReply(input: {
       "Probala y dejanos tu comentario.\n\n" +
       "Cualquier asesoramiento mas especifico, escribime por aca y seguimos.";
 
-    // Truncar respuesta en el primer punto de corte natural si existe
-    const sepIdx = result.respuesta.search(/\n[ \t]*---[ \t]*\n/);
+    // Limpiar respuesta: cortar en --- o en "Si quer" si el agente mezcló todo
+    const sepIdx = result.respuesta.search(/\n[ \t]*---[ \t]*(\n|$)/);
     const catalogIdx = result.respuesta.search(/\nSi quer/);
     const splitAt = sepIdx >= 0 ? sepIdx : catalogIdx;
 

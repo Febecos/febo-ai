@@ -3027,6 +3027,15 @@ button:disabled {
   color: #1f2937;
 }
 
+.chat-bubble.outbound:not(.human-outbound) small,
+.chat-bubble.outbound:not(.human-outbound) .delivery-status {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.chat-bubble.outbound:not(.human-outbound) .delivery-status.read {
+  color: #93c5fd;
+}
+
 .chat-bubble.outbound.human-outbound small,
 .chat-bubble.outbound.human-outbound .delivery-status {
   color: rgba(31, 41, 55, 0.78);

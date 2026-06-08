@@ -36,7 +36,7 @@ const WHATSAPP_BUTTON_SIX_INSTALLMENTS = "febo_six_installments";
 const WHATSAPP_BUTTON_CASH = "febo_cash";
 const DEFAULT_AUTO_REPLY_DELAY_SECONDS = 90;
 
-export const maxDuration = 150;
+export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams;
@@ -538,7 +538,7 @@ async function sendAutomaticReply(input: {
 
     // Si el agente generó un segundo mensaje (ej. publi), enviarlo aparte con demora natural
     if (result.segundoMensaje) {
-      await sleep(8_000); // 8 s de pausa entre mensajes (30s era demasiado para after())
+      await sleep(30_000); // 30 s de pausa entre mensajes
       await sendWhatsAppText(message.from, result.segundoMensaje);
     }
 

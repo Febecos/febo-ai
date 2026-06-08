@@ -38,7 +38,7 @@ async function handler(req: NextRequest) {
         'Seguimiento Lead Publi',
         'febecos_seguimiento_publi',
         'es_AR',
-        'marketing',
+        'session',
         'Hola! 👋 Te escribimos desde Febecos. ¿Pudiste ver los datos del equipo que te compartimos? Si tenés alguna duda o querés que un asesor te ayude a elegir la bomba solar ideal para tu campo, estamos por acá. 😊',
         true
       )
@@ -94,7 +94,7 @@ async function handler(req: NextRequest) {
       label: "lead-publi creada/actualizada",
       template: { id: template.id, name: template.name, label: template.label },
       rule: rule ?? "ya existia",
-      nota: "⚠️ El template 'febecos_seguimiento_publi' debe estar aprobado en Meta Business Manager para enviarse fuera de la ventana de 24hs.",
+      nota: "✅ Se envia como mensaje de texto libre (category=session), dentro de la ventana de 24hs. No requiere aprobacion de Meta.",
     });
 
   } catch (err) {

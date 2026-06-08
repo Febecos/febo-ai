@@ -111,6 +111,8 @@ export type ScheduledTemplateMessage = {
   template_label: string;
   template_name: string;
   template_language_code: string;
+  template_body: string | null;
+  template_category: string | null;
   phone: string;
   body_parameters: string[];
   scheduled_at: string;
@@ -1900,6 +1902,8 @@ export async function listDueScheduledTemplateMessages(limit = 20) {
       (select label from message_templates where id = s.template_id) as template_label,
       (select name from message_templates where id = s.template_id) as template_name,
       (select language_code from message_templates where id = s.template_id) as template_language_code,
+      (select body from message_templates where id = s.template_id) as template_body,
+      (select category from message_templates where id = s.template_id) as template_category,
       (select full_name from app_users where id = s.created_by) as created_by_name
   `) as ScheduledTemplateMessage[];
 }

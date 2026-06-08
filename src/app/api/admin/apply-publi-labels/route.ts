@@ -16,7 +16,7 @@ async function handler(req: NextRequest) {
   try {
     // Crear etiqueta solo si no existe (sin ON CONFLICT para evitar problemas de constraint)
     const existingLabel = await sql`
-      SELECT id FROM label_definitions WHERE slug = 'lead-publi' LIMIT 1
+      SELECT slug FROM label_definitions WHERE slug = 'lead-publi' LIMIT 1
     `;
     const labelRows = Array.isArray(existingLabel) ? existingLabel : [];
     if (labelRows.length === 0) {

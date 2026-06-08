@@ -30,16 +30,16 @@ async function handler(req: NextRequest) {
 
     // Candidatos: conversaciones de últimas 48hs con mensaje de publi
     const rowsRaw = await sql`
-      SELECT DISTINCT ON (m.conversation_id)
-        m.conversation_id as id,
+      SELECT DISTINCT ON (c.contact_id)
+        c.contact_id as id,
         ct.display_name as name,
-        c.consultype
+        ct.consultype
       FROM messages m
       JOIN conversations c ON c.id = m.conversation_id
       JOIN contacts ct ON ct.id = c.contact_id
       WHERE m.created_at >= NOW() - INTERVAL '48 hours'
         AND m.body ILIKE '%Vino de un anuncio de Meta%'
-      ORDER BY m.conversation_id
+      ORDER BY c.contact_id
     `;
     const rows = Array.isArray(rowsRaw) ? rowsRaw as Array<{ id: string; name: string; consultype: string }> : [];
 
@@ -52,7 +52,7 @@ async function handler(req: NextRequest) {
 
     // Actualizar solo estados iniciales
     const updatedRaw = await sql`
-      UPDATE conversations
+      UPDATE contacts
       SET consultype = 'lead-publi', updated_at = NOW()
       WHERE id = ANY(${ids})
         AND (consultype IS NULL OR consultype IN ('saludo','informacion','pasar-presupuesto','otro',''))

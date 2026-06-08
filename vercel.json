@@ -7,6 +7,10 @@
     {
       "path": "/api/learnings/distill",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/window24-followup",
+      "schedule": "0 * * * *"
     }
   ]
 }

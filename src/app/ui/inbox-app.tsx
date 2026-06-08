@@ -37,6 +37,7 @@ import {
   Square,
   Star,
   Tags,
+  Timer,
   Trash2,
   Truck,
   UserCheck,
@@ -3634,7 +3635,7 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [scheduledTemplates, setScheduledTemplates] = useState<ScheduledTemplateMessage[]>([]);
   const [automationRules, setAutomationRules] = useState<TemplateAutomationRule[]>([]);
-  const [activeTab, setActiveTab] = useState<"list" | "edit" | "scheduled" | "automation">("scheduled");
+  const [activeTab, setActiveTab] = useState<"list" | "edit" | "scheduled" | "automation" | "window24">("scheduled");
   const [selectedAutomationState, setSelectedAutomationState] = useState("comparador");
   const [form, setForm] = useState({
     label: "",
@@ -3666,6 +3667,9 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
   const [importingTemplates, setImportingTemplates] = useState(false);
   const [schedulingTemplate, setSchedulingTemplate] = useState(false);
   const [savingAutomationRule, setSavingAutomationRule] = useState(false);
+  const [window24Config, setWindow24Config] = useState({ delayHours: 21, text: "Hola! 👋 Te escribimos desde Febecos. ¿Pudiste ver los datos del equipo que te compartimos? Si tenés alguna duda o querés que un asesor te ayude a elegir la bomba solar ideal para tu campo, estamos por acá. 😊" });
+  const [window24Saving, setWindow24Saving] = useState(false);
+  const [window24Loaded, setWindow24Loaded] = useState(false);
   const [message, setMessage] = useState("");
   const isAdmin = currentUser.role === "admin";
   const automationRulesByState = useMemo(() => {
@@ -3684,7 +3688,28 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
     void loadTemplates();
     void loadScheduledTemplates();
     void loadAutomationRules();
+    void loadWindow24Config();
   }, []);
+
+  async function loadWindow24Config() {
+    const response = await fetch("/api/settings/window24-followup");
+    const payload = await readJsonResponse(response);
+    if (response.ok && payload?.config) {
+      setWindow24Config(payload.config);
+    }
+    setWindow24Loaded(true);
+  }
+
+  async function saveWindow24Config(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setWindow24Saving(true);
+    await fetch("/api/settings/window24-followup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(window24Config)
+    });
+    setWindow24Saving(false);
+  }
 
   async function loadTemplates() {
     const response = await fetch("/api/templates");
@@ -3975,7 +4000,7 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
     <section className="admin-panel templates-panel">
       <div className="panel-title compact-panel-title">
         <MessageSquareText size={16} />
-        Plantillas de WhatsApp
+        Seguimiento
         <span>{templates.length}</span>
       </div>
       <div className="settings-tabs compact-tabs">
@@ -3988,6 +4013,11 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
         {isAdmin ? (
           <button className={activeTab === "automation" ? "active" : ""} onClick={() => setActiveTab("automation")} type="button">
             <BellRing size={16} /> Automatizacion por estado
+          </button>
+        ) : null}
+        {isAdmin ? (
+          <button className={activeTab === "window24" ? "active" : ""} onClick={() => setActiveTab("window24")} type="button">
+            <Timer size={16} /> Seguimiento 24hs
           </button>
         ) : null}
         {isAdmin ? (
@@ -4247,6 +4277,43 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
               </button>
             </div>
             {message ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
+          </form>
+        </div>
+      ) : null}
+
+      {activeTab === "window24" && isAdmin ? (
+        <div className="window24-panel">
+          <div className="window24-header">
+            <Timer size={18} />
+            <div>
+              <strong>Seguimiento automático — Ventana 24hs</strong>
+              <p>Se envía un mensaje de texto libre (sin template aprobado) a los contactos con etiqueta <b>Lead Publi</b> que no respondieron después del tiempo indicado. El cron corre cada hora.</p>
+            </div>
+          </div>
+          <form className="window24-form" onSubmit={saveWindow24Config}>
+            <label className="field">
+              <span>Horas sin respuesta del cliente para disparar el seguimiento</span>
+              <input
+                type="number"
+                min={1}
+                max={23}
+                value={window24Config.delayHours}
+                onChange={(e) => setWindow24Config(c => ({ ...c, delayHours: Number(e.target.value) }))}
+              />
+            </label>
+            <label className="field">
+              <span>Texto del mensaje de seguimiento</span>
+              <textarea
+                rows={5}
+                value={window24Config.text}
+                onChange={(e) => setWindow24Config(c => ({ ...c, text: e.target.value }))}
+              />
+            </label>
+            <div className="window24-actions">
+              <button type="submit" className="btn-primary" disabled={window24Saving}>
+                {window24Saving ? "Guardando…" : "Guardar configuración"}
+              </button>
+            </div>
           </form>
         </div>
       ) : null}

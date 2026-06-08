@@ -15,7 +15,7 @@ async function handler(req: NextRequest) {
   const sql = getSql();
 
   // 1. Upsert etiqueta lead-publi
-  const existing = await sql`SELECT id FROM label_definitions WHERE slug = 'lead-publi' LIMIT 1`;
+  const existing = await sql`SELECT id FROM label_definitions WHERE slug = 'lead-publi' LIMIT 1` as Array<{ id: string }>;
   if (existing.length === 0) {
     await sql`
       INSERT INTO label_definitions (slug, name, color, instructions, active, sort_order)

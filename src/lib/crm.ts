@@ -2166,9 +2166,24 @@ export async function recordIncomingMessage(input: {
         platform = coalesce(nullif(contacts.platform, ''), excluded.platform),
         last_seen_at = now(),
         updated_at = now()
-    returning id
-  `) as Array<{ id: string }>;
+    returning id, (xmax = 0) as is_new
+  `) as Array<{ id: string; is_new: boolean }>;
   const contactId = contacts[0].id;
+  const isNewContact = contacts[0].is_new;
+
+  // Volcar contacto nuevo a la base de clientes unificada (fire-and-forget, dedup por whatsapp)
+  if (isNewContact) {
+    fetch("https://febecos.com/api/admin?action=upsert_cliente", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tipo: "cliente_final",
+        nombre: input.contactName ?? null,
+        whatsapp: phone,
+        origen: "febo_ai"
+      })
+    }).catch(() => {});
+  }
 
   const existing = (await sql`
     select id, ai_enabled
@@ -2297,10 +2312,25 @@ export async function recordSelectorCheckoutLead(input: SelectorCheckoutLead) {
         assigned_to = coalesce(contacts.assigned_to, ${assigneeId}::uuid),
         last_seen_at = now(),
         updated_at = now()
-    returning id::text
-  `) as Array<{ id: string }>;
+    returning id::text, (xmax = 0) as is_new
+  `) as Array<{ id: string; is_new: boolean }>;
 
   const contactId = contacts[0].id;
+  const isNewSelectorContact = contacts[0].is_new;
+
+  // Volcar a la base de clientes unificada si es contacto nuevo
+  if (isNewSelectorContact) {
+    fetch("https://febecos.com/api/admin?action=upsert_cliente", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tipo: "cliente_final",
+        whatsapp: phone,
+        origen: "selector"
+      })
+    }).catch(() => {});
+  }
+
   const existingConversation = (await sql`
     select id::text
     from conversations

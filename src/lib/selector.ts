@@ -101,3 +101,75 @@ export async function suggestPump(input: {
 function ensureTrailingSlash(value: string) {
   return value.endsWith("/") ? value : `${value}/`;
 }
+
+// ── Pump detail (curvas de rendimiento) ──────────────────────────────────────
+
+export type PumpCurvePoint = {
+  altura_m: number;
+  litros_invierno: number;
+  litros_promedio: number;
+  litros_verano: number;
+  litros_hora: number;
+  cant_animales: number;
+};
+
+export type PumpDetailResult = {
+  ok: true;
+  bomba: {
+    codigo: string;
+    tipo?: string;
+    energia?: string;
+    impulsor?: string;
+    marca?: string;
+    diam_bomba?: string;
+    diam_perf?: string;
+    watts?: number;
+    cant_paneles?: number;
+    precio_full?: number | null;
+    stock?: number | null;
+  };
+  curvas: PumpCurvePoint[];
+};
+
+/**
+ * Obtiene el detalle de una bomba con curvas de rendimiento por altura.
+ * Llama directamente a roi.febecos.com/api/pump-detail?codigo=X
+ */
+export async function fetchPumpDetail(codigo: string): Promise<PumpDetailResult | null> {
+  try {
+    const url = `https://roi.febecos.com/api/pump-detail?codigo=${encodeURIComponent(codigo)}`;
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return null;
+    const data = await response.json() as Record<string, unknown>;
+    if (data.ok !== true || !data.curvas) return null;
+    return data as PumpDetailResult;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Formatea las curvas de rendimiento de una bomba como tabla de texto legible por WhatsApp.
+ * Ej:
+ * Curva de caudal — Kit Bomba 3" 300W (HD-3SSC4.5-35-24-300)
+ * Altura | Verano  | Promedio | Invierno | L/hora
+ * 10 m   | 2.400 L | 1.800 L  | 1.200 L  | 100
+ * ...
+ */
+export function formatPumpCurveText(detail: PumpDetailResult): string {
+  const { bomba, curvas } = detail;
+  if (!curvas || curvas.length === 0) return "";
+
+  const header = `📊 *Curva de caudal — ${bomba.marca ?? ""} ${bomba.watts ?? ""}W (${bomba.codigo})*`;
+  const cols = "Altura  | Verano    | Promedio  | Invierno";
+  const sep  = "--------|-----------|-----------|----------";
+  const rows = curvas.map((c) => {
+    const alt = `${c.altura_m}m`.padEnd(7);
+    const v   = `${c.litros_verano.toLocaleString("es-AR")} L/d`.padEnd(10);
+    const p   = `${c.litros_promedio.toLocaleString("es-AR")} L/d`.padEnd(10);
+    const i   = `${c.litros_invierno.toLocaleString("es-AR")} L/d`.padEnd(10);
+    return `${alt} | ${v} | ${p} | ${i}`;
+  });
+
+  return [header, cols, sep, ...rows].join("\n");
+}

@@ -182,6 +182,7 @@ export async function runFebecosAgent(input: {
   message: string;
   contactName?: string;
   conversationId?: string | null;
+  pumpCurveContext?: string | null;
 }): Promise<AgentResult> {
   const profile = await getProfileByPhone(input.phone);
   const fallback = platformFallbackContext();
@@ -296,6 +297,7 @@ export async function runFebecosAgent(input: {
       "El mensaje del cliente puede traer al final un bloque entre corchetes con el contexto del anuncio de Meta. Si dice '[Vino de un anuncio de Meta - titulo... texto... link...]', usa esos datos para saber que producto vio y responde sobre ESE equipo (no pidas captura). Si dice '[Vino de un anuncio... pero no llego el contenido del anuncio]', o el cliente abre con algo vago (solo 'Precio?', 'Hola', 'Info', un emoji) sin contexto, no inventes el producto: deci con honestidad que no podes ver la imagen ni donde toco y pedile una captura de la publicacion o que te diga que equipo estaba viendo.",
       "El diametro de la bomba define el modelo: 2\" para perforaciones angostas (~63-80mm), 4\" para perforaciones anchas (110mm+) y mas caudal/riego. La misma potencia puede venir en 2\" y 4\" (ej 500W existe en ambas). Si el cliente llega desde una publi/anuncio que promociona un modelo puntual (ej publi de Facebook de la 4\" 500W), ESE es el modelo que aplica: pasale el link de ese (kit-bomba-solar-4-500w), no el de otro diametro, salvo que sus datos pidan claramente otro.",
       "Si preguntan cuanto tiempo de uso continuo aguantan las bombas o cuantas horas funcionan, responde que estan preparadas para trabajar todo el dia sin problemas: las solares sumergibles son para uso continuo durante las horas de sol, no se recalientan ni se desgastan por trabajar todo el dia. De noche/sin sol no bombean (no usan bateria para operar). Para llenar reservorios o piletas, durante el dia la bomba va llenando; el dato que define el equipo es profundidad y diametro, no las horas.",
+      "Si el contexto incluye febecos.pumpCurveContext (tabla de caudal de la bomba que el cliente ya tiene en pantalla), PRIMERO mostra esa tabla tal cual en tu respuesta (es texto plano, mostrarla como esta). Luego agrega una linea breve como 'Si queres saber cuanto saca para tu instalacion puntual, pasa profundidad, diametro y uso'. NO pidas las 4 preguntas antes de mostrar la tabla: la tabla va primero siempre que exista pumpCurveContext.",
       "Si selectorQuote no esta disponible pero falta algun dato tecnico, pedi solo ese dato. No inventes precios ni modelos.",
       "Si selectorQuote.error existe, deriva o pedi disculpas brevemente; no inventes una cotizacion alternativa.",
       "Solo si el cliente ya confirmo que quiere asesor, si pidio compra/cierre/factura/envio/pago, o si el caso requiere solucion a medida, entonces tu respuesta puede decir que lo vas a pasar/derivar y escalar debe ser true.",
@@ -326,7 +328,8 @@ export async function runFebecosAgent(input: {
               febecos: {
                 profile,
                 fallback,
-                selectorQuote
+                selectorQuote,
+                pumpCurveContext: input.pumpCurveContext ?? null
               },
               outputSchema: {
                 respuesta: "primer mensaje WhatsApp (mensaje 1 de 2 cuando viene de publi: saludo + modelo + link ficha). En el resto de casos, el unico mensaje.",

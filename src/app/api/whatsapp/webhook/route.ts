@@ -15,7 +15,7 @@ import {
   updateMessageBody
 } from "@/lib/crm";
 import { sendPushNotificationToAll } from "@/lib/push";
-import { suggestPump } from "@/lib/selector";
+import { fetchPumpDetail, formatPumpCurveText, suggestPump } from "@/lib/selector";
 import {
   downloadWhatsAppMedia,
   extractInboundMessages,
@@ -443,13 +443,53 @@ async function sendAutomaticReply(input: {
     return;
   }
 
+  // ── Pump curve enrichment ─────────────────────────────────────────────────
+  // Si el cliente viene del catálogo con un producto y pregunta sobre caudal/litros,
+  // buscamos la curva de rendimiento y se la pasamos al agente para que la muestre
+  // directamente en vez de pedir los 4 datos técnicos.
+  let pumpCurveContext: string | null = null;
+  const caudalKeywords = /caudal|litros|litro|l\/h|l\/d|cuanto saca|cuánto saca|rendimiento|performance|cuanto bombea|cuánto bombea/i;
+  if (caudalKeywords.test(effectiveAgentMessage) && stored.threadId) {
+    try {
+      const sqlCurve = getSql();
+      const recentMessages = await sqlCurve`
+        SELECT body FROM messages
+        WHERE conversation_id = ${stored.threadId}::uuid
+        ORDER BY created_at DESC
+        LIMIT 20
+      ` as Array<{ body: string }>;
+      // Buscar código de bomba en el historial (patrón: letras-dígitos-guiones-puntos, ej HD-3SSC4.5-35-24-300)
+      const pumpCodeRegex = /\b([A-Z]{2,6}-[A-Z0-9][A-Z0-9\-._]{4,})\b/g;
+      let foundCode: string | null = null;
+      for (const row of recentMessages) {
+        const matches = row.body?.matchAll(pumpCodeRegex);
+        if (matches) {
+          for (const m of matches) {
+            foundCode = m[1];
+            break;
+          }
+        }
+        if (foundCode) break;
+      }
+      if (foundCode) {
+        const detail = await fetchPumpDetail(foundCode);
+        if (detail && detail.curvas.length > 0) {
+          pumpCurveContext = formatPumpCurveText(detail);
+        }
+      }
+    } catch (e) {
+      console.warn("[webhook] pump-curve enrichment failed:", e);
+    }
+  }
+
   let result;
   try {
     result = await runFebecosAgent({
       phone: message.from,
       message: effectiveAgentMessage,
       contactName: message.contactName,
-      conversationId: stored.threadId
+      conversationId: stored.threadId,
+      pumpCurveContext
     });
   } catch (error) {
     console.error("No pudimos generar respuesta automatica.", error);

@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
   // - con la etiqueta configurada (lead-publi por defecto)
   // - cuyo último mensaje es OUTBOUND (el cliente no respondió)
   // - ese último mensaje tiene >= delayHours horas de antigüedad
-  // - pero < 24hs (dentro de la ventana de sesión de WhatsApp)
+  // - último mensaje INBOUND del cliente < 24hs (ventana real de sesión WhatsApp)
   // - que no tengan ya el marcador de seguimiento enviado
   const candidates = await sql`
     SELECT DISTINCT ON (c.id)
@@ -48,7 +48,12 @@ export async function GET(request: NextRequest) {
       ct.phone,
       m.id              AS last_message_id,
       m.created_at      AS last_message_at,
-      m.direction       AS last_direction
+      m.direction       AS last_direction,
+      (
+        SELECT created_at FROM messages
+        WHERE conversation_id = c.id AND direction = 'inbound'
+        ORDER BY created_at DESC LIMIT 1
+      )                 AS last_inbound_at
     FROM conversations c
     JOIN contacts ct ON ct.id = c.contact_id
     JOIN messages m ON m.conversation_id = c.id
@@ -63,6 +68,7 @@ export async function GET(request: NextRequest) {
     last_message_id: string;
     last_message_at: string;
     last_direction: string;
+    last_inbound_at: string | null;
   }>;
 
   const results: Array<{ phone: string; ok: boolean; reason?: string }> = [];
@@ -78,13 +84,22 @@ export async function GET(request: NextRequest) {
     const now = Date.now();
     const hoursAgo = (now - lastAt) / 1000 / 3600;
 
-    // Verificar ventana: entre delayHours y 24hs
+    // Verificar ventana sobre el último outbound: >= delayHours
     if (hoursAgo < delayHours) {
       results.push({ phone: row.phone, ok: false, reason: `faltan-horas (${hoursAgo.toFixed(1)}h)` });
       continue;
     }
-    if (hoursAgo >= 24) {
-      results.push({ phone: row.phone, ok: false, reason: "fuera-ventana-24hs" });
+
+    // CRÍTICO: la ventana de sesión WhatsApp de 24hs se mide desde el ÚLTIMO MENSAJE
+    // ENTRANTE del cliente, no desde el último outbound nuestro.
+    // Si el cliente no escribió en las últimas 24hs, el mensaje no es free-form → NO enviar.
+    if (!row.last_inbound_at) {
+      results.push({ phone: row.phone, ok: false, reason: "sin-inbound" });
+      continue;
+    }
+    const inboundHoursAgo = (now - new Date(row.last_inbound_at).getTime()) / 1000 / 3600;
+    if (inboundHoursAgo >= 24) {
+      results.push({ phone: row.phone, ok: false, reason: `ventana-expirada (ultimo-inbound ${inboundHoursAgo.toFixed(1)}h)` });
       continue;
     }
 

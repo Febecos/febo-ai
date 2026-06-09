@@ -556,23 +556,35 @@ async function sendAutomaticReply(input: {
       )
     : await sendWhatsAppText(message.from, result.respuesta);
 
-    // Si el agente generó un segundo mensaje (ej. publi), enviarlo aparte con demora natural
+    // Si hay segundo mensaje (publi intro), enviarlo aparte con pausa y registrar por separado
+    let sent2 = null;
     if (result.segundoMensaje) {
       await sleep(30_000); // 30 s de pausa entre mensajes
-      await sendWhatsAppText(message.from, result.segundoMensaje);
+      sent2 = await sendWhatsAppText(message.from, result.segundoMensaje);
     }
 
+    // Registrar primer mensaje
     await recordAgentReply({
       contactId: stored.contactId,
       threadId: stored.threadId,
-      answer: result.segundoMensaje
-        ? `${result.respuesta}\n\n---\n\n${result.segundoMensaje}`
-        : result.respuesta,
+      answer: result.respuesta,
       intent: result.consultype,
       needsHuman,
       waMessageId: getSentMessageId(sent),
       replyOptions: sentReplyOptions
     });
+
+    // Registrar segundo mensaje como burbuja separada (sin needsHuman ni botones)
+    if (result.segundoMensaje && sent2) {
+      await recordAgentReply({
+        contactId: stored.contactId,
+        threadId: stored.threadId,
+        answer: result.segundoMensaje,
+        intent: result.consultype,
+        needsHuman: false,
+        waMessageId: getSentMessageId(sent2)
+      });
+    }
 
     const followUpDueAt = inferDeferredFollowUpDueAt(effectiveAgentMessage);
     if (result.consultype === "seguimiento" && followUpDueAt) {

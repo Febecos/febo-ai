@@ -473,9 +473,9 @@ async function sendAutomaticReply(input: {
   const PUBLI_SEGUNDO_MENSAJE =
     "Si queres ver y analizar otras opciones, date una vuelta por el catalogo completo en este link\n" +
     "https://selector.febecos.com/catalogo\n\n" +
-    "Tambien te invito a experimentar en 2 minutos, nuestra herramienta gratuita y hacer un calculo online para tu campo.\n" +
-    "https://selector.febecos.com/formulario\n" +
-    "Probala y dejanos tu comentario.\n\n" +
+    "En caso que quieras calcularlo vos, te invito a experimentar en 2 minutos nuestra herramienta gratuita online.\n" +
+    "Te va a solicitar los datos minimos necesarios, para analizar todo lo que necesita tu campo aqui y si dejas el e-mail podes acceder a un informe completo con el Retorno de la Inversion (ROI) que te ayudara a tomar una decision inteligente.\n" +
+    "Ingresa ahora a este link https://selector.febecos.com/formulario\n\n" +
     "Cualquier asesoramiento mas especifico, escribime por aca y seguimos.";
 
   // PASO 1 — SIEMPRE: si el agente dejó "---" en la respuesta, cortar ahí y usar template.

@@ -2,6 +2,35 @@ import crypto from "node:crypto";
 import { config, requireEnv } from "./config";
 import { getSettingValue } from "./crm";
 
+/**
+ * Decora URLs de selector.febecos.com con UTM params para atribución de Febo.
+ * - Solo toca selector.febecos.com (no revendedores, Maps, etc.)
+ * - No duplica: si la URL ya trae utm_source, la deja intacta.
+ * - utm_content = contactId (UUID opaco, no teléfono).
+ */
+export function decorateLinksWithUtm(
+  body: string,
+  opts: { contactId?: string | null; campaign?: string | null } = {}
+): string {
+  const campaign = opts.campaign || "msg-bombas";
+  return body.replace(
+    /https?:\/\/selector\.febecos\.com\/[^\s)>\]"']*/g,
+    (url) => {
+      try {
+        const u = new URL(url);
+        if (u.searchParams.has("utm_source")) return url; // ya decorada
+        u.searchParams.set("utm_source", "febo");
+        u.searchParams.set("utm_medium", "whatsapp");
+        u.searchParams.set("utm_campaign", campaign);
+        if (opts.contactId) u.searchParams.set("utm_content", opts.contactId);
+        return u.toString();
+      } catch {
+        return url; // URL malformada — dejar intacta
+      }
+    }
+  );
+}
+
 export type WhatsAppAdReferral = {
   sourceUrl?: string;
   sourceType?: string;
@@ -486,9 +515,16 @@ export async function downloadWhatsAppMedia(mediaId: string) {
   };
 }
 
-export async function sendWhatsAppText(to: string, body: string, replyToWaMessageId?: string | null) {
+export async function sendWhatsAppText(
+  to: string,
+  body: string,
+  replyToWaMessageId?: string | null,
+  opts: { contactId?: string | null; campaign?: string | null } = {}
+) {
   const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
   const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+
+  const decoratedBody = decorateLinksWithUtm(body, opts);
 
   const payload: Record<string, unknown> = {
     messaging_product: "whatsapp",
@@ -497,7 +533,7 @@ export async function sendWhatsAppText(to: string, body: string, replyToWaMessag
     type: "text",
     text: {
       preview_url: false,
-      body
+      body: decoratedBody
     }
   };
 
@@ -525,9 +561,16 @@ export async function sendWhatsAppReplyButtons(input: {
   to: string;
   body: string;
   buttons: Array<{ id: string; title: string }>;
+  contactId?: string | null;
+  campaign?: string | null;
 }) {
   const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
   const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+
+  const decoratedBody = decorateLinksWithUtm(input.body, {
+    contactId: input.contactId,
+    campaign: input.campaign
+  });
 
   const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
     method: "POST",
@@ -543,7 +586,7 @@ export async function sendWhatsAppReplyButtons(input: {
       interactive: {
         type: "button",
         body: {
-          text: input.body
+          text: decoratedBody
         },
         action: {
           buttons: input.buttons.slice(0, 3).map((button) => ({

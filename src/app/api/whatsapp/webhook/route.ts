@@ -512,6 +512,7 @@ async function sendAutomaticReply(input: {
   const paymentButtons = getPaymentDecisionButtons(result.respuesta, needsHuman);
   let sentReplyOptions: Array<{ id: string; title: string }> | undefined;
 
+  const utmOpts = { contactId: stored.contactId ?? null };
   try {
     const sent = paymentButtons ?
       (
@@ -519,7 +520,8 @@ async function sendAutomaticReply(input: {
         await sendWhatsAppReplyButtons({
           to: message.from,
           body: result.respuesta,
-          buttons: paymentButtons
+          buttons: paymentButtons,
+          ...utmOpts
         })
       )
     : advisorDecisionButtons ?
@@ -528,7 +530,8 @@ async function sendAutomaticReply(input: {
         await sendWhatsAppReplyButtons({
           to: message.from,
           body: result.respuesta,
-          buttons: advisorDecisionButtons
+          buttons: advisorDecisionButtons,
+          ...utmOpts
         })
       )
     : shouldOfferAdvisorButton(result.respuesta, needsHuman) ?
@@ -539,7 +542,8 @@ async function sendAutomaticReply(input: {
         await sendWhatsAppReplyButtons({
           to: message.from,
           body: result.respuesta,
-          buttons: sentReplyOptions
+          buttons: sentReplyOptions,
+          ...utmOpts
         })
       )
     : shouldOfferDecisionButtons(result.respuesta, needsHuman) ?
@@ -551,16 +555,17 @@ async function sendAutomaticReply(input: {
         await sendWhatsAppReplyButtons({
           to: message.from,
           body: result.respuesta,
-          buttons: sentReplyOptions
+          buttons: sentReplyOptions,
+          ...utmOpts
         })
       )
-    : await sendWhatsAppText(message.from, result.respuesta);
+    : await sendWhatsAppText(message.from, result.respuesta, null, utmOpts);
 
     // Si hay segundo mensaje (publi intro), enviarlo aparte con pausa y registrar por separado
     let sent2 = null;
     if (result.segundoMensaje) {
       await sleep(30_000); // 30 s de pausa entre mensajes
-      sent2 = await sendWhatsAppText(message.from, result.segundoMensaje);
+      sent2 = await sendWhatsAppText(message.from, result.segundoMensaje, null, utmOpts);
     }
 
     // Registrar primer mensaje

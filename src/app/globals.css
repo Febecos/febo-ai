@@ -1691,6 +1691,16 @@ button:disabled {
   width: 100%;
 }
 
+.chat-bubble.highlight-message {
+  animation: highlight-fade 3s ease forwards;
+}
+
+@keyframes highlight-fade {
+  0%   { outline: 2px solid #facc15; background: rgba(250,204,21,0.12); }
+  60%  { outline: 2px solid #facc15; background: rgba(250,204,21,0.08); }
+  100% { outline: 2px solid transparent; background: transparent; }
+}
+
 .msg-search-btn {
   background: transparent;
   border: 0;

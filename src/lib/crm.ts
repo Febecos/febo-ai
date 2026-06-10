@@ -2846,6 +2846,7 @@ export type MessageSearchResult = {
   phone: string;
   display_name: string | null;
   consultype: string | null;
+  matched_message_id: string;
   matched_body: string;
   matched_at: string;
   matched_direction: string;
@@ -2876,6 +2877,7 @@ export async function searchMessageBodies(query: string, limit = 50): Promise<Me
         ct.phone,
         ct.display_name,
         ct.consultype,
+        m.id::text              AS matched_message_id,
         m.body                  AS matched_body,
         m.created_at            AS matched_at,
         m.direction             AS matched_direction,

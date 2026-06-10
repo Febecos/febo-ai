@@ -4764,12 +4764,14 @@ function InboxList({
     phone: string;
     display_name: string | null;
     consultype: string | null;
+    matched_message_id: string;
     matched_body: string;
     matched_at: string;
     matched_direction: string;
     total_matches: number;
   }> | null>(null);
   const [msgSearchLoading, setMsgSearchLoading] = useState(false);
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
   const [contactDetailOpen, setContactDetailOpen] = useState(false);
   const [contactDetailSaving, setContactDetailSaving] = useState(false);
   const [contactDetailMessage, setContactDetailMessage] = useState("");
@@ -5006,6 +5008,22 @@ function InboxList({
 
     return scheduleThreadScrollToBottom();
   }, [activeConversationTab, loadingMessages, messages.length, mobileDetailOpen, selected?.id]);
+
+  // Scroll al mensaje del resultado de búsqueda cuando termina de cargar
+  useEffect(() => {
+    if (!highlightMessageId || loadingMessages) return;
+    // Verificar que el mensaje existe en la lista cargada
+    const exists = messages.some((m) => m.id === highlightMessageId);
+    if (!exists) return;
+    window.setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[data-message-id="${highlightMessageId}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      // Limpiar highlight después de 3 segundos
+      window.setTimeout(() => setHighlightMessageId(null), 3000);
+    }, 100);
+  }, [highlightMessageId, loadingMessages, messages]);
 
   useEffect(() => {
     if (!replyFile?.type.startsWith("audio/")) {
@@ -6661,6 +6679,7 @@ function InboxList({
                 key={r.conversation_id}
                 type="button"
                 onClick={() => {
+                  setHighlightMessageId(r.matched_message_id);
                   setMsgSearchResults(null);
                   setSelectedId(r.conversation_id);
                 }}
@@ -7213,7 +7232,8 @@ function InboxList({
 
                       return (
                         <article
-                          className={`chat-bubble ${message.direction} ${isHumanOutbound ? "human-outbound" : ""} ${isAudioMessage(message) ? "audio-bubble" : ""}`}
+                          className={`chat-bubble ${message.direction} ${isHumanOutbound ? "human-outbound" : ""} ${isAudioMessage(message) ? "audio-bubble" : ""} ${highlightMessageId === message.id ? "highlight-message" : ""}`}
+                          data-message-id={message.id}
                           key={message.id}
                         >
                           <div className="message-actions">

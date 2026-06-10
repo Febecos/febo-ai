@@ -1,13 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 
-const TOKEN = "febo-publi-2026";
+const TOKEN = process.env.ADMIN_TOOLS_TOKEN || ""; // rotar el valor comprometido 'febo-publi-2026'
 
 export async function GET(req: NextRequest) { return handler(req); }
 export async function POST(req: NextRequest) { return handler(req); }
 
 async function handler(req: NextRequest) {
-  if (req.nextUrl.searchParams.get("token") !== TOKEN) {
+  if (!TOKEN || req.nextUrl.searchParams.get("token") !== TOKEN) {
     return NextResponse.json({ error: "No autorizado." }, { status: 403 });
   }
 

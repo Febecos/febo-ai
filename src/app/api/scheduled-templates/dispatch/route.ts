@@ -83,8 +83,9 @@ export async function GET(request: NextRequest) {
 }
 
 function isAuthorizedCronRequest(request: NextRequest) {
+  // Fail-closed tambien en no-produccion: sin CRON_SECRET no se autoriza.
   if (!config.CRON_SECRET) {
-    return process.env.VERCEL_ENV !== "production";
+    return false;
   }
 
   return request.headers.get("authorization") === `Bearer ${config.CRON_SECRET}`;

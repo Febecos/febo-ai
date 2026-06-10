@@ -167,7 +167,9 @@ type MetaTemplateResponse = {
 
 export function verifyMetaSignature(rawBody: string, signature: string | null) {
   if (!config.WHATSAPP_APP_SECRET) {
-    return true;
+    // Fail-closed: sin el secreto no se puede verificar la firma, asi que se
+    // rechaza el webhook en vez de aceptar payloads no autenticados.
+    return false;
   }
 
   if (!signature?.startsWith("sha256=")) {

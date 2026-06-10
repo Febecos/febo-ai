@@ -165,7 +165,9 @@ function buildSelectorCheckoutConfirmation(input: z.infer<typeof checkoutSchema>
 
 function isAuthorized(request: NextRequest) {
   if (!config.FEBECOS_WEBHOOK_TOKEN) {
-    return true;
+    // Fail-closed: sin token configurado no se acepta el webhook (antes permitia
+    // disparar leads y envios de WhatsApp a numeros arbitrarios sin auth).
+    return false;
   }
 
   const authHeader = request.headers.get("authorization");

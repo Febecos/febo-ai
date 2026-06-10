@@ -2840,6 +2840,60 @@ export async function listConversations(filters: ConversationFilters = {}) {
   `) as ConversationSummary[];
 }
 
+export type MessageSearchResult = {
+  conversation_id: string;
+  contact_id: string;
+  phone: string;
+  display_name: string | null;
+  consultype: string | null;
+  matched_body: string;
+  matched_at: string;
+  matched_direction: string;
+  total_matches: number;
+};
+
+export async function searchMessageBodies(query: string, limit = 50): Promise<MessageSearchResult[]> {
+  if (!isDbConfigured() || !query.trim()) return [];
+
+  const sql = getSql();
+  const search = `%${query.trim().toLowerCase()}%`;
+
+  return (await sql`
+    SELECT
+      conv_data.conversation_id,
+      conv_data.contact_id,
+      conv_data.phone,
+      conv_data.display_name,
+      conv_data.consultype,
+      conv_data.matched_body,
+      conv_data.matched_at::text,
+      conv_data.matched_direction,
+      conv_data.total_matches
+    FROM (
+      SELECT DISTINCT ON (c.id)
+        c.id::text              AS conversation_id,
+        ct.id::text             AS contact_id,
+        ct.phone,
+        ct.display_name,
+        ct.consultype,
+        m.body                  AS matched_body,
+        m.created_at            AS matched_at,
+        m.direction             AS matched_direction,
+        COUNT(m2.id) OVER (PARTITION BY c.id) AS total_matches
+      FROM messages m
+      JOIN conversations c  ON c.id  = m.conversation_id
+      JOIN contacts ct      ON ct.id = c.contact_id
+      JOIN messages m2      ON m2.conversation_id = c.id
+                            AND lower(m2.body) LIKE ${search}
+      WHERE lower(m.body) LIKE ${search}
+        AND c.status NOT IN ('blocked', 'deleted')
+      ORDER BY c.id, m.created_at DESC
+    ) conv_data
+    ORDER BY conv_data.matched_at DESC
+    LIMIT ${limit}
+  `) as MessageSearchResult[];
+}
+
 export async function listContacts(filters: ContactFilters = {}) {
   if (!isDbConfigured()) {
     return [];

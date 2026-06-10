@@ -4758,6 +4758,18 @@ function InboxList({
     assignedTo: "all",
     unreadOnly: false
   });
+  const [msgSearchResults, setMsgSearchResults] = useState<Array<{
+    conversation_id: string;
+    contact_id: string;
+    phone: string;
+    display_name: string | null;
+    consultype: string | null;
+    matched_body: string;
+    matched_at: string;
+    matched_direction: string;
+    total_matches: number;
+  }> | null>(null);
+  const [msgSearchLoading, setMsgSearchLoading] = useState(false);
   const [contactDetailOpen, setContactDetailOpen] = useState(false);
   const [contactDetailSaving, setContactDetailSaving] = useState(false);
   const [contactDetailMessage, setContactDetailMessage] = useState("");
@@ -5714,7 +5726,26 @@ function InboxList({
   function updateFilters(next: Partial<typeof filters>) {
     const nextFilters = { ...filters, ...next };
     setFilters(nextFilters);
+    // Limpiar resultados de búsqueda en mensajes al cambiar filtros
+    if (next.query === "" || next.query === undefined) {
+      setMsgSearchResults(null);
+    }
     void refreshConversations(nextFilters);
+  }
+
+  async function searchInMessages(q: string) {
+    if (!q.trim() || q.trim().length < 2) return;
+    setMsgSearchLoading(true);
+    setMsgSearchResults(null);
+    try {
+      const res = await fetch(`/api/messages/search?q=${encodeURIComponent(q.trim())}`);
+      const data = await res.json() as { results?: typeof msgSearchResults };
+      setMsgSearchResults(data.results ?? []);
+    } catch {
+      setMsgSearchResults([]);
+    } finally {
+      setMsgSearchLoading(false);
+    }
   }
 
   function toggleSelectedTag(tagName: string) {
@@ -6496,11 +6527,58 @@ function InboxList({
             <label className="search-field">
               <Search size={16} />
               <input
+                className="inbox-search"
                 placeholder="Buscar"
                 value={filters.query}
-                onChange={(event) => updateFilters({ query: event.target.value })}
+                onChange={(event) => {
+                  updateFilters({ query: event.target.value });
+                  if (!event.target.value.trim()) setMsgSearchResults(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && filters.query.trim().length >= 2) {
+                    void searchInMessages(filters.query);
+                  }
+                }}
               />
+              {filters.query.trim().length >= 2 && (
+                <button
+                  className="msg-search-btn"
+                  title="Buscar esta frase en todos los mensajes (Enter)"
+                  type="button"
+                  onClick={() => void searchInMessages(filters.query)}
+                >
+                  {msgSearchLoading ? "…" : <MessageSquareText size={14} />}
+                </button>
+              )}
             </label>
+            {msgSearchResults !== null && (
+              <div className="msg-search-results">
+                <div className="msg-search-header">
+                  <span>
+                    {msgSearchResults.length === 0
+                      ? "Sin resultados en mensajes"
+                      : `${msgSearchResults.length} conversación${msgSearchResults.length !== 1 ? "es" : ""} con "${filters.query}"`}
+                  </span>
+                  <button type="button" onClick={() => setMsgSearchResults(null)}><X size={14} /></button>
+                </div>
+                {msgSearchResults.map((r) => (
+                  <button
+                    className="msg-search-row"
+                    key={r.conversation_id}
+                    type="button"
+                    onClick={() => {
+                      setMsgSearchResults(null);
+                      setSelectedId(r.conversation_id);
+                    }}
+                  >
+                    <strong>{r.display_name || r.phone}</strong>
+                    {r.total_matches > 1 && <span className="match-count">{r.total_matches}</span>}
+                    <p className="match-snippet">{r.matched_body.slice(0, 120)}{r.matched_body.length > 120 ? "…" : ""}</p>
+                    <small>{formatMessageTime(r.matched_at)}</small>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {filtersOpen ? (
             <div className="filters-popover">

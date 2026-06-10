@@ -6681,7 +6681,13 @@ function InboxList({
                 onClick={() => {
                   setHighlightMessageId(r.matched_message_id);
                   setMsgSearchResults(null);
-                  setSelectedId(r.conversation_id);
+                  // Limpiar el query para que refreshConversations recargue la lista normal
+                  // y la conversación aparezca en items (necesario para que selected no sea undefined)
+                  const nextFilters = { ...filters, query: "" };
+                  setFilters(nextFilters);
+                  void refreshConversations(nextFilters).then(() => {
+                    setSelectedId(r.conversation_id);
+                  });
                 }}
               >
                 <strong>{r.display_name || r.phone}</strong>

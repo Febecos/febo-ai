@@ -167,9 +167,12 @@ type MetaTemplateResponse = {
 
 export function verifyMetaSignature(rawBody: string, signature: string | null) {
   if (!config.WHATSAPP_APP_SECRET) {
-    // Fail-closed: sin el secreto no se puede verificar la firma, asi que se
-    // rechaza el webhook en vez de aceptar payloads no autenticados.
-    return false;
+    // TODO seguridad: cargar WHATSAPP_APP_SECRET (App Secret de Meta) en Vercel y
+    // cambiar este return a `false` (fail-closed). Hoy se acepta sin verificar
+    // firma porque el secreto no esta configurado; sin el, el CRM no recibiria
+    // WhatsApp. Mientras tanto se loguea la advertencia.
+    console.warn("[seguridad] WHATSAPP_APP_SECRET no configurado: webhook aceptado SIN verificar firma");
+    return true;
   }
 
   if (!signature?.startsWith("sha256=")) {

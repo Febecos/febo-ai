@@ -165,7 +165,8 @@ export async function transcribeAudio(input: {
 }) {
   const buffer = Buffer.from(input.dataBase64, "base64");
   const extension = audioExtensionForMime(input.mimeType);
-  const file = await toFile(buffer, input.filename ?? `audio.${extension}`, { type: input.mimeType });
+  const cleanMimeType = input.mimeType.split(";")[0].trim();
+  const file = await toFile(buffer, input.filename ?? `audio.${extension}`, { type: cleanMimeType });
 
   const transcription = await getOpenAI().audio.transcriptions.create({
     file,

@@ -1652,6 +1652,7 @@ button:disabled {
   display: grid;
   gap: 10px;
   padding: 8px 10px;
+  position: relative;
 }
 
 .new-contact-button {
@@ -1704,13 +1705,10 @@ button:disabled {
 }
 
 .msg-search-results {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  background: var(--surface, #1e2328);
+  border-bottom: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  max-height: 420px;
-  overflow-y: auto;
 }
 
 .msg-search-header {

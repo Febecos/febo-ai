@@ -6551,34 +6551,6 @@ function InboxList({
                 </button>
               )}
             </label>
-            {msgSearchResults !== null && (
-              <div className="msg-search-results">
-                <div className="msg-search-header">
-                  <span>
-                    {msgSearchResults.length === 0
-                      ? "Sin resultados en mensajes"
-                      : `${msgSearchResults.length} conversación${msgSearchResults.length !== 1 ? "es" : ""} con "${filters.query}"`}
-                  </span>
-                  <button type="button" onClick={() => setMsgSearchResults(null)}><X size={14} /></button>
-                </div>
-                {msgSearchResults.map((r) => (
-                  <button
-                    className="msg-search-row"
-                    key={r.conversation_id}
-                    type="button"
-                    onClick={() => {
-                      setMsgSearchResults(null);
-                      setSelectedId(r.conversation_id);
-                    }}
-                  >
-                    <strong>{r.display_name || r.phone}</strong>
-                    {r.total_matches > 1 && <span className="match-count">{r.total_matches}</span>}
-                    <p className="match-snippet">{r.matched_body.slice(0, 120)}{r.matched_body.length > 120 ? "…" : ""}</p>
-                    <small>{formatMessageTime(r.matched_at)}</small>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
           {filtersOpen ? (
             <div className="filters-popover">
@@ -6673,6 +6645,34 @@ function InboxList({
           </div>
           ) : null}
         </div>
+        {msgSearchResults !== null && (
+          <div className="msg-search-results">
+            <div className="msg-search-header">
+              <span>
+                {msgSearchResults.length === 0
+                  ? "Sin resultados en mensajes"
+                  : `${msgSearchResults.length} conversación${msgSearchResults.length !== 1 ? "es" : ""} con "${filters.query}"`}
+              </span>
+              <button type="button" onClick={() => setMsgSearchResults(null)}><X size={14} /></button>
+            </div>
+            {msgSearchResults.map((r) => (
+              <button
+                className="msg-search-row"
+                key={r.conversation_id}
+                type="button"
+                onClick={() => {
+                  setMsgSearchResults(null);
+                  setSelectedId(r.conversation_id);
+                }}
+              >
+                <strong>{r.display_name || r.phone}</strong>
+                {r.total_matches > 1 && <span className="match-count">{r.total_matches}</span>}
+                <p className="match-snippet">{r.matched_body.slice(0, 120)}{r.matched_body.length > 120 ? "…" : ""}</p>
+                <small>{formatMessageTime(r.matched_at)}</small>
+              </button>
+            ))}
+          </div>
+        )}
         {items.length ? (
           items.map((conversation) => {
             const channelMeta = getConversationChannelMeta(conversation);
@@ -6735,7 +6735,7 @@ function InboxList({
             );
           })
         ) : (
-          <div className="empty-state">Cuando importemos Hariaz o entren mensajes, van a aparecer aca.</div>
+          <div className="empty-state">No hay conversaciones.</div>
         )}
       </div>
 

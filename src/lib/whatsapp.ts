@@ -351,6 +351,26 @@ export function formatAdReferralForAgent(referral?: WhatsAppAdReferral): string 
   return `[Vino de un anuncio de Meta — ${parts.join(" · ")}]`;
 }
 
+// Versión reducida para el agente IA: solo el título (modelo del producto).
+// El body del anuncio tiene specs de marketing ("Hasta 33.000 L/día") que el modelo
+// confunde con datos técnicos del cliente y usa para correr el selector incorrectamente.
+export function formatAdReferralForAgentSafe(referral?: WhatsAppAdReferral): string | null {
+  if (!referral) {
+    return null;
+  }
+
+  if (referral.headline) {
+    return `[Vino de un anuncio de Meta — titulo: "${referral.headline}". IMPORTANTE: el texto del anuncio son specs del producto, NO datos del cliente. No los uses para dimensionar ni para correr el selector.]`;
+  }
+
+  if (!referral.body && !referral.headline) {
+    return "[Vino de un anuncio/publicación de Meta, pero no llegó el contenido del anuncio]";
+  }
+
+  // Sin título pero hay body: incluirlo pero con advertencia explícita
+  return `[Vino de un anuncio de Meta — texto del anuncio (son specs de marketing del producto, NO datos del cliente): "${referral.body}". No uses estos números para dimensionar.]`;
+}
+
 function parseFlowResponse(responseJson?: string) {
   if (!responseJson) {
     return {};

@@ -21,6 +21,7 @@ import {
   extractInboundMessages,
   extractMessageStatuses,
   formatAdReferralForAgent,
+  formatAdReferralForAgentSafe,
   isWhatsAppAudioMessage,
   isWhatsAppMediaMessage,
   isWhatsAppTextMessage,
@@ -68,12 +69,15 @@ export async function POST(request: NextRequest) {
     const isText = isWhatsAppTextMessage(message);
     let agentMessage = isText ? message.text : "";
     const baseBody = isText ? agentMessage : getInboundMediaBody(message);
-    // Contexto del anuncio (Click-to-WhatsApp): lo adjuntamos al cuerpo para que
-    // lo vea el agente IA y el asesor humano en el chat.
+    // Contexto del anuncio (Click-to-WhatsApp):
+    // - adContext (versión completa con body) → se guarda en DB y lo ve el asesor humano
+    // - adContextSafe (solo título + advertencia) → se pasa al agente IA para evitar que
+    //   confunda los specs de marketing ("Hasta 33.000 L/día") con datos del cliente
     const adContext = formatAdReferralForAgent(message.referral);
+    const adContextSafe = formatAdReferralForAgentSafe(message.referral);
     const initialBody = adContext ? `${baseBody}\n\n${adContext}` : baseBody;
-    if (adContext) {
-      agentMessage = agentMessage ? `${agentMessage}\n\n${adContext}` : adContext;
+    if (adContextSafe) {
+      agentMessage = agentMessage ? `${agentMessage}\n\n${adContextSafe}` : adContextSafe;
     }
 
     const stored = await recordIncomingMessage({

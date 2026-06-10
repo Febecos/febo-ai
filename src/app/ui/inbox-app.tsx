@@ -7835,7 +7835,7 @@ function DeliveryStatus({ message }: { message: ConversationMessage }) {
     );
 
   return (
-    <span className={`delivery-status ${failed ? "failed" : message.whatsapp_status ?? ""}`} title={deliveryError ?? message.whatsapp_error ?? undefined}>
+    <span className={`delivery-status ${failed ? "failed" : message.whatsapp_status ?? ""}`} title={failed ? deliveryError : undefined}>
       {statusIcon}
       {formatDeliveryStatus(message)}
     </span>

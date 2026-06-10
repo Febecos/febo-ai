@@ -165,11 +165,9 @@ function buildSelectorCheckoutConfirmation(input: z.infer<typeof checkoutSchema>
 
 function isAuthorized(request: NextRequest) {
   if (!config.FEBECOS_WEBHOOK_TOKEN) {
-    // TODO seguridad: cargar FEBECOS_WEBHOOK_TOKEN en el proyecto febo-ai y cambiar
-    // este return a `false` (fail-closed). Tolerante con warning para no cortar el
-    // ingreso de leads del selector si el token aun no esta en este proyecto.
-    console.warn("[seguridad] FEBECOS_WEBHOOK_TOKEN no configurado: webhook aceptado SIN auth");
-    return true;
+    // Fail-closed: FEBECOS_WEBHOOK_TOKEN esta configurado en el proyecto febo-ai;
+    // si faltara es error de config y se rechaza en vez de aceptar sin auth.
+    return false;
   }
 
   const authHeader = request.headers.get("authorization");

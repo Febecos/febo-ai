@@ -166,15 +166,59 @@ export type CatalogProductResult = {
   };
 };
 
+type CatalogEntry = {
+  codigo: string;
+  marca?: string;
+  watts?: number;
+  diam_bomba?: string;
+  cant_paneles?: number;
+  watts_panel?: number;
+  precio_full?: number;
+  cuota_mensual?: number;
+  stock?: number | null;
+};
+
+function parseDiamWattsFromSlug(slug: string): { diam: string; watts: number } | null {
+  // kit-bomba-solar-4-500w-completo → diam=4, watts=500
+  const m = slug.match(/kit-bomba-solar-(\d+)-(\d+)w-completo/i);
+  if (!m) return null;
+  return { diam: m[1], watts: parseInt(m[2], 10) };
+}
+
 export async function fetchCatalogBySlug(slug: string): Promise<CatalogProductResult | null> {
   try {
+    const parsed = parseDiamWattsFromSlug(slug);
+    if (!parsed) return null;
+
     const base = ensureTrailingSlash(config.FEBECOS_SELECTOR_API_BASE_URL);
-    const url = `${base}catalog/${encodeURIComponent(slug)}`;
+    const url = `${base}suggest-pump?catalog=1`;
     const response = await fetch(url, { cache: "no-store" });
     if (!response.ok) return null;
-    const data = await response.json() as Record<string, unknown>;
-    if (!data.sugerencia) return null;
-    return data as CatalogProductResult;
+
+    const data = await response.json() as { ok: boolean; catalog?: CatalogEntry[] };
+    if (!data.ok || !Array.isArray(data.catalog)) return null;
+
+    const matches = data.catalog.filter(
+      (p) => p.diam_bomba === parsed.diam && p.watts === parsed.watts
+    );
+    if (matches.length === 0) return null;
+
+    // Prefer products with stock; fallback to first match
+    const best = matches.find((p) => p.stock && p.stock > 0) ?? matches[0];
+
+    return {
+      ok: true,
+      sugerencia: {
+        codigo: best.codigo,
+        marca: best.marca,
+        watts: best.watts,
+        diam_bomba: best.diam_bomba,
+        cant_paneles: best.cant_paneles,
+        watts_panel: best.watts_panel,
+        precio_full: best.precio_full,
+        cuota_mensual: best.cuota_mensual,
+      },
+    };
   } catch {
     return null;
   }

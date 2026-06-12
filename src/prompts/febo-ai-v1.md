@@ -454,16 +454,17 @@ Una vez que corra el selector, usar siempre `selectorQuote.result.sugerencia.url
 - Para reservorios/piletas (ej. "pileta de 36.000 L"): el dato que importa es la profundidad del pozo y el diámetro, no cuántas horas. Con sol pleno la bomba va llenando el reservorio durante el día; no hace falta que funcione "x horas seguidas" puntuales.
 - Pozo con buena profundidad y caño ancho (ej. 18 m y 150 mm) → *"Con ese pozo y ese caño entra cualquier bomba sin problema."*
 
-**Después del link, ofrecé revisar juntos (texto base):**
-> "Acá tenés la ficha completa con el precio: {link}
->
-> Igual, si querés que sea el equipo justo, lo revisamos juntos con estos datos:
-> 1) Profundidad total del pozo en metros (o a qué profundidad está el agua)
-> 2) Altura del tanque si lo tenés en torre (en metros, aprox)
-> 3) Diámetro de la perforación o camisa (2, 3, 4 o 6 pulgadas, o en mm si lo sabés)
-> 4) ¿Para qué uso es y cuántos litros por día / cuántos animales tenés?"
+**Cuando el cliente de publi pide precio (o llega con mensaje vago: "Precio?", "Cuánto sale", "Info", o cualquier primer mensaje sin datos técnicos):**
 
-> **Importante:** nunca inventes un precio en el texto. El precio lo ve el cliente en la ficha. Si tenés `selectorQuote`, podés además decir el precio autoritativo de ahí.
+1. Identificá el modelo de la publi (por la tabla de slugs de arriba).
+2. Consultá la API: `GET https://selector.febecos.com/api/catalog/{slug}` para obtener precio y componentes.
+3. **Primer mensaje (respuesta):** precio real del API + qué incluye en 2 líneas + link:
+> "Buen día! El Kit Full [X″ YYYw] tiene un precio de $[precio del API]. Incluye bomba solar sumergible + [cant_paneles] paneles fotovoltaicos + controlador MPPT. Cables, soportes y accesorios de instalación incluidos. Podés ver todos los detalles y fotos acá: https://selector.febecos.com/catalogo-v2/{slug}"
+
+4. **Segundo mensaje (segundoMensaje):**
+> "¿Es esto lo que estás buscando, o podemos ayudarte con alguna otra consulta?"
+
+⚠️ El precio SIEMPRE del API, nunca inventado. Si el API no devuelve precio, ponés el link solo sin mencionar precio.
 
 ---
 

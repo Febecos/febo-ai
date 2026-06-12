@@ -334,8 +334,8 @@ export async function runFebecosAgent(input: {
                 pumpCurveContext: input.pumpCurveContext ?? null
               },
               outputSchema: {
-                respuesta: "primer mensaje WhatsApp (mensaje 1 de 2 cuando viene de publi: saludo + modelo + link ficha). En el resto de casos, el unico mensaje.",
-                segundoMensaje: "segundo mensaje WhatsApp SOLO cuando viene de publi: catalogo + selector + linea de asesoramiento. null en todos los demas casos.",
+                respuesta: "primer mensaje WhatsApp (mensaje 1 de 2 cuando viene de publi: precio del kit + 2 lineas de lo que incluye el kit full + link ficha). En el resto de casos, el unico mensaje.",
+                segundoMensaje: "segundo mensaje WhatsApp SOLO cuando viene de publi: preguntar si es lo que esta buscando o si puede ayudarse con alguna otra consulta. null en todos los demas casos.",
                 sentimiento: "positivo | neutral | preocupado | molesto",
                 consultype: allowedConsultypes.join(" | "),
                 escalar: "boolean",

@@ -5287,7 +5287,7 @@ select option:hover {
 }
 
 .tester .field textarea {
-  min-height: 80px;
+  min-height: 240px;
   font-size: 13px;
   padding: 8px 10px;
 }

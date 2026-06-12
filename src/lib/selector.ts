@@ -148,6 +148,66 @@ export async function fetchPumpDetail(codigo: string): Promise<PumpDetailResult 
   }
 }
 
+// ── Catalog product (precio + componentes para primer mensaje publi) ─────────
+
+export type CatalogProductResult = {
+  ok: true;
+  sugerencia: {
+    codigo: string;
+    url_slug?: string;
+    watts?: number;
+    cant_paneles?: number;
+    watts_panel?: number;
+    diam_bomba?: string;
+    precio_full?: number;
+    precio_6cuotas?: number | null;
+    cuota_mensual?: number;
+    marca?: string;
+  };
+};
+
+export async function fetchCatalogBySlug(slug: string): Promise<CatalogProductResult | null> {
+  try {
+    const base = ensureTrailingSlash(config.FEBECOS_SELECTOR_API_BASE_URL);
+    const url = `${base}catalog/${encodeURIComponent(slug)}`;
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return null;
+    const data = await response.json() as Record<string, unknown>;
+    if (!data.sugerencia) return null;
+    return data as CatalogProductResult;
+  } catch {
+    return null;
+  }
+}
+
+export function extractSlugFromReferralText(headline?: string, body?: string): string | null {
+  const text = `${headline ?? ""} ${body ?? ""}`;
+  const lower = text.toLowerCase();
+
+  let diam: string | null = null;
+  if (lower.includes('6"') || lower.includes("6 pulgadas")) diam = "6";
+  else if (lower.includes('4"') || lower.includes("4 pulgadas")) diam = "4";
+  else if (lower.includes('3"') || lower.includes("3 pulgadas")) diam = "3";
+  else if (lower.includes('2"') || lower.includes("2 pulgadas")) diam = "2";
+
+  const wattsMatch = lower.match(/(\d{3,4})\s*w(?:att)?s?\b/);
+  const watts = wattsMatch ? wattsMatch[1] : null;
+
+  if (!diam || !watts) return null;
+  return `kit-bomba-solar-${diam}-${watts}w-completo`;
+}
+
+export function formatCatalogContext(product: CatalogProductResult, slug: string): string {
+  const s = product.sugerencia;
+  const precio = s.precio_full
+    ? `$${s.precio_full.toLocaleString("es-AR")}`
+    : "no disponible";
+  const paneles = s.cant_paneles ? `${s.cant_paneles} panel${s.cant_paneles > 1 ? "es" : ""} fotovoltaico${s.cant_paneles > 1 ? "s" : ""}` : "paneles fotovoltaicos";
+  const wattsPanel = s.watts_panel ? ` ${s.watts_panel}W` : "";
+  const link = `https://selector.febecos.com/catalogo-v2/${slug}`;
+  return `catalogContext: Kit Full ${s.diam_bomba ?? ""} ${s.watts ?? ""}W | Precio: ${precio} | Incluye: bomba solar sumergible + ${paneles}${wattsPanel} + controlador MPPT + cables y accesorios | URL: ${link}`;
+}
+
 /**
  * Formatea las curvas de rendimiento de una bomba como tabla de texto legible por WhatsApp.
  * Ej:

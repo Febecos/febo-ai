@@ -15,7 +15,7 @@ import {
   updateMessageBody
 } from "@/lib/crm";
 import { sendPushNotificationToAll } from "@/lib/push";
-import { fetchPumpDetail, formatPumpCurveText, suggestPump } from "@/lib/selector";
+import { fetchCatalogBySlug, extractSlugFromReferralText, formatCatalogContext, fetchPumpDetail, formatPumpCurveText, suggestPump } from "@/lib/selector";
 import {
   downloadWhatsAppMedia,
   extractInboundMessages,
@@ -447,6 +447,19 @@ async function sendAutomaticReply(input: {
   // Si el cliente viene del catálogo con un producto y pregunta sobre caudal/litros,
   // buscamos la curva de rendimiento y se la pasamos al agente para que la muestre
   // directamente en vez de pedir los 4 datos técnicos.
+  let catalogContext: string | null = null;
+  if (message.referral) {
+    const slug = extractSlugFromReferralText(message.referral.headline, message.referral.body);
+    if (slug) {
+      try {
+        const product = await fetchCatalogBySlug(slug);
+        if (product) catalogContext = formatCatalogContext(product, slug);
+      } catch (e) {
+        console.warn("[webhook] catalog enrichment failed:", e);
+      }
+    }
+  }
+
   let pumpCurveContext: string | null = null;
   const caudalKeywords = /caudal|litros|litro|l\/h|l\/d|cuanto saca|cuánto saca|rendimiento|performance|cuanto bombea|cuánto bombea/i;
   if (caudalKeywords.test(effectiveAgentMessage) && stored.threadId) {
@@ -489,7 +502,8 @@ async function sendAutomaticReply(input: {
       message: effectiveAgentMessage,
       contactName: message.contactName,
       conversationId: stored.threadId,
-      pumpCurveContext
+      pumpCurveContext,
+      catalogContext
     });
   } catch (error) {
     console.error("No pudimos generar respuesta automatica.", error);
@@ -509,14 +523,8 @@ async function sendAutomaticReply(input: {
   ` as Array<{ consultype: string }>)[0] : null;
   const isPubliMessage = !!formatAdReferralForAgent(message.referral) || contactRow?.consultype === "lead-publi";
 
-  // Template hardcodeado para segundo mensaje de publi
-  const PUBLI_SEGUNDO_MENSAJE =
-    "Si queres ver y analizar otras opciones, date una vuelta por el catalogo completo en este link\n" +
-    "https://selector.febecos.com/catalogo\n\n" +
-    "En caso que quieras calcularlo vos, te invito a experimentar en 2 minutos nuestra herramienta gratuita online.\n" +
-    "Te va a solicitar los datos minimos necesarios, para analizar todo lo que necesita tu campo aqui y si dejas el e-mail podes acceder a un informe completo con el Retorno de la Inversion (ROI) que te ayudara a tomar una decision inteligente.\n" +
-    "Ingresa ahora a este link https://selector.febecos.com/formulario\n\n" +
-    "Cualquier asesoramiento mas especifico, escribime por aca y seguimos.";
+  // Template fallback para segundo mensaje de publi (si el agente no generó uno)
+  const PUBLI_SEGUNDO_MENSAJE = "¿Es esto lo que estás buscando, o podemos ayudarte con alguna otra consulta?";
 
   // PASO 1 — SIEMPRE: si el agente dejó "---" en la respuesta, cortar ahí y usar template.
   // Esto es incondicional: el "---" NUNCA debe llegar al WhatsApp del cliente.

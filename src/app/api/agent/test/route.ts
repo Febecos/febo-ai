@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { runFebecosAgent } from "@/lib/agent";
 import { getCurrentUser } from "@/lib/auth";
+import { getPumpUrlSlug } from "@/lib/crm";
 import { extractSlugFromReferralText, fetchCatalogBySlug, formatCatalogContext } from "@/lib/selector";
 
 const schema = z.object({
@@ -41,7 +42,10 @@ export async function POST(request: NextRequest) {
     if (slug) {
       try {
         const product = await fetchCatalogBySlug(slug);
-        if (product) catalogContext = formatCatalogContext(product, slug);
+        if (product) {
+          const realSlug = await getPumpUrlSlug(product.sugerencia.codigo) ?? slug;
+          catalogContext = formatCatalogContext(product, realSlug);
+        }
       } catch {
         // catalog enrichment is best-effort
       }

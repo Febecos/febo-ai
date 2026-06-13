@@ -4416,3 +4416,13 @@ export async function updateConversation(input: {
     assignedName: after?.assigned_name ?? null
   };
 }
+
+export async function getPumpUrlSlug(codigo: string): Promise<string | null> {
+  if (!isDbConfigured() || !codigo) return null;
+  const sql = getSql();
+  const rows = await sql`
+    select url_slug from pumps where codigo = ${codigo} limit 1
+  ` as { url_slug: string | null }[];
+  return rows[0]?.url_slug ?? null;
+}
+

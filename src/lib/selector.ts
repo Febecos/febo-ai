@@ -179,8 +179,8 @@ type CatalogEntry = {
 };
 
 function parseDiamWattsFromSlug(slug: string): { diam: string; watts: number } | null {
-  // kit-bomba-solar-4-500w-completo → diam=4, watts=500
-  const m = slug.match(/kit-bomba-solar-(\d+)-(\d+)w-completo/i);
+  // Acepta cualquier slug que contenga -{diam}-{watts}w (ej: kit-bomba-hd-solar-4-1100w-completo)
+  const m = slug.match(/[^0-9](\d)-(\d{3,4})w/i);
   if (!m) return null;
   return { diam: m[1], watts: parseInt(m[2], 10) };
 }
@@ -244,6 +244,7 @@ export function extractSlugFromReferralText(headline?: string, body?: string): s
   const watts = wattsMatch ? wattsMatch[1] : null;
 
   if (!diam || !watts) return null;
+  // Slug genérico — el webhook resuelve el slug real desde la DB por codigo
   return `kit-bomba-solar-${diam}-${watts}w-completo`;
 }
 

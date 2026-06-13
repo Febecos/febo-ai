@@ -12,8 +12,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const res = await fetch(
-      `https://afip.tangofactura.com/Rest/GetContribuyenteFull?cuit=${cuit}`,
-      { headers: { "Accept": "application/json" }, signal: AbortSignal.timeout(8000) }
+      `https://febecos.com/api/admin?action=consultar_cuit&cuit=${cuit}`,
+      { signal: AbortSignal.timeout(8000) }
     );
 
     if (!res.ok) {
@@ -22,23 +22,22 @@ export async function GET(request: NextRequest) {
 
     const data = await res.json() as Record<string, unknown>;
 
-    if (!data || data.errorGetData) {
-      return NextResponse.json({ error: "CUIT no encontrado en ARCA." }, { status: 404 });
+    if (!data?.ok || data?.valido === false) {
+      return NextResponse.json({ error: data?.error as string || "CUIT no encontrado en ARCA." }, { status: 404 });
     }
 
-    const contrib = (data.Contribuyente ?? data.contribuyente ?? data) as Record<string, unknown>;
-    const domicilio = contrib.domicilio as Record<string, unknown> | undefined ??
-                      (Array.isArray(contrib.domicilios) ? (contrib.domicilios as Record<string, unknown>[])[0] : null) ?? {};
+    const dom = (data.domicilio ?? {}) as Record<string, string>;
 
     return NextResponse.json({
       cuit,
-      razonSocial: contrib.razonSocial ?? contrib.apellidoNombre ?? null,
-      domicilio: [domicilio.direccion ?? domicilio.calle, domicilio.numero].filter(Boolean).join(" ") || null,
-      codigoPostal: domicilio.codigoPostal ?? domicilio.cp ?? null,
-      localidad: domicilio.localidad ?? domicilio.descripcionLocalidad ?? null,
-      provincia: domicilio.descripcionProvincia ?? domicilio.provincia ?? null,
-      categoriaIva: contrib.categoriaIva ?? contrib.descripcionTipoResponsable ?? null,
-      raw: contrib
+      razonSocial: data.razonSocial ?? data.denominacion ?? null,
+      domicilio: dom.direccion ?? null,
+      codigoPostal: dom.codPostal ?? null,
+      localidad: dom.localidad ?? null,
+      provincia: dom.provincia ?? null,
+      tipoPersona: data.tipoPersona ?? null,
+      estado: data.estado ?? null,
+      condicionFiscal: data.condicionFiscal ?? null
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

@@ -77,6 +77,8 @@ export type ContactSummary = {
   id: string;
   phone: string;
   email: string | null;
+  cuit: string | null;
+  tags: string[];
   account_id: string | null;
   account_name: string | null;
   external_user_id: string | null;
@@ -2917,6 +2919,8 @@ export async function listContacts(filters: ContactFilters = {}) {
       ct.id::text,
       ct.phone,
       ct.email,
+      ct.cuit,
+      coalesce(ct.tags, '{}') as tags,
       ct.account_id::text,
       ca.name as account_name,
       ct.external_user_id,
@@ -2956,6 +2960,8 @@ export async function updateContact(input: {
   displayName?: string | null;
   phone?: string;
   email?: string | null;
+  cuit?: string | null;
+  tags?: string[];
   contactType?: string;
   sentiment?: string;
   consultype?: string;
@@ -2991,12 +2997,16 @@ export async function updateContact(input: {
     : null;
 
   const email = input.email !== undefined ? (input.email?.trim().toLowerCase() || null) : undefined;
+  const cuit = input.cuit !== undefined ? (input.cuit?.replace(/\D/g, "") || null) : undefined;
+  const tagsJson = input.tags !== undefined ? JSON.stringify(input.tags) : undefined;
 
   const rows = (await sql`
     update contacts
     set display_name = ${displayName},
         phone = coalesce(${phone}, phone),
         email = case when ${email !== undefined}::boolean then ${email ?? null} else email end,
+        cuit = case when ${cuit !== undefined}::boolean then ${cuit ?? null} else cuit end,
+        tags = case when ${tagsJson !== undefined}::boolean then ${tagsJson ?? "[]"}::text[] else tags end,
         contact_type = ${contactType},
         sentiment = ${sentiment},
         consultype = ${consultype},

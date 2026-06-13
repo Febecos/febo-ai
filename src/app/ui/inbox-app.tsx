@@ -3232,6 +3232,43 @@ function getContactPanelChannelPhone(conversation: Pick<ConversationSummary, "ch
   return "";
 }
 
+const ALL_TAGS = [
+  { value: "caliente", label: "Caliente" },
+  { value: "cliente", label: "Cliente" },
+  { value: "comparador", label: "Comparador" },
+  { value: "cotizado", label: "Cotizado" },
+  { value: "pasar-presupuesto", label: "Pasar presupuesto" },
+  { value: "presupuesto-enviado", label: "Presupuesto enviado" },
+  { value: "sin-perforacion", label: "Sin perforación" },
+  { value: "proyecto-futuro", label: "Proyecto futuro" },
+  { value: "pocero-instalador", label: "Pocero / instalador" },
+  { value: "contacto-de-bobbio", label: "Contacto de Bobbio" },
+  { value: "esperando-respuesta", label: "Esperando respuesta" },
+  { value: "seguimiento", label: "Seguimiento" },
+  { value: "lead-publi", label: "Lead publi" },
+  { value: "otro", label: "Otro" }
+];
+
+function TagPicker({ selected, onChange }: { selected: string[]; onChange: (tags: string[]) => void }) {
+  function toggle(value: string) {
+    onChange(selected.includes(value) ? selected.filter((t) => t !== value) : [...selected, value]);
+  }
+  return (
+    <div className="tag-picker">
+      {ALL_TAGS.map((tag) => (
+        <button
+          key={tag.value}
+          type="button"
+          className={`tag-chip ${selected.includes(tag.value) ? "active" : ""} ${tag.value}`}
+          onClick={() => toggle(tag.value)}
+        >
+          {tag.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ContactsPanel({
   focusedContact,
   onContactCreated,
@@ -3249,6 +3286,7 @@ function ContactsPanel({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [afipLoading, setAfipLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
@@ -3257,55 +3295,52 @@ function ContactsPanel({
 
   const editing = useMemo(() => contacts.find((c) => c.id === editingId) ?? null, [contacts, editingId]);
 
-  const [newContactForm, setNewContactForm] = useState({
-    displayName: "",
-    phone: "",
-    templateId: "",
-    sendTemplate: true
-  });
+  const [newContactForm, setNewContactForm] = useState({ displayName: "", phone: "", templateId: "", sendTemplate: true });
   const [form, setForm] = useState({
     displayName: "",
     phone: "",
     email: "",
+    cuit: "",
+    tags: [] as string[],
     contactType: "prospecto",
-    sentiment: "neutral",
-    consultype: "otro",
     assignedTo: "",
     notes: "",
+    domicilio: "",
+    codigoPostal: "",
+    localidad: "",
+    provincia: "",
     additional: [] as Array<{ id: string; title: string; value: string }>
   });
 
-  useEffect(() => {
-    void loadContacts();
-    void loadContactTemplates();
-  }, []);
+  useEffect(() => { void loadContacts(); void loadContactTemplates(); }, []);
 
   useEffect(() => {
     if (focusedContact.id) {
       const found = contacts.find((c) => c.id === focusedContact.id);
-      if (found) openEditor(found);
+      if (found) setEditingId(found.id);
     }
   }, [focusedContact.id, focusedContact.signal]);
 
   useEffect(() => {
     if (!editing) return;
     const info = editing.imported_payload?.contact_info as { notes?: string; additional?: Array<{ id: string; title: string; value: string }> } | undefined;
+    const afip = editing.imported_payload?.afip_data as Record<string, string> | undefined;
     setForm({
       displayName: editing.display_name ?? "",
       phone: editing.phone,
       email: editing.email ?? "",
+      cuit: editing.cuit ?? "",
+      tags: editing.tags ?? [],
       contactType: editing.contact_type || "prospecto",
-      sentiment: editing.sentiment || "neutral",
-      consultype: editing.consultype || "otro",
       assignedTo: editing.assigned_to ?? "",
       notes: info?.notes ?? "",
+      domicilio: afip?.domicilio ?? "",
+      codigoPostal: afip?.codigoPostal ?? "",
+      localidad: afip?.localidad ?? "",
+      provincia: afip?.provincia ?? "",
       additional: info?.additional ?? []
     });
   }, [editingId]);
-
-  function openEditor(contact: ContactSummary) {
-    setEditingId(contact.id);
-  }
 
   async function loadContacts(nextQuery = query) {
     setLoading(true);
@@ -3315,10 +3350,7 @@ function ContactsPanel({
     const response = await fetch(`/api/contacts?${params.toString()}`);
     const payload = await readJsonResponse(response);
     setLoading(false);
-    if (!response.ok) {
-      setMessage(payload?.error ?? "No pudimos cargar contactos.");
-      return;
-    }
+    if (!response.ok) { setMessage(payload?.error ?? "No pudimos cargar contactos."); return; }
     setContacts(payload?.contacts ?? []);
     setPage(0);
   }
@@ -3332,29 +3364,39 @@ function ContactsPanel({
     setNewContactForm((cur) => ({ ...cur, templateId: cur.templateId || pickInitialTemplateId(activeTemplates) }));
   }
 
+  async function lookupAfip() {
+    const cuit = form.cuit.replace(/\D/g, "");
+    if (cuit.length !== 11) { setMessage("El CUIT debe tener 11 dígitos."); return; }
+    setAfipLoading(true);
+    setMessage("");
+    const res = await fetch(`/api/afip?cuit=${cuit}`);
+    const data = await readJsonResponse(res);
+    setAfipLoading(false);
+    if (!res.ok) { setMessage(data?.error ?? "No pudimos consultar ARCA."); return; }
+    setForm((f) => ({
+      ...f,
+      displayName: f.displayName || data.razonSocial || f.displayName,
+      domicilio: data.domicilio ?? f.domicilio,
+      codigoPostal: data.codigoPostal ?? f.codigoPostal,
+      localidad: data.localidad ?? f.localidad,
+      provincia: data.provincia ?? f.provincia
+    }));
+    setMessage(`ARCA: ${data.razonSocial ?? "datos cargados"}`);
+    setTimeout(() => setMessage(""), 3000);
+  }
+
   async function createContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (newContactForm.sendTemplate && !newContactForm.templateId) {
-      setMessage("Selecciona una plantilla inicial.");
-      return;
-    }
-    setCreating(true);
-    setMessage("");
+    if (newContactForm.sendTemplate && !newContactForm.templateId) { setMessage("Selecciona una plantilla inicial."); return; }
+    setCreating(true); setMessage("");
     const response = await fetch("/api/contacts", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        displayName: newContactForm.displayName,
-        phone: newContactForm.phone,
-        templateId: newContactForm.sendTemplate ? newContactForm.templateId : undefined
-      })
+      body: JSON.stringify({ displayName: newContactForm.displayName, phone: newContactForm.phone, templateId: newContactForm.sendTemplate ? newContactForm.templateId : undefined })
     });
     const payload = await readJsonResponse(response);
     setCreating(false);
-    if (!response.ok) {
-      setMessage(payload?.error ?? "No pudimos crear el contacto.");
-      return;
-    }
+    if (!response.ok) { setMessage(payload?.error ?? "No pudimos crear el contacto."); return; }
     setContacts(payload?.contacts ?? contacts);
     setNewContactForm({ displayName: "", phone: "", templateId: pickInitialTemplateId(templates), sendTemplate: true });
     setShowNewForm(false);
@@ -3365,8 +3407,10 @@ function ContactsPanel({
   async function saveContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editing) return;
-    setSaving(true);
-    setMessage("");
+    setSaving(true); setMessage("");
+    const afipPayload = (form.domicilio || form.codigoPostal || form.localidad || form.provincia)
+      ? { afip_data: { domicilio: form.domicilio, codigoPostal: form.codigoPostal, localidad: form.localidad, provincia: form.provincia } }
+      : null;
     const response = await fetch("/api/contacts", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -3375,22 +3419,24 @@ function ContactsPanel({
         displayName: form.displayName,
         phone: form.phone,
         email: form.email || null,
+        cuit: form.cuit || null,
+        tags: form.tags,
         contactType: form.contactType,
-        sentiment: form.sentiment,
-        consultype: form.consultype,
+        consultype: form.tags[0] ?? editing.consultype,
         assignedTo: form.assignedTo || null,
         contactInfo: {
           notes: form.notes,
-          additional: form.additional
-        }
+          additional: [
+            ...form.additional,
+            ...(afipPayload ? [] : [])
+          ]
+        },
+        ...(afipPayload ? { contactInfo: { notes: form.notes, additional: form.additional, ...afipPayload } } : {})
       })
     });
     const payload = await readJsonResponse(response);
     setSaving(false);
-    if (!response.ok) {
-      setMessage(payload?.error ?? "No pudimos guardar el contacto.");
-      return;
-    }
+    if (!response.ok) { setMessage(payload?.error ?? "No pudimos guardar el contacto."); return; }
     const nextContacts: ContactSummary[] = payload?.contacts ?? [];
     setContacts(nextContacts);
     const savedContact = nextContacts.find((c) => c.id === editing.id);
@@ -3409,7 +3455,6 @@ function ContactsPanel({
 
   return (
     <section className="contacts-manager-v2">
-      {/* Toolbar */}
       <div className="contacts-toolbar">
         <div className="contacts-toolbar-left">
           <UsersRound size={18} />
@@ -3418,68 +3463,59 @@ function ContactsPanel({
         <form className="contacts-search-inline" onSubmit={searchContacts}>
           <label className="search-field">
             <Search size={15} />
-            <input
-              placeholder="Buscar nombre, teléfono o email..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+            <input placeholder="Buscar nombre, teléfono o email..." value={query} onChange={(e) => setQuery(e.target.value)} />
           </label>
-          <button className="secondary small" type="submit" disabled={loading}>
-            <Search size={14} />
-          </button>
+          <button className="secondary small" type="submit" disabled={loading}><Search size={14} /></button>
         </form>
         <button className="primary small" onClick={() => setShowNewForm(true)} type="button">
-          <UserPlus size={15} />
-          Nuevo
+          <UserPlus size={15} /> Nuevo
         </button>
       </div>
 
-      {message ? <div className={`contacts-notice ${message.includes("pudimos") ? "error" : "ok"}`}>{message}</div> : null}
+      {message ? <div className={`contacts-notice ${message.includes("pudimos") || message.includes("inválido") ? "error" : "ok"}`}>{message}</div> : null}
 
-      {/* Table */}
       <div className="contacts-table-wrap">
         <table className="contacts-table">
           <thead>
             <tr>
               <th>Nombre</th>
               <th>WhatsApp</th>
+              <th>CUIT</th>
               <th>Email</th>
-              <th>Etiqueta</th>
+              <th>Etiquetas</th>
               <th>Tipo</th>
               <th>Último contacto</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {pageContacts.map((contact) => (
-              <tr key={contact.id} className={editingId === contact.id ? "active-row" : ""}>
+              <tr
+                key={contact.id}
+                className={`clickable-row ${editingId === contact.id ? "active-row" : ""}`}
+                onClick={() => setEditingId(contact.id)}
+              >
                 <td className="col-name">
-                  <button className="contact-name-btn" onClick={() => openEditor(contact)} type="button">
-                    {contact.display_name || <span className="muted">Sin nombre</span>}
-                  </button>
+                  <strong>{contact.display_name || <span className="muted">Sin nombre</span>}</strong>
                 </td>
                 <td className="col-phone">{contact.phone}</td>
+                <td className="col-cuit">{contact.cuit ?? <span className="muted">—</span>}</td>
                 <td className="col-email">{contact.email ?? <span className="muted">—</span>}</td>
-                <td><span className={`tag ${contact.consultype}`}>{contact.consultype}</span></td>
+                <td className="col-tags">
+                  {(contact.tags ?? []).length > 0
+                    ? (contact.tags ?? []).map((t) => <span key={t} className={`tag ${t}`}>{t}</span>)
+                    : contact.consultype ? <span className={`tag ${contact.consultype}`}>{contact.consultype}</span> : <span className="muted">—</span>}
+                </td>
                 <td className="col-type">{contact.contact_type || "—"}</td>
                 <td className="col-date">{formatMessageTime(contact.last_message_at ?? contact.last_seen_at)}</td>
-                <td>
-                  <button className="icon-btn" onClick={() => openEditor(contact)} title="Editar" type="button">
-                    <Save size={14} />
-                  </button>
-                </td>
               </tr>
             ))}
             {!pageContacts.length ? (
-              <tr>
-                <td colSpan={7} className="empty-state">{loading ? "Cargando..." : "No encontramos contactos."}</td>
-              </tr>
+              <tr><td colSpan={7} className="empty-state">{loading ? "Cargando..." : "No encontramos contactos."}</td></tr>
             ) : null}
           </tbody>
         </table>
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 ? (
         <div className="contacts-pagination">
           <button className="secondary small" disabled={page === 0} onClick={() => setPage(page - 1)} type="button">← Anterior</button>
@@ -3497,6 +3533,8 @@ function ContactsPanel({
               <button className="icon-btn" onClick={() => setEditingId(null)} type="button">✕</button>
             </div>
             <form className="modal-body" onSubmit={saveContact}>
+
+              {/* Datos personales */}
               <div className="form-grid">
                 <label className="field">
                   Nombre y apellido
@@ -3510,6 +3548,45 @@ function ContactsPanel({
                   Email
                   <input type="email" placeholder="correo@ejemplo.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
                 </label>
+              </div>
+
+              {/* CUIT + ARCA */}
+              <div className="cuit-row">
+                <label className="field" style={{ flex: 1 }}>
+                  CUIT
+                  <input
+                    placeholder="20-12345678-9"
+                    value={form.cuit}
+                    onChange={(e) => setForm({ ...form, cuit: e.target.value })}
+                  />
+                </label>
+                <button type="button" className="secondary small cuit-lookup-btn" disabled={afipLoading} onClick={lookupAfip}>
+                  {afipLoading ? "Consultando..." : "Consultar ARCA"}
+                </button>
+              </div>
+
+              {/* Dirección (cargada desde ARCA o manual) */}
+              <div className="form-grid">
+                <label className="field wide">
+                  Domicilio
+                  <input placeholder="Calle y número" value={form.domicilio} onChange={(e) => setForm({ ...form, domicilio: e.target.value })} />
+                </label>
+                <label className="field">
+                  Localidad
+                  <input placeholder="Localidad" value={form.localidad} onChange={(e) => setForm({ ...form, localidad: e.target.value })} />
+                </label>
+                <label className="field">
+                  Código postal
+                  <input placeholder="CP" value={form.codigoPostal} onChange={(e) => setForm({ ...form, codigoPostal: e.target.value })} />
+                </label>
+                <label className="field wide">
+                  Provincia
+                  <input placeholder="Provincia" value={form.provincia} onChange={(e) => setForm({ ...form, provincia: e.target.value })} />
+                </label>
+              </div>
+
+              {/* Tipo + Asignado */}
+              <div className="form-grid">
                 <label className="field">
                   Tipo
                   <select value={form.contactType} onChange={(e) => setForm({ ...form, contactType: e.target.value })}>
@@ -3517,23 +3594,6 @@ function ContactsPanel({
                     <option value="cliente">Cliente</option>
                     <option value="revendedor">Revendedor</option>
                     <option value="tecnico">Técnico</option>
-                  </select>
-                </label>
-                <label className="field">
-                  Etiqueta
-                  <select value={form.consultype} onChange={(e) => setForm({ ...form, consultype: e.target.value })}>
-                    {CONSULTYPE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  Sentimiento
-                  <select value={form.sentiment} onChange={(e) => setForm({ ...form, sentiment: e.target.value })}>
-                    <option value="positivo">Positivo</option>
-                    <option value="neutral">Neutral</option>
-                    <option value="preocupado">Preocupado</option>
-                    <option value="molesto">Molesto</option>
                   </select>
                 </label>
                 <label className="field">
@@ -3547,55 +3607,32 @@ function ContactsPanel({
                 </label>
               </div>
 
-              <label className="field wide">
+              {/* Etiquetas multi-select */}
+              <div className="field-group">
+                <span className="field-label">Etiquetas</span>
+                <TagPicker selected={form.tags} onChange={(tags) => setForm({ ...form, tags })} />
+              </div>
+
+              {/* Notas */}
+              <label className="field">
                 Notas internas
-                <textarea
-                  rows={3}
-                  placeholder="Notas sobre este contacto..."
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                />
+                <textarea rows={3} placeholder="Notas sobre este contacto..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </label>
 
-              {form.additional.length > 0 || true ? (
-                <div className="additional-info">
-                  <div className="additional-header">
-                    <span>Info adicional</span>
-                    <button
-                      type="button"
-                      className="secondary small"
-                      onClick={() => setForm({ ...form, additional: [...form.additional, { id: crypto.randomUUID(), title: "", value: "" }] })}
-                    >+ Agregar</button>
-                  </div>
-                  {form.additional.map((item, idx) => (
-                    <div className="additional-row" key={item.id}>
-                      <input
-                        placeholder="Campo"
-                        value={item.title}
-                        onChange={(e) => {
-                          const next = [...form.additional];
-                          next[idx] = { ...item, title: e.target.value };
-                          setForm({ ...form, additional: next });
-                        }}
-                      />
-                      <input
-                        placeholder="Valor"
-                        value={item.value}
-                        onChange={(e) => {
-                          const next = [...form.additional];
-                          next[idx] = { ...item, value: e.target.value };
-                          setForm({ ...form, additional: next });
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="icon-btn danger"
-                        onClick={() => setForm({ ...form, additional: form.additional.filter((_, i) => i !== idx) })}
-                      >✕</button>
-                    </div>
-                  ))}
+              {/* Info adicional */}
+              <div className="additional-info">
+                <div className="additional-header">
+                  <span>Info adicional</span>
+                  <button type="button" className="secondary small" onClick={() => setForm({ ...form, additional: [...form.additional, { id: crypto.randomUUID(), title: "", value: "" }] })}>+ Agregar</button>
                 </div>
-              ) : null}
+                {form.additional.map((item, idx) => (
+                  <div className="additional-row" key={item.id}>
+                    <input placeholder="Campo" value={item.title} onChange={(e) => { const next = [...form.additional]; next[idx] = { ...item, title: e.target.value }; setForm({ ...form, additional: next }); }} />
+                    <input placeholder="Valor" value={item.value} onChange={(e) => { const next = [...form.additional]; next[idx] = { ...item, value: e.target.value }; setForm({ ...form, additional: next }); }} />
+                    <button type="button" className="icon-btn danger" onClick={() => setForm({ ...form, additional: form.additional.filter((_, i) => i !== idx) })}>✕</button>
+                  </div>
+                ))}
+              </div>
 
               <div className="contact-meta">
                 <span>Origen: {editing.imported_from || editing.source || "manual"}</span>
@@ -3606,8 +3643,7 @@ function ContactsPanel({
               <div className="modal-actions">
                 <button className="secondary" onClick={() => setEditingId(null)} type="button">Cerrar</button>
                 <button className="primary" disabled={saving} type="submit">
-                  <Save size={15} />
-                  {saving ? "Guardando..." : "Guardar"}
+                  <Save size={15} /> {saving ? "Guardando..." : "Guardar"}
                 </button>
               </div>
               {message ? <span className={`inline ${message.includes("pudimos") ? "warn" : "ok"}`}>{message}</span> : null}
@@ -3628,48 +3664,28 @@ function ContactsPanel({
               <div className="form-grid">
                 <label className="field">
                   Nombre y apellido
-                  <input
-                    placeholder="Ej: Carlos Gomez"
-                    value={newContactForm.displayName}
-                    onChange={(e) => setNewContactForm({ ...newContactForm, displayName: e.target.value })}
-                  />
+                  <input placeholder="Ej: Carlos Gomez" value={newContactForm.displayName} onChange={(e) => setNewContactForm({ ...newContactForm, displayName: e.target.value })} />
                 </label>
                 <label className="field">
                   WhatsApp
-                  <input
-                    placeholder="549..."
-                    required
-                    value={newContactForm.phone}
-                    onChange={(e) => setNewContactForm({ ...newContactForm, phone: e.target.value })}
-                  />
+                  <input placeholder="549..." required value={newContactForm.phone} onChange={(e) => setNewContactForm({ ...newContactForm, phone: e.target.value })} />
                 </label>
                 <label className="field wide">
                   Plantilla inicial
-                  <select
-                    disabled={!newContactForm.sendTemplate || !templates.length}
-                    value={newContactForm.templateId}
-                    onChange={(e) => setNewContactForm({ ...newContactForm, templateId: e.target.value })}
-                  >
+                  <select disabled={!newContactForm.sendTemplate || !templates.length} value={newContactForm.templateId} onChange={(e) => setNewContactForm({ ...newContactForm, templateId: e.target.value })}>
                     {!templates.length ? <option value="">No hay plantillas activas</option> : null}
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>{t.label} / {t.name}</option>
-                    ))}
+                    {templates.map((t) => <option key={t.id} value={t.id}>{t.label} / {t.name}</option>)}
                   </select>
                 </label>
               </div>
               <label className="check-line">
-                <input
-                  checked={newContactForm.sendTemplate}
-                  onChange={(e) => setNewContactForm({ ...newContactForm, sendTemplate: e.target.checked })}
-                  type="checkbox"
-                />
+                <input checked={newContactForm.sendTemplate} onChange={(e) => setNewContactForm({ ...newContactForm, sendTemplate: e.target.checked })} type="checkbox" />
                 Enviar plantilla inicial para activar WhatsApp
               </label>
               <div className="modal-actions">
                 <button className="secondary" onClick={() => setShowNewForm(false)} type="button">Cancelar</button>
                 <button className="primary" disabled={creating} type="submit">
-                  <SendHorizonal size={15} />
-                  {creating ? "Creando..." : "Crear y activar"}
+                  <SendHorizonal size={15} /> {creating ? "Creando..." : "Crear y activar"}
                 </button>
               </div>
               {!templates.length ? <span className="warn inline">Primero sincroniza o carga una plantilla activa.</span> : null}

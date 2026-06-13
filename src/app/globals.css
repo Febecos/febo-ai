@@ -7073,3 +7073,66 @@ select {
   resize: vertical;
   width: 100%;
 }
+
+/* Clickable table rows */
+.clickable-row { cursor: pointer; }
+.clickable-row:hover td { background: rgba(255,255,255,0.05); }
+
+/* CUIT + ARCA */
+.cuit-row {
+  align-items: flex-end;
+  display: flex;
+  gap: 8px;
+}
+.cuit-lookup-btn { white-space: nowrap; }
+
+/* Col CUIT */
+.col-cuit { color: var(--muted); font-size: 12px; }
+
+/* Col tags (multiple) */
+.col-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* Tag multi-picker */
+.field-group { display: flex; flex-direction: column; gap: 6px; }
+.field-label { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+
+.tag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-chip {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 12px;
+  transition: all 0.15s;
+}
+
+.tag-chip:hover { background: rgba(255,255,255,0.10); color: var(--ink); }
+
+.tag-chip.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  font-weight: 600;
+}
+
+.tag-chip.active.caliente { background: #f43f5e; border-color: #f43f5e; }
+.tag-chip.active.cliente { background: #42c767; border-color: #42c767; }
+.tag-chip.active.comparador { background: #fbbf24; border-color: #fbbf24; color: #1a1a1a; }
+.tag-chip.active.cotizado { background: #16a34a; border-color: #16a34a; }
+.tag-chip.active.pasar-presupuesto,
+.tag-chip.active.pocero-instalador,
+.tag-chip.active.presupuesto-enviado,
+.tag-chip.active.contacto-de-bobbio,
+.tag-chip.active.sin-perforacion,
+.tag-chip.active.esperando-respuesta,
+.tag-chip.active.seguimiento,
+.tag-chip.active.lead-publi { background: #38bdf8; border-color: #38bdf8; color: #0a1520; }
+.tag-chip.active.proyecto-futuro,
+.tag-chip.active.otro { background: #64748b; border-color: #64748b; }

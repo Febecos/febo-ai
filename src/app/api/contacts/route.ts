@@ -26,6 +26,8 @@ const updateContactSchema = z.object({
   displayName: z.string().trim().max(120).nullable().optional(),
   phone: z.string().trim().min(6).max(30).optional(),
   email: z.string().trim().email().max(200).nullable().optional(),
+  cuit: z.string().trim().max(20).nullable().optional(),
+  tags: z.array(z.string().trim().max(60)).max(20).optional(),
   contactType: z.string().trim().max(40).optional(),
   sentiment: z.string().trim().max(40).optional(),
   consultype: z.string().trim().max(40).optional(),

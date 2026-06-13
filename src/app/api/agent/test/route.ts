@@ -35,7 +35,9 @@ export async function POST(request: NextRequest) {
   let catalogContext: string | null = null;
   const referral = extractReferralFromMessage(parsed.data.message);
   if (referral) {
-    const slug = extractSlugFromReferralText(referral.headline, referral.body);
+    const slug =
+      extractSlugFromReferralText(referral.headline, referral.body) ??
+      extractSlugFromReferralText(parsed.data.message);
     if (slug) {
       try {
         const product = await fetchCatalogBySlug(slug);

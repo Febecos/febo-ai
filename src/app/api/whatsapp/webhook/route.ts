@@ -449,7 +449,10 @@ async function sendAutomaticReply(input: {
   // directamente en vez de pedir los 4 datos técnicos.
   let catalogContext: string | null = null;
   if (message.referral) {
-    const slug = extractSlugFromReferralText(message.referral.headline, message.referral.body);
+    // Intentar extraer el slug del texto del anuncio; si no, del mensaje del usuario
+    const slug =
+      extractSlugFromReferralText(message.referral.headline, message.referral.body) ??
+      extractSlugFromReferralText(effectiveAgentMessage);
     if (slug) {
       try {
         const product = await fetchCatalogBySlug(slug);

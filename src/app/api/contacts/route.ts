@@ -25,6 +25,7 @@ const updateContactSchema = z.object({
   contactId: z.string().uuid(),
   displayName: z.string().trim().max(120).nullable().optional(),
   phone: z.string().trim().min(6).max(30).optional(),
+  email: z.string().trim().email().max(200).nullable().optional(),
   contactType: z.string().trim().max(40).optional(),
   sentiment: z.string().trim().max(40).optional(),
   consultype: z.string().trim().max(40).optional(),

@@ -3245,13 +3245,18 @@ function ContactsPanel({
 }) {
   const [contacts, setContacts] = useState<ContactSummary[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
-  const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
-  const selected = useMemo(() => contacts.find((contact) => contact.id === selectedId) ?? contacts[0], [contacts, selectedId]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
+
+  const editing = useMemo(() => contacts.find((c) => c.id === editingId) ?? null, [contacts, editingId]);
+
   const [newContactForm, setNewContactForm] = useState({
     displayName: "",
     phone: "",
@@ -3261,10 +3266,13 @@ function ContactsPanel({
   const [form, setForm] = useState({
     displayName: "",
     phone: "",
+    email: "",
     contactType: "prospecto",
     sentiment: "neutral",
     consultype: "otro",
-    assignedTo: ""
+    assignedTo: "",
+    notes: "",
+    additional: [] as Array<{ id: string; title: string; value: string }>
   });
 
   useEffect(() => {
@@ -3274,82 +3282,64 @@ function ContactsPanel({
 
   useEffect(() => {
     if (focusedContact.id) {
-      setSelectedId(focusedContact.id);
+      const found = contacts.find((c) => c.id === focusedContact.id);
+      if (found) openEditor(found);
     }
   }, [focusedContact.id, focusedContact.signal]);
 
   useEffect(() => {
-    if (!selected) {
-      return;
-    }
-
+    if (!editing) return;
+    const info = editing.imported_payload?.contact_info as { notes?: string; additional?: Array<{ id: string; title: string; value: string }> } | undefined;
     setForm({
-      displayName: selected.display_name ?? "",
-      phone: selected.phone,
-      contactType: selected.contact_type || "prospecto",
-      sentiment: selected.sentiment || "neutral",
-      consultype: selected.consultype || "otro",
-      assignedTo: selected.assigned_to ?? ""
+      displayName: editing.display_name ?? "",
+      phone: editing.phone,
+      email: editing.email ?? "",
+      contactType: editing.contact_type || "prospecto",
+      sentiment: editing.sentiment || "neutral",
+      consultype: editing.consultype || "otro",
+      assignedTo: editing.assigned_to ?? "",
+      notes: info?.notes ?? "",
+      additional: info?.additional ?? []
     });
-  }, [selected?.id]);
+  }, [editingId]);
+
+  function openEditor(contact: ContactSummary) {
+    setEditingId(contact.id);
+  }
 
   async function loadContacts(nextQuery = query) {
     setLoading(true);
     setMessage("");
     const params = new URLSearchParams();
-
-    if (nextQuery.trim()) {
-      params.set("q", nextQuery.trim());
-    }
-
+    if (nextQuery.trim()) params.set("q", nextQuery.trim());
     const response = await fetch(`/api/contacts?${params.toString()}`);
     const payload = await readJsonResponse(response);
     setLoading(false);
-
     if (!response.ok) {
       setMessage(payload?.error ?? "No pudimos cargar contactos.");
       return;
     }
-
-    const nextContacts = payload?.contacts ?? [];
-    setContacts(nextContacts);
-
-    const preferredId = focusedContact.id || selectedId;
-
-    if (nextContacts.some((contact: ContactSummary) => contact.id === preferredId)) {
-      setSelectedId(preferredId);
-    } else {
-      setSelectedId(nextContacts[0]?.id ?? "");
-    }
+    setContacts(payload?.contacts ?? []);
+    setPage(0);
   }
 
   async function loadContactTemplates() {
     const response = await fetch("/api/templates");
     const payload = await readJsonResponse(response);
-
-    if (!response.ok) {
-      return;
-    }
-
-    const activeTemplates = (payload?.templates ?? []).filter((template: MessageTemplate) => template.active);
+    if (!response.ok) return;
+    const activeTemplates = (payload?.templates ?? []).filter((t: MessageTemplate) => t.active);
     setTemplates(activeTemplates);
-    setNewContactForm((current) => ({
-      ...current,
-      templateId: current.templateId || pickInitialTemplateId(activeTemplates)
-    }));
+    setNewContactForm((cur) => ({ ...cur, templateId: cur.templateId || pickInitialTemplateId(activeTemplates) }));
   }
 
   async function createContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     if (newContactForm.sendTemplate && !newContactForm.templateId) {
       setMessage("Selecciona una plantilla inicial.");
       return;
     }
-
     setCreating(true);
     setMessage("");
-
     const response = await fetch("/api/contacts", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -3361,64 +3351,52 @@ function ContactsPanel({
     });
     const payload = await readJsonResponse(response);
     setCreating(false);
-
     if (!response.ok) {
       setMessage(payload?.error ?? "No pudimos crear el contacto.");
       return;
     }
-
     setContacts(payload?.contacts ?? contacts);
-    setSelectedId(payload?.contactId ?? "");
-    setNewContactForm({
-      displayName: "",
-      phone: "",
-      templateId: pickInitialTemplateId(templates),
-      sendTemplate: true
-    });
+    setNewContactForm({ displayName: "", phone: "", templateId: pickInitialTemplateId(templates), sendTemplate: true });
+    setShowNewForm(false);
     setMessage(newContactForm.sendTemplate ? "Contacto creado y plantilla enviada." : "Contacto creado.");
-    onContactCreated({
-      conversationId: payload.conversationId,
-      conversations: payload?.conversations ?? []
-    });
+    onContactCreated({ conversationId: payload.conversationId, conversations: payload?.conversations ?? [] });
   }
 
   async function saveContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!selected) {
-      return;
-    }
-
+    if (!editing) return;
     setSaving(true);
     setMessage("");
     const response = await fetch("/api/contacts", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        contactId: selected.id,
+        contactId: editing.id,
         displayName: form.displayName,
         phone: form.phone,
+        email: form.email || null,
         contactType: form.contactType,
         sentiment: form.sentiment,
         consultype: form.consultype,
-        assignedTo: form.assignedTo || null
+        assignedTo: form.assignedTo || null,
+        contactInfo: {
+          notes: form.notes,
+          additional: form.additional
+        }
       })
     });
     const payload = await readJsonResponse(response);
     setSaving(false);
-
     if (!response.ok) {
       setMessage(payload?.error ?? "No pudimos guardar el contacto.");
       return;
     }
-
-    const nextContacts = payload?.contacts ?? [];
+    const nextContacts: ContactSummary[] = payload?.contacts ?? [];
     setContacts(nextContacts);
-    const savedContact = nextContacts.find((contact: ContactSummary) => contact.id === selected.id);
-    if (savedContact) {
-      onContactSaved(savedContact);
-    }
-    setMessage("Contacto guardado.");
+    const savedContact = nextContacts.find((c) => c.id === editing.id);
+    if (savedContact) onContactSaved(savedContact);
+    setMessage("Guardado.");
+    setTimeout(() => setMessage(""), 2000);
   }
 
   function searchContacts(event: FormEvent<HTMLFormElement>) {
@@ -3426,170 +3404,280 @@ function ContactsPanel({
     void loadContacts(query);
   }
 
+  const pageContacts = contacts.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const totalPages = Math.ceil(contacts.length / PAGE_SIZE);
+
   return (
-    <section className="contacts-manager">
-      <div className="contacts-list-panel">
-        <div className="panel-title">
+    <section className="contacts-manager-v2">
+      {/* Toolbar */}
+      <div className="contacts-toolbar">
+        <div className="contacts-toolbar-left">
           <UsersRound size={18} />
-          Contactos
-          <span>{contacts.length}</span>
+          <span className="contacts-count">{contacts.length} contactos</span>
         </div>
-        <form className="contacts-search" onSubmit={searchContacts}>
+        <form className="contacts-search-inline" onSubmit={searchContacts}>
           <label className="search-field">
-            <Search size={16} />
+            <Search size={15} />
             <input
-              placeholder="Buscar nombre o telefono"
+              placeholder="Buscar nombre, teléfono o email..."
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(e) => setQuery(e.target.value)}
             />
           </label>
-          <button className="secondary" disabled={loading} type="submit">
-            <Search size={16} />
+          <button className="secondary small" type="submit" disabled={loading}>
+            <Search size={14} />
           </button>
         </form>
-        <div className="contacts-list">
-          {contacts.map((contact) => (
-            <button
-              className={`contact-row ${contact.id === selected?.id ? "active" : ""}`}
-              key={contact.id}
-              onClick={() => setSelectedId(contact.id)}
-              type="button"
-            >
-              <span className="row-main">
-                <strong>{contact.display_name || contact.phone}</strong>
-                <small>{contact.phone}</small>
-              </span>
-              <span className={`tag ${contact.consultype}`}>{contact.consultype}</span>
-            </button>
-          ))}
-          {!contacts.length ? <div className="empty-state">{loading ? "Cargando contactos..." : "No encontramos contactos."}</div> : null}
+        <button className="primary small" onClick={() => setShowNewForm(true)} type="button">
+          <UserPlus size={15} />
+          Nuevo
+        </button>
+      </div>
+
+      {message ? <div className={`contacts-notice ${message.includes("pudimos") ? "error" : "ok"}`}>{message}</div> : null}
+
+      {/* Table */}
+      <div className="contacts-table-wrap">
+        <table className="contacts-table">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>WhatsApp</th>
+              <th>Email</th>
+              <th>Etiqueta</th>
+              <th>Tipo</th>
+              <th>Último contacto</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {pageContacts.map((contact) => (
+              <tr key={contact.id} className={editingId === contact.id ? "active-row" : ""}>
+                <td className="col-name">
+                  <button className="contact-name-btn" onClick={() => openEditor(contact)} type="button">
+                    {contact.display_name || <span className="muted">Sin nombre</span>}
+                  </button>
+                </td>
+                <td className="col-phone">{contact.phone}</td>
+                <td className="col-email">{contact.email ?? <span className="muted">—</span>}</td>
+                <td><span className={`tag ${contact.consultype}`}>{contact.consultype}</span></td>
+                <td className="col-type">{contact.contact_type || "—"}</td>
+                <td className="col-date">{formatMessageTime(contact.last_message_at ?? contact.last_seen_at)}</td>
+                <td>
+                  <button className="icon-btn" onClick={() => openEditor(contact)} title="Editar" type="button">
+                    <Save size={14} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {!pageContacts.length ? (
+              <tr>
+                <td colSpan={7} className="empty-state">{loading ? "Cargando..." : "No encontramos contactos."}</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 ? (
+        <div className="contacts-pagination">
+          <button className="secondary small" disabled={page === 0} onClick={() => setPage(page - 1)} type="button">← Anterior</button>
+          <span>{page + 1} / {totalPages}</span>
+          <button className="secondary small" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} type="button">Siguiente →</button>
         </div>
-      </div>
+      ) : null}
 
-      <div className="contact-editor">
-        <form className="admin-form new-contact-card" onSubmit={createContact}>
-          <div className="panel-title compact">
-            <UserPlus size={18} />
-            Nuevo contacto
-          </div>
-          <div className="form-grid">
-            <label className="field">
-              Nombre y apellido
-              <input
-                placeholder="Ej: Carlos Gomez"
-                value={newContactForm.displayName}
-                onChange={(event) => setNewContactForm({ ...newContactForm, displayName: event.target.value })}
-              />
-            </label>
-            <label className="field">
-              WhatsApp
-              <input
-                placeholder="549..."
-                required
-                value={newContactForm.phone}
-                onChange={(event) => setNewContactForm({ ...newContactForm, phone: event.target.value })}
-              />
-            </label>
-            <label className="field wide">
-              Plantilla inicial
-              <select
-                disabled={!newContactForm.sendTemplate || !templates.length}
-                value={newContactForm.templateId}
-                onChange={(event) => setNewContactForm({ ...newContactForm, templateId: event.target.value })}
-              >
-                {!templates.length ? <option value="">No hay plantillas activas</option> : null}
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.label} / {template.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <label className="check-line">
-            <input
-              checked={newContactForm.sendTemplate}
-              onChange={(event) => setNewContactForm({ ...newContactForm, sendTemplate: event.target.checked })}
-              type="checkbox"
-            />
-            Enviar plantilla inicial para activar WhatsApp
-          </label>
-          <button className="primary" disabled={creating} type="submit">
-            <SendHorizonal size={17} />
-            {creating ? "Creando" : "Crear y activar"}
-          </button>
-          {!templates.length ? <span className="warn inline">Primero sincroniza o carga una plantilla activa.</span> : null}
-        </form>
+      {/* Edit modal */}
+      {editing ? (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setEditingId(null); }}>
+          <div className="modal-card contacts-modal">
+            <div className="modal-header">
+              <span><UsersRound size={16} /> {editing.display_name || editing.phone}</span>
+              <button className="icon-btn" onClick={() => setEditingId(null)} type="button">✕</button>
+            </div>
+            <form className="modal-body" onSubmit={saveContact}>
+              <div className="form-grid">
+                <label className="field">
+                  Nombre y apellido
+                  <input value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
+                </label>
+                <label className="field">
+                  WhatsApp
+                  <input required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                </label>
+                <label className="field wide">
+                  Email
+                  <input type="email" placeholder="correo@ejemplo.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                </label>
+                <label className="field">
+                  Tipo
+                  <select value={form.contactType} onChange={(e) => setForm({ ...form, contactType: e.target.value })}>
+                    <option value="prospecto">Prospecto</option>
+                    <option value="cliente">Cliente</option>
+                    <option value="revendedor">Revendedor</option>
+                    <option value="tecnico">Técnico</option>
+                  </select>
+                </label>
+                <label className="field">
+                  Etiqueta
+                  <select value={form.consultype} onChange={(e) => setForm({ ...form, consultype: e.target.value })}>
+                    {CONSULTYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  Sentimiento
+                  <select value={form.sentiment} onChange={(e) => setForm({ ...form, sentiment: e.target.value })}>
+                    <option value="positivo">Positivo</option>
+                    <option value="neutral">Neutral</option>
+                    <option value="preocupado">Preocupado</option>
+                    <option value="molesto">Molesto</option>
+                  </select>
+                </label>
+                <label className="field">
+                  Asignado a
+                  <select value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}>
+                    <option value="">Sin asignar</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>{user.full_name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
 
-        {selected ? (
-          <form className="admin-form" onSubmit={saveContact}>
-            <div className="panel-title">
-              <UsersRound size={18} />
-              Datos del contacto
-            </div>
-            <div className="form-grid">
-              <label className="field">
-                Nombre
-                <input value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} />
+              <label className="field wide">
+                Notas internas
+                <textarea
+                  rows={3}
+                  placeholder="Notas sobre este contacto..."
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                />
               </label>
-              <label className="field">
-                WhatsApp
-                <input required value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
-              </label>
-              <label className="field">
-                Tipo
-                <select value={form.contactType} onChange={(event) => setForm({ ...form, contactType: event.target.value })}>
-                  <option value="prospecto">Prospecto</option>
-                  <option value="cliente">Cliente</option>
-                  <option value="revendedor">Revendedor</option>
-                  <option value="tecnico">Tecnico</option>
-                </select>
-              </label>
-              <label className="field">
-                Etiqueta
-                <select value={form.consultype} onChange={(event) => setForm({ ...form, consultype: event.target.value })}>
-                  {CONSULTYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
+
+              {form.additional.length > 0 || true ? (
+                <div className="additional-info">
+                  <div className="additional-header">
+                    <span>Info adicional</span>
+                    <button
+                      type="button"
+                      className="secondary small"
+                      onClick={() => setForm({ ...form, additional: [...form.additional, { id: crypto.randomUUID(), title: "", value: "" }] })}
+                    >+ Agregar</button>
+                  </div>
+                  {form.additional.map((item, idx) => (
+                    <div className="additional-row" key={item.id}>
+                      <input
+                        placeholder="Campo"
+                        value={item.title}
+                        onChange={(e) => {
+                          const next = [...form.additional];
+                          next[idx] = { ...item, title: e.target.value };
+                          setForm({ ...form, additional: next });
+                        }}
+                      />
+                      <input
+                        placeholder="Valor"
+                        value={item.value}
+                        onChange={(e) => {
+                          const next = [...form.additional];
+                          next[idx] = { ...item, value: e.target.value };
+                          setForm({ ...form, additional: next });
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="icon-btn danger"
+                        onClick={() => setForm({ ...form, additional: form.additional.filter((_, i) => i !== idx) })}
+                      >✕</button>
+                    </div>
                   ))}
-                </select>
-              </label>
-              <label className="field">
-                Sentimiento
-                <select value={form.sentiment} onChange={(event) => setForm({ ...form, sentiment: event.target.value })}>
-                  <option value="positivo">Positivo</option>
-                  <option value="neutral">Neutral</option>
-                  <option value="preocupado">Preocupado</option>
-                  <option value="molesto">Molesto</option>
-                </select>
-              </label>
-              <label className="field">
-                Asignado a
-                <select value={form.assignedTo} onChange={(event) => setForm({ ...form, assignedTo: event.target.value })}>
-                  <option value="">Sin asignar</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.full_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                </div>
+              ) : null}
+
+              <div className="contact-meta">
+                <span>Origen: {editing.imported_from || editing.source || "manual"}</span>
+                <span>Visto: {formatMessageTime(editing.last_seen_at)}</span>
+                {editing.conversation_id ? <span>Conv: {editing.conversation_status}</span> : null}
+              </div>
+
+              <div className="modal-actions">
+                <button className="secondary" onClick={() => setEditingId(null)} type="button">Cerrar</button>
+                <button className="primary" disabled={saving} type="submit">
+                  <Save size={15} />
+                  {saving ? "Guardando..." : "Guardar"}
+                </button>
+              </div>
+              {message ? <span className={`inline ${message.includes("pudimos") ? "warn" : "ok"}`}>{message}</span> : null}
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {/* New contact modal */}
+      {showNewForm ? (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowNewForm(false); }}>
+          <div className="modal-card">
+            <div className="modal-header">
+              <span><UserPlus size={16} /> Nuevo contacto</span>
+              <button className="icon-btn" onClick={() => setShowNewForm(false)} type="button">✕</button>
             </div>
-            <div className="contact-meta">
-              <span>Origen: {selected.imported_from || selected.source || "manual"}</span>
-              <span>Ultimo contacto: {formatMessageTime(selected.last_seen_at)}</span>
-            </div>
-            <button className="primary" disabled={saving} type="submit">
-              <Save size={17} />
-              {saving ? "Guardando" : "Guardar datos"}
-            </button>
-            {message ? <span className={message.includes("guardado") ? "ok inline" : "warn"}>{message}</span> : null}
-          </form>
-        ) : (
-          <div className="empty-state">Selecciona un contacto.</div>
-        )}
-      </div>
+            <form className="modal-body" onSubmit={createContact}>
+              <div className="form-grid">
+                <label className="field">
+                  Nombre y apellido
+                  <input
+                    placeholder="Ej: Carlos Gomez"
+                    value={newContactForm.displayName}
+                    onChange={(e) => setNewContactForm({ ...newContactForm, displayName: e.target.value })}
+                  />
+                </label>
+                <label className="field">
+                  WhatsApp
+                  <input
+                    placeholder="549..."
+                    required
+                    value={newContactForm.phone}
+                    onChange={(e) => setNewContactForm({ ...newContactForm, phone: e.target.value })}
+                  />
+                </label>
+                <label className="field wide">
+                  Plantilla inicial
+                  <select
+                    disabled={!newContactForm.sendTemplate || !templates.length}
+                    value={newContactForm.templateId}
+                    onChange={(e) => setNewContactForm({ ...newContactForm, templateId: e.target.value })}
+                  >
+                    {!templates.length ? <option value="">No hay plantillas activas</option> : null}
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.label} / {t.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label className="check-line">
+                <input
+                  checked={newContactForm.sendTemplate}
+                  onChange={(e) => setNewContactForm({ ...newContactForm, sendTemplate: e.target.checked })}
+                  type="checkbox"
+                />
+                Enviar plantilla inicial para activar WhatsApp
+              </label>
+              <div className="modal-actions">
+                <button className="secondary" onClick={() => setShowNewForm(false)} type="button">Cancelar</button>
+                <button className="primary" disabled={creating} type="submit">
+                  <SendHorizonal size={15} />
+                  {creating ? "Creando..." : "Crear y activar"}
+                </button>
+              </div>
+              {!templates.length ? <span className="warn inline">Primero sincroniza o carga una plantilla activa.</span> : null}
+              {message ? <span className={`inline ${message.includes("pudimos") ? "warn" : "ok"}`}>{message}</span> : null}
+            </form>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

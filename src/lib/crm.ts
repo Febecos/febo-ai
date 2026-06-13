@@ -76,6 +76,7 @@ export type ConversationReplyTarget = {
 export type ContactSummary = {
   id: string;
   phone: string;
+  email: string | null;
   account_id: string | null;
   account_name: string | null;
   external_user_id: string | null;
@@ -88,7 +89,10 @@ export type ContactSummary = {
   assigned_name: string | null;
   source: string | null;
   imported_from: string | null;
+  imported_payload: Record<string, unknown> | null;
   last_seen_at: string;
+  created_at: string;
+  last_message_at: string | null;
   conversation_id: string | null;
   conversation_status: string | null;
 };
@@ -2912,6 +2916,7 @@ export async function listContacts(filters: ContactFilters = {}) {
     select
       ct.id::text,
       ct.phone,
+      ct.email,
       ct.account_id::text,
       ca.name as account_name,
       ct.external_user_id,
@@ -2926,8 +2931,10 @@ export async function listContacts(filters: ContactFilters = {}) {
       ct.imported_from,
       ct.imported_payload,
       ct.last_seen_at::text,
+      ct.created_at::text,
       c.id::text as conversation_id,
-      c.status as conversation_status
+      c.status as conversation_status,
+      c.last_message_at::text as last_message_at
     from contacts ct
     left join channel_accounts ca on ca.id = ct.account_id
     left join app_users u on u.id = ct.assigned_to
@@ -2948,6 +2955,7 @@ export async function updateContact(input: {
   contactId: string;
   displayName?: string | null;
   phone?: string;
+  email?: string | null;
   contactType?: string;
   sentiment?: string;
   consultype?: string;
@@ -2982,10 +2990,13 @@ export async function updateContact(input: {
       })
     : null;
 
+  const email = input.email !== undefined ? (input.email?.trim().toLowerCase() || null) : undefined;
+
   const rows = (await sql`
     update contacts
     set display_name = ${displayName},
         phone = coalesce(${phone}, phone),
+        email = case when ${email !== undefined}::boolean then ${email ?? null} else email end,
         contact_type = ${contactType},
         sentiment = ${sentiment},
         consultype = ${consultype},

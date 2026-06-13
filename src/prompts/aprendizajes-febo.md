@@ -30,6 +30,20 @@
 - El `url_slug` viene **solo** de `selectorQuote.result.sugerencia.url_slug` (el slug real puede tener sufijo `-completo`, ej. `kit-bomba-solar-3-300w-completo`). **NUNCA lo armes a mano.** Si no hay url_slug, no pongas link.
 - Siempre que cotices (con selector ok), pasá el link en el mismo mensaje: *"Podés ver todos los datos de este equipo online acá: {link}"*.
 
+## [2026-06-13] Presupuesto formal — siempre link, nunca PDF
+
+Cuando se comparte un presupuesto con el cliente (ya sea la IA o una plantilla), el formato es:
+
+```
+https://coti.febecos.com/p/{public_token}
+```
+
+- `public_token` viene de la tabla `presupuestos` de la DB, columna `public_token`, para el número `PREV-AAAA-XXXX`.
+- **NUNCA mandar el PDF** como archivo adjunto.
+- **SIEMPRE `coti.febecos.com`**, nunca `revendedores.febecos.com` ni otra URL.
+- Si en algún momento la IA o una plantilla necesita compartir un presupuesto, usar este link.
+- Hoy (2026-06-13) Febo AI no tiene función de compartir presupuesto (solo etiquetas). Cuando se implemente, respetar este formato obligatoriamente.
+
 ## Modelo según potencia + diámetro
 
 - El modelo se define por **potencia + diámetro de la bomba**. Misma potencia puede venir en 2" y 4" (ej. 500W en 2" y en 4").

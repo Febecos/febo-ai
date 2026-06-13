@@ -183,22 +183,27 @@ Con esos datos → escalar (`escalar: true`) para que el asesor arme y envíe el
 - **Nunca pedirlo en el primer mensaje** (da sensación de formulario). Hacerlo después de haber respondido la consulta principal.
 - El objetivo es tener los datos para enviar el presupuesto por email con ficha técnica, precio actualizado y condiciones.
 
-## [2026-06-13] Cliente da litros por hora — no pedir animales, calcular litros/día vos
+## [2026-06-13] Cliente da litros por hora — prioridad sobre animales; si da ambos, cotizá los dos
 
-Si el cliente menciona litros por hora (ej: "necesito 5000 litros x hora"), ese dato es suficiente para calcular el consumo. **NO preguntar cuántos animales tiene.**
+### Caso A — Solo da L/h (sin mención de animales)
+Usá directo. No preguntes animales. Calculás: litros/día = L/h × 5,5 hs (verano).
+Ejemplo: 5000 L/h × 5,5 = **27.500 L/día** → corrés el selector con ese número.
+Informale: *"Con 5000 L/h × 5,5 horas de sol en verano, el equipo tiene que mover 27.500 litros al día."*
+Pedís SOLO los datos que faltan: profundidad del espejo, altura del tanque, diámetro de perforación.
 
-**Regla:** litros/día = litros/hora × 5,5 horas de sol (promedio verano).
+### Caso B — Da L/h Y también menciona animales (caso real: 5000 L/h + 200 animales)
+Los dos datos pueden dar consumos distintos:
+- Por L/h: 5000 × 5,5 = **27.500 L/día**
+- Por animales: 200 × 60 = **12.000 L/día**
 
-Ejemplo: 5000 L/h × 5,5 = **27.500 L/día** → con ese número corrés el selector.
+**No ignorés ninguno.** Aclaralo y cotizá el más exigente (el que pide el cliente explícitamente, que es el L/h):
 
-Después informás al cliente: *"Con 5000 L/h × 5,5 horas de sol en verano, el equipo tiene que mover 27.500 litros al día."*
+*"Con los 5000 L/h que necesitás, el equipo tiene que entregar ~27.500 L/día en verano. Con 200 animales serían ~12.000 L/día. Voy a cotizarte para cubrir los 27.500 L/día que pedís — si alcanza con 12.000 L/día, el equipo puede ser más chico y más económico. ¿Confirmás que necesitás los 5000 L/h?"*
 
-Los datos que **sí faltan** si el cliente ya dio L/h:
-- Profundidad total del pozo
-- A qué altura está el tanque (altura de bombeo)
-- Diámetro de la perforación (en mm, o si es 4" entubado)
+Si confirma → selector con 27.500 L/día.
+Si aclara que los 5000 L/h eran aproximados → selector con 12.000 L/día.
 
-Pedí SOLO esos tres, en una sola línea. No repitas el pedido de litros/animales.
+**Nunca uses solo el dato de animales cuando el cliente ya te dio L/h.**
 
 ---
 

@@ -183,6 +183,25 @@ Con esos datos → escalar (`escalar: true`) para que el asesor arme y envíe el
 - **Nunca pedirlo en el primer mensaje** (da sensación de formulario). Hacerlo después de haber respondido la consulta principal.
 - El objetivo es tener los datos para enviar el presupuesto por email con ficha técnica, precio actualizado y condiciones.
 
+## [2026-06-13] Cliente da litros por hora — no pedir animales, calcular litros/día vos
+
+Si el cliente menciona litros por hora (ej: "necesito 5000 litros x hora"), ese dato es suficiente para calcular el consumo. **NO preguntar cuántos animales tiene.**
+
+**Regla:** litros/día = litros/hora × 5,5 horas de sol (promedio verano).
+
+Ejemplo: 5000 L/h × 5,5 = **27.500 L/día** → con ese número corrés el selector.
+
+Después informás al cliente: *"Con 5000 L/h × 5,5 horas de sol en verano, el equipo tiene que mover 27.500 litros al día."*
+
+Los datos que **sí faltan** si el cliente ya dio L/h:
+- Profundidad total del pozo
+- A qué altura está el tanque (altura de bombeo)
+- Diámetro de la perforación (en mm, o si es 4" entubado)
+
+Pedí SOLO esos tres, en una sola línea. No repitas el pedido de litros/animales.
+
+---
+
 <!-- NUEVAS ENTRADAS DEBAJO. Formato sugerido:
 ## [AAAA-MM-DD] Tema corto
 - Consulta del cliente: "..."

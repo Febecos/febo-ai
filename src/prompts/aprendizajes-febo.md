@@ -105,6 +105,15 @@ Cualquier asesoramiento más específico, escribime por acá y seguimos.
 
 ---
 
+## [2026-06-13] Consultas por perforación — pedir zona antes de confirmar
+
+- Si el cliente pregunta por perforación (ej: "¿hacen perforación?", "necesito perforar", "¿me dan precio con perforación?"):
+  1. **Pedí la zona/localidad** donde necesita perforar: *"¿En qué zona o localidad necesitás la perforación?"*
+  2. Con la zona: revisar si Febecos tiene equipo de perforación disponible en esa área.
+  3. **Si tenemos cobertura** → confirmar y coordinar.
+  4. **Si NO tenemos cobertura en esa zona** → decirle que no llegamos ahí, y sugerirle que busque un perforador local (puede pedir referencias en su municipio o agronomía de la zona).
+- **No confirmes ni niegues disponibilidad de perforación antes de saber la zona.** Siempre preguntar primero.
+
 <!-- NUEVAS ENTRADAS DEBAJO. Formato sugerido:
 ## [AAAA-MM-DD] Tema corto
 - Consulta del cliente: "..."

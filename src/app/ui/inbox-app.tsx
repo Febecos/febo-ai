@@ -4808,6 +4808,8 @@ function InboxList({
   const [tagPanelOpen, setTagPanelOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryMemory, setSummaryMemory] = useState<Record<string, unknown> | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [quickRepliesOpen, setQuickRepliesOpen] = useState(false);
   const [eventMenuOpen, setEventMenuOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
@@ -7004,7 +7006,19 @@ function InboxList({
                     </div>
                   ) : null}
                 </span>
-                <button className="icon-action" onClick={() => setSummaryOpen(true)} title="Generar resumen" type="button"><ClipboardList size={17} /></button>
+                <button className="icon-action" onClick={async () => {
+                  setSummaryOpen(true);
+                  setSummaryMemory(null);
+                  if (!selected?.id) return;
+                  setSummaryLoading(true);
+                  try {
+                    const res = await fetch(`/api/conversation-summary?conversationId=${selected.id}`);
+                    const data = await res.json() as { memory: Record<string, unknown> | null };
+                    setSummaryMemory(data.memory ?? null);
+                  } finally {
+                    setSummaryLoading(false);
+                  }
+                }} title="Generar resumen" type="button"><ClipboardList size={17} /></button>
                 <button className="icon-action active" onClick={() => setTemplateComposerOpen(true)} title="Enviar plantilla" type="button"><FilePenLine size={17} /></button>
                 <button className="icon-action" onClick={() => setQuickRepliesOpen(true)} title="Respuestas rapidas" type="button"><MessageCircleMore size={17} /></button>
                 <details className="event-menu" open={eventMenuOpen}>
@@ -7120,7 +7134,45 @@ function InboxList({
                     <h3>Resumen de la conversacion</h3>
                     <button onClick={() => setSummaryOpen(false)} type="button"><X size={22} /></button>
                   </header>
-                  <p>{buildConversationSummary()}</p>
+                  {summaryLoading ? (
+                    <p style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Cargando resumen...</p>
+                  ) : summaryMemory ? (
+                    <div className="conversation-summary-body">
+                      {summaryMemory.summary ? <p><strong>Resumen:</strong> {String(summaryMemory.summary)}</p> : null}
+                      {summaryMemory.last_topic ? <p><strong>Tema:</strong> {String(summaryMemory.last_topic)}</p> : null}
+                      {summaryMemory.last_intent ? <p><strong>Intención:</strong> {String(summaryMemory.last_intent)}</p> : null}
+                      {summaryMemory.technical_facts && Object.keys(summaryMemory.technical_facts as object).length > 0 ? (
+                        <div>
+                          <strong>Datos técnicos:</strong>
+                          <ul>
+                            {Object.entries(summaryMemory.technical_facts as Record<string, unknown>)
+                              .filter(([, v]) => v != null && v !== "")
+                              .map(([k, v]) => <li key={k}><em>{k}:</em> {String(v)}</li>)}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {summaryMemory.commercial_facts && Object.keys(summaryMemory.commercial_facts as object).length > 0 ? (
+                        <div>
+                          <strong>Datos comerciales:</strong>
+                          <ul>
+                            {Object.entries(summaryMemory.commercial_facts as Record<string, unknown>)
+                              .filter(([, v]) => v != null && v !== "")
+                              .map(([k, v]) => <li key={k}><em>{k}:</em> {String(v)}</li>)}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {Array.isArray(summaryMemory.pending_questions) && (summaryMemory.pending_questions as string[]).length > 0 ? (
+                        <div>
+                          <strong>Pendiente:</strong>
+                          <ul>
+                            {(summaryMemory.pending_questions as string[]).map((q, i) => <li key={i}>{q}</li>)}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p style={{ color: "var(--text-muted)" }}>Sin resumen disponible todavía. Se genera automáticamente cuando llega un mensaje.</p>
+                  )}
                   <footer><button className="secondary" onClick={() => setSummaryOpen(false)} type="button">Cerrar</button></footer>
                 </section>
               </div>

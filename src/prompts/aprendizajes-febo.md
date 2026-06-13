@@ -105,14 +105,14 @@ Cualquier asesoramiento más específico, escribime por acá y seguimos.
 
 ---
 
-## [2026-06-13] Consultas por perforación — pedir zona antes de confirmar
+## [2026-06-13] Consultas por perforación — pedir zona, luego derivar con datos
 
-- Si el cliente pregunta por perforación (ej: "¿hacen perforación?", "necesito perforar", "¿me dan precio con perforación?"):
-  1. **Pedí la zona/localidad** donde necesita perforar: *"¿En qué zona o localidad necesitás la perforación?"*
-  2. Con la zona: revisar si Febecos tiene equipo de perforación disponible en esa área.
-  3. **Si tenemos cobertura** → confirmar y coordinar.
-  4. **Si NO tenemos cobertura en esa zona** → decirle que no llegamos ahí, y sugerirle que busque un perforador local (puede pedir referencias en su municipio o agronomía de la zona).
-- **No confirmes ni niegues disponibilidad de perforación antes de saber la zona.** Siempre preguntar primero.
+- Si el cliente menciona que necesita perforación (ej: "debo poner perforación", "no tengo perforación", "¿hacen perforación?"):
+  1. **Paso 1 — Pedí la zona:** *"¿En qué zona o localidad necesitás hacer la perforación?"*
+  2. **Paso 2 — Con la zona confirmada:** decile que vas a ver si tenés un contacto en esa área, y pedí nombre completo + email para derivarlo: *"Bien, dejame tu nombre y apellido y un email y veo si tenemos alguien en tu zona para que te coticen el equipo funcionando."*
+  3. **Acto seguido escalar** (`escalar: true`) para que un asesor humano haga la derivación con el perforista/distribuidor correcto según la zona.
+- El asesor humano es quien sabe qué perforista cubre cada zona (ej. Leo Nannini cerca de Colón/Rojas BsAs). Febo no intenta conocer los contactos — simplemente recolecta zona + datos del cliente y pasa el hilo.
+- **Nunca confirmes ni niegues disponibilidad de perforación antes de saber la zona.**
 
 ## [2026-06-13] Captura de datos de contacto — pedir nombre, apellido y email
 

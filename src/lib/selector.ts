@@ -198,13 +198,17 @@ export async function fetchCatalogBySlug(slug: string): Promise<CatalogProductRe
     const data = await response.json() as { ok: boolean; catalog?: CatalogEntry[] };
     if (!data.ok || !Array.isArray(data.catalog)) return null;
 
-    const matches = data.catalog.filter(
-      (p) => p.diam_bomba === parsed.diam && p.watts === parsed.watts
+    const sameDiam = data.catalog.filter((p) => p.diam_bomba === parsed.diam && p.watts != null);
+    if (sameDiam.length === 0) return null;
+
+    // Exact match first; if none, take the product with nearest watts
+    const exact = sameDiam.filter((p) => p.watts === parsed.watts);
+    const pool = exact.length > 0 ? exact : sameDiam.sort(
+      (a, b) => Math.abs((a.watts ?? 0) - parsed.watts) - Math.abs((b.watts ?? 0) - parsed.watts)
     );
-    if (matches.length === 0) return null;
 
     // Prefer products with stock; fallback to first match
-    const best = matches.find((p) => p.stock && p.stock > 0) ?? matches[0];
+    const best = pool.find((p) => p.stock && p.stock > 0) ?? pool[0];
 
     return {
       ok: true,
@@ -251,7 +255,7 @@ export function formatCatalogContext(product: CatalogProductResult, slug: string
   const paneles = s.cant_paneles ? `${s.cant_paneles} panel${s.cant_paneles > 1 ? "es" : ""} fotovoltaico${s.cant_paneles > 1 ? "s" : ""}` : "paneles fotovoltaicos";
   const wattsPanel = s.watts_panel ? ` ${s.watts_panel}W` : "";
   const link = `https://selector.febecos.com/catalogo-v2/${slug}`;
-  return `catalogContext: Kit Full ${s.diam_bomba ?? ""} ${s.watts ?? ""}W | Precio: ${precio} | Incluye: bomba solar sumergible + ${paneles}${wattsPanel} + controlador MPPT + cables y accesorios | URL: ${link}`;
+  return `catalogContext: Kit Full ${s.diam_bomba ?? ""} ${s.watts ?? ""}W | Precio: ${precio} | Incluye: bomba solar sumergible + ${paneles}${wattsPanel} + controlador MPPT + cables y accesorios | NO incluye instalación | Si el cliente quiere instalación: decirle que nos escriba al 011 2739-9430 y lo coordinamos | URL: ${link}`;
 }
 
 /**

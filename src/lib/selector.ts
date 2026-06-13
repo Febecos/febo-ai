@@ -228,11 +228,13 @@ export function extractSlugFromReferralText(headline?: string, body?: string): s
   const text = `${headline ?? ""} ${body ?? ""}`;
   const lower = text.toLowerCase();
 
+  // Normalizar comillas tipográficas (curvas) → rectas antes de buscar diámetros
+  const normalized = lower.replace(/[""]/g, '"').replace(/['']/g, "'");
   let diam: string | null = null;
-  if (lower.includes('6"') || lower.includes("6 pulgadas")) diam = "6";
-  else if (lower.includes('4"') || lower.includes("4 pulgadas")) diam = "4";
-  else if (lower.includes('3"') || lower.includes("3 pulgadas")) diam = "3";
-  else if (lower.includes('2"') || lower.includes("2 pulgadas")) diam = "2";
+  if (normalized.includes('6"') || lower.includes("6 pulgadas")) diam = "6";
+  else if (normalized.includes('4"') || lower.includes("4 pulgadas")) diam = "4";
+  else if (normalized.includes('3"') || lower.includes("3 pulgadas")) diam = "3";
+  else if (normalized.includes('2"') || lower.includes("2 pulgadas")) diam = "2";
 
   const wattsMatch = lower.match(/(\d{3,4})\s*w(?:att)?s?\b/);
   const watts = wattsMatch ? wattsMatch[1] : null;

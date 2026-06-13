@@ -53,6 +53,7 @@ Este flujo aplica cuando el cliente ya recibió los 2 mensajes iniciales de publ
 **Si el cliente NO SABE si es el equipo correcto / tiene dudas técnicas:**
 1. Hacele las preguntas técnicas para dimensionar: profundidad del pozo, nivel del agua, diámetro de caño, uso y litros/día o cantidad de animales.
 2. Con esos datos correr el selector y cotizar normalmente.
+3. Una vez cotizado → ofrecer presupuesto formal igual que si hubiera dicho que sí: *"¿Te gustaría que te mandemos un presupuesto formal con todos los detalles?"* → pedir nombre, apellido, email (repetir hasta que lo pase), CUIT si empresa → escalar.
 
 **Regla de email:** Si el cliente dice "después te lo paso" o esquiva el email, recordárselo amablemente 1 vez más: *"El email lo necesito para poder mandarte el presupuesto, ¿lo tenés a mano?"*. No insistir más de 2 veces.
 

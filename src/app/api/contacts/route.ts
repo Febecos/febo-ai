@@ -39,7 +39,13 @@ const updateContactSchema = z.object({
       title: z.string().max(80).optional(),
       value: z.string().max(400).optional()
     })).max(20).optional()
-  }).optional()
+  }).optional(),
+  afipData: z.object({
+    domicilio: z.string().max(200).optional(),
+    codigoPostal: z.string().max(20).optional(),
+    localidad: z.string().max(100).optional(),
+    provincia: z.string().max(100).optional()
+  }).nullable().optional()
 });
 
 export async function GET(request: NextRequest) {

@@ -2970,6 +2970,12 @@ export async function updateContact(input: {
     notes?: string;
     additional?: Array<{ id?: string; title?: string; value?: string }>;
   };
+  afipData?: {
+    domicilio?: string;
+    codigoPostal?: string;
+    localidad?: string;
+    provincia?: string;
+  } | null;
 }) {
   if (!isDbConfigured()) {
     return null;
@@ -2999,6 +3005,7 @@ export async function updateContact(input: {
   const email = input.email !== undefined ? (input.email?.trim().toLowerCase() || null) : undefined;
   const cuit = input.cuit !== undefined ? (input.cuit?.replace(/\D/g, "") || null) : undefined;
   const tagsJson = input.tags !== undefined ? JSON.stringify(input.tags) : undefined;
+  const afipPayload = input.afipData != null ? JSON.stringify({ arca: input.afipData }) : null;
 
   const rows = (await sql`
     update contacts
@@ -3011,10 +3018,11 @@ export async function updateContact(input: {
         sentiment = ${sentiment},
         consultype = ${consultype},
         assigned_to = ${input.assignedTo ?? null}::uuid,
-        imported_payload = case
-          when ${contactInfoPayload}::jsonb is null then imported_payload
-          else coalesce(imported_payload, '{}'::jsonb) || ${contactInfoPayload}::jsonb
-        end,
+        imported_payload = (
+          coalesce(imported_payload, '{}'::jsonb)
+          || case when ${contactInfoPayload}::jsonb is null then '{}'::jsonb else ${contactInfoPayload}::jsonb end
+          || case when ${afipPayload}::jsonb is null then '{}'::jsonb else ${afipPayload}::jsonb end
+        ),
         updated_at = now()
     where id = ${input.contactId}
     returning id::text

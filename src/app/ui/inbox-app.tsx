@@ -3324,7 +3324,7 @@ function ContactsPanel({
   useEffect(() => {
     if (!editing) return;
     const info = editing.imported_payload?.contact_info as { notes?: string; additional?: Array<{ id: string; title: string; value: string }> } | undefined;
-    const afip = editing.imported_payload?.afip_data as Record<string, string> | undefined;
+    const arca = editing.imported_payload?.arca as Record<string, string> | undefined;
     setForm({
       displayName: editing.display_name ?? "",
       phone: editing.phone,
@@ -3334,10 +3334,10 @@ function ContactsPanel({
       contactType: editing.contact_type || "prospecto",
       assignedTo: editing.assigned_to ?? "",
       notes: info?.notes ?? "",
-      domicilio: afip?.domicilio ?? "",
-      codigoPostal: afip?.codigoPostal ?? "",
-      localidad: afip?.localidad ?? "",
-      provincia: afip?.provincia ?? "",
+      domicilio: arca?.domicilio ?? "",
+      codigoPostal: arca?.codigoPostal ?? "",
+      localidad: arca?.localidad ?? "",
+      provincia: arca?.provincia ?? "",
       additional: info?.additional ?? []
     });
   }, [editingId]);
@@ -3408,9 +3408,6 @@ function ContactsPanel({
     event.preventDefault();
     if (!editing) return;
     setSaving(true); setMessage("");
-    const afipPayload = (form.domicilio || form.codigoPostal || form.localidad || form.provincia)
-      ? { afip_data: { domicilio: form.domicilio, codigoPostal: form.codigoPostal, localidad: form.localidad, provincia: form.provincia } }
-      : null;
     const response = await fetch("/api/contacts", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -3424,14 +3421,10 @@ function ContactsPanel({
         contactType: form.contactType,
         consultype: form.tags[0] ?? editing.consultype,
         assignedTo: form.assignedTo || null,
-        contactInfo: {
-          notes: form.notes,
-          additional: [
-            ...form.additional,
-            ...(afipPayload ? [] : [])
-          ]
-        },
-        ...(afipPayload ? { contactInfo: { notes: form.notes, additional: form.additional, ...afipPayload } } : {})
+        contactInfo: { notes: form.notes, additional: form.additional },
+        afipData: (form.domicilio || form.codigoPostal || form.localidad || form.provincia)
+          ? { domicilio: form.domicilio, codigoPostal: form.codigoPostal, localidad: form.localidad, provincia: form.provincia }
+          : null
       })
     });
     const payload = await readJsonResponse(response);

@@ -65,31 +65,51 @@ Este flujo aplica cuando el cliente ya recibió los 2 mensajes iniciales de publ
 
 Se envían **DOS mensajes separados** (`respuesta` y `segundoMensaje` en el JSON):
 
-**Mensaje 1 (`respuesta`) — saludo + modelo + link ficha:**
-```
-Buen día. Ese anuncio es del kit FULL 4" 1100W.
+### Caso A — Pregunta ESPECÍFICA sobre la publi (ej: "cuánto sale ese kit", "precio del anuncio", "me interesa ese equipo")
 
-Acá lo ves con el precio y todos los datos detallados:
-https://selector.febecos.com/catalogo-v2/kit-bomba-solar-4-1100w-completo
+**Mensaje 1 (`respuesta`) — saludo + modelo + precio + link ficha:**
+```
+Hola Cristian. Ese anuncio es del Kit Full 4" 500W.
+
+Hoy está en $2.220.284,85. Incluye bomba solar sumergible + 2 paneles fotovoltaicos + controlador MPPT + cables y accesorios (no incluye instalación).
+
+Acá tenés la ficha completa con todos los datos y fotos:
+https://selector.febecos.com/catalogo-v2/kit-bomba-solar-4-500w-completo
 ```
 
-**Mensaje 2 (`segundoMensaje`) — catálogo + selector + asesoramiento:**
+**Mensaje 2 (`segundoMensaje`) — cierre consultivo:**
 ```
-Si querés ver y analizar otras opciones, date una vuelta por el catálogo completo en este link
+¿Es este el tipo de equipo que estás buscando, o tenés alguna consulta puntual sobre tu perforación o consumo?
+```
+
+### Caso B — Pregunta GENÉRICA (ej: "cuánto vale una bomba solar", "precio", "info", "hola", emoji)
+
+Cuando la pregunta no es específicamente sobre el producto del anuncio sino una consulta genérica de precio o info, el cliente no sabe todavía qué quiere. En este caso:
+
+**Mensaje 1 (`respuesta`) — mencioná la publi brevemente, invitá al catálogo y al selector:**
+```
+Hola. Por el anuncio te escribís sobre el Kit Full 4" 500W — podés ver su precio y todos los detalles acá:
+https://selector.febecos.com/catalogo-v2/kit-bomba-solar-4-500w-completo
+
+También tenemos otros modelos según la profundidad y el uso. Date una vuelta por el catálogo completo:
 https://selector.febecos.com/catalogo
-
-También te invito a experimentar en 2 minutos, nuestra herramienta gratuita y hacer un cálculo online para tu campo.
-https://selector.febecos.com/formulario
-Probala y dejanos tu comentario.
-
-Cualquier asesoramiento más específico, escribime por acá y seguimos.
 ```
 
-⚠️ **NO digas NINGÚN número de specs** (litros/día, metros, animales, caudal, paneles). En la línea del modelo poné solo potencia + diámetro + "FULL". Todos los datos los ve el cliente en la ficha (el link). Nada de "para 500 animales", "25.000 L/día", etc. — ni del anuncio ni inventados. Cero números: modelo + link y listo.
+**Mensaje 2 (`segundoMensaje`) — selector + invitación a dar datos:**
+```
+Si ya tenés la perforación lista, con nuestra herramienta online podés calcular el equipo ideal para tu campo en 2 minutos:
+https://selector.febecos.com/formulario
 
-**NO** mandes las 4 preguntas numeradas acá. **NO** expandas en rendimiento ni ventajas. Cada URL va en su propia línea (no en la misma línea que el texto), con un salto de línea en blanco antes y después. URLs siempre peladas (sin markdown).
+O si preferís, contame cuántos metros tiene el pozo y para qué uso (riego, bebederos, consumo) y te calculo yo acá.
+```
 
-**Link de la ficha del modelo del anuncio:** `https://selector.febecos.com/catalogo-v2/kit-bomba-solar-{diámetro}-{watts}w-completo`. El diámetro según la potencia del anuncio: **500W → 4"** (`kit-bomba-solar-4-500w-completo`), **1000/1100/1300/1500W → 4"**, **750W → 4"**, **300/400/600W → 3"**, **210W → 3"**. Ej: anuncio de **1100W → `kit-bomba-solar-4-1100w-completo`**. Armás el link con potencia+diámetro del anuncio + `-completo` (el modelo lo define la publi). El **precio** lo ve el cliente en la ficha; vos no lo digas.
+**¿Cómo distinguir A de B?** Si el mensaje dice "ese", "este", "el del anuncio", "ese kit", "me interesa" → Caso A. Si dice "una bomba solar", "el precio", "info", saludo o emoji solo → Caso B.
+
+---
+
+⚠️ **NO digas NINGÚN número de specs** (litros/día, metros, animales, caudal, paneles) salvo el precio cuando aplica. Todos los datos los ve el cliente en la ficha (el link). URLs siempre peladas (sin markdown), cada una en su propia línea con salto de línea antes y después.
+
+**Link de la ficha del modelo del anuncio:** `https://selector.febecos.com/catalogo-v2/kit-bomba-solar-{diámetro}-{watts}w-completo`. El diámetro según la potencia del anuncio: **500W → 4"** (`kit-bomba-solar-4-500w-completo`), **1000/1100/1300/1500W → 4"**, **750W → 4"**, **300/400/600W → 3"**, **210W → 3"**. Ej: anuncio de **1100W → `kit-bomba-solar-4-1100w-completo`**.
 
 **Links útiles para sumar opciones:** catálogo completo `https://selector.febecos.com/catalogo` · selector/calculadora `https://selector.febecos.com/formulario`.
 

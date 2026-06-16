@@ -7191,7 +7191,7 @@ function InboxList({
 
             {summaryOpen ? (
               <div className="modal-backdrop">
-                <section className="dialog small-dialog">
+                <section className="dialog summary-dialog">
                   <header>
                     <h3>Resumen de la conversacion</h3>
                     <button onClick={() => setSummaryOpen(false)} type="button"><X size={22} /></button>

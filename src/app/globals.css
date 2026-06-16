@@ -4383,6 +4383,31 @@ button:disabled {
   width: min(500px, calc(100vw - 60px));
 }
 
+.summary-dialog {
+  width: min(680px, calc(100vw - 60px));
+}
+
+.summary-dialog .conversation-summary-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  line-height: 1.5;
+  padding: 18px 20px;
+}
+
+.summary-dialog .conversation-summary-body p {
+  margin: 0;
+}
+
+.summary-dialog .conversation-summary-body ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.summary-dialog .conversation-summary-body li {
+  margin-bottom: 3px;
+}
+
 .quick-dialog {
   width: min(800px, calc(100vw - 60px));
 }

@@ -1053,6 +1053,7 @@ export async function refreshConversationMemory(conversationId: string | null | 
     model: config.OPENAI_MODEL,
     instructions: [
       "Actualiza la memoria comercial persistente de una conversacion de WhatsApp de Febecos.",
+      "El campo 'summary' es un RESUMEN EJECUTIVO breve: maximo 2-3 oraciones (no mas de ~50 palabras). Sintetiza solo lo esencial: quien es el cliente, que necesita y en que estado quedo el caso. NO narres la conversacion mensaje por mensaje, NO repitas los datos tecnicos que ya van en technicalFacts/commercialFacts. Los detalles van en los campos estructurados, no en el summary.",
       "La memoria debe conservar datos importantes aunque no aparezcan en el ultimo mensaje.",
       "No inventes datos tecnicos, precios, stock, cuotas ni nombres. Si un dato no esta, usa null.",
       "Si hay una cotizacion anterior, equipo sugerido, zona, litros, altura, diametro, forma de pago, asesor o pendiente comercial, conservalo.",

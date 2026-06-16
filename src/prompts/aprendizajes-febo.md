@@ -130,6 +130,20 @@ https://selector.febecos.com/catalogo
 
 - Si el cliente viene de una publi que promociona un modelo puntual (ej. publi de Facebook de la **4" 500W**), **ese es el modelo que aplica** → pasá el link de ese, no el de otro diámetro (salvo que sus datos pidan claramente otro).
 
+## [2026-06-16] Perforación angosta (1" o 2") → NO cotizar, aclarar
+
+Caso real (mal): cliente dice *"Tengo un pozo de 1' a una profundidad de entre 6 y 8 m... unos 2mil litros por día"*. El agente cotizó un **Kit 3" 210W** — pero en una perforación de **1 pulgada NO entra ninguna bomba** (el mínimo Febecos es 3"/63mm). El agente ignoró el diámetro y cotizó por altura+litros nomás. MAL.
+
+**Regla dura:** si el cliente da una perforación de **1 o 2 pulgadas (o menos de 63mm)**, NINGUNA bomba entra. NO cotices modelo ni precio. Respondé:
+
+*"En una perforación de 1 pulgada no entra ninguna bomba sumergible — el mínimo es 3 pulgadas (63 mm). ¿Me confirmás el diámetro real de la perforación? ¿O es un pozo ancho / aljibe? En ese caso la bomba va dentro de una camisa de PVC y entra sin problema."*
+
+- Nunca recomiendes un equipo que no entra en el diámetro que dio el cliente.
+- El diámetro que da el cliente MANDA: no lo ignores para cotizar por altura+litros.
+- Si es pozo ancho/aljibe (fuente abierta), ahí sí cotizás normal (la bomba va en camisa).
+
+---
+
 ## Sin contexto → no cotizar
 
 - Si abre vago o pide precio ("Precio?", "Hola", "Info", emoji) y **no hay contexto** (sin bloque de anuncio con datos, sin equipo mencionado, no viene del selector) → **no** mandes las 4 preguntas técnicas ni rango de precio. Pedí que diga qué equipo busca o que mande una captura de la publi.

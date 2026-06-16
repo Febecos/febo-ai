@@ -305,6 +305,7 @@ export async function runFebecosAgent(input: {
       "Si el contexto incluye febecos.pumpCurveContext (tabla de caudal de la bomba que el cliente ya tiene en pantalla), PRIMERO mostra esa tabla tal cual en tu respuesta (es texto plano, mostrarla como esta). Luego agrega una linea breve como 'Si queres saber cuanto saca para tu instalacion puntual, pasa profundidad, diametro y uso'. NO pidas las 4 preguntas antes de mostrar la tabla: la tabla va primero siempre que exista pumpCurveContext.",
       "CRITICO — primer mensaje de publi con febecos.catalogContext: si febecos.catalogContext existe, ESE es el contexto del producto del anuncio. El campo 'respuesta' DEBE contener: (1) el precio exacto que dice catalogContext (sin redondear ni cambiar), (2) en 2 lineas lo que incluye el kit (bomba + paneles + controlador + cables), (3) el link de la URL del catalogContext. No agregues las 4 preguntas tecnicas. No digas 'Aca lo ves con el precio'. Redacta directo con el precio en el cuerpo del mensaje.",
       "Si selectorQuote no esta disponible pero falta algun dato tecnico, pedi solo ese dato. No inventes precios ni modelos.",
+      "PERFORACION ANGOSTA: si el cliente indica una perforacion de 1 o 2 pulgadas (o menos de 63mm), NINGUNA bomba Febecos entra ahi (el minimo es 3 pulgadas / 63mm). En ese caso NO cotices ningun modelo ni precio: avisale que en ese diametro no entra equipo y pedile que confirme el diametro real de la perforacion, o si en realidad es un pozo ancho/aljibe (donde la bomba va en una camisa de PVC y entra cualquier diametro). Si selectorQuote.assumptions menciona 'PERFORACION DEMASIADO ANGOSTA', segui esta regla al pie.",
       "Si selectorQuote.error existe, deriva o pedi disculpas brevemente; no inventes una cotizacion alternativa.",
       "Solo si el cliente ya confirmo que quiere asesor, si pidio compra/cierre/factura/envio/pago, o si el caso requiere solucion a medida, entonces tu respuesta puede decir que lo vas a pasar/derivar y escalar debe ser true.",
       "Datos fiscales: si el cliente proporciona su CUIT (en texto o en una imagen de constancia AFIP/ARCA) o su email, devolvelos en cuitDetectado y emailDetectado. Si en este mensaje no los dio, dejalos en null. No inventes ni completes con datos de mensajes viejos: solo lo que aparece ahora.",
@@ -746,7 +747,16 @@ function normalizeQuoteExtraction(
   const waterLevelMeters = normalizePositiveNumber(extraction.waterLevelMeters) ?? inferWaterLevelMeters(sourceText);
   const perforationDepthMeters = normalizePositiveNumber(extraction.perforationDepthMeters) ?? inferPerforationDepthMeters(sourceText);
   let heightMeters = normalizePositiveNumber(extraction.heightMeters);
-  const maxPumpDiameterInches = normalizePumpDiameter(sourceText, extraction.maxPumpDiameterInches);
+  let maxPumpDiameterInches = normalizePumpDiameter(sourceText, extraction.maxPumpDiameterInches);
+
+  // Perforación demasiado angosta: si el cliente dice 1 o 2 pulgadas (o <63mm),
+  // NINGUNA bomba Febecos entra (mínimo 3"/63mm). No cotizar: hay que aclarar el
+  // diámetro real. Evita que el agente recomiende un equipo que no entra en el pozo.
+  if (mentionsTooNarrowPerforation(sourceText)) {
+    maxPumpDiameterInches = null;
+    missingData.add("diametro");
+    assumptions.push("PERFORACION DEMASIADO ANGOSTA: el cliente indico ~1-2 pulgadas. Ninguna bomba Febecos entra en menos de 3 pulgadas (63mm). NO cotizar ningun modelo ni precio: aclarar el diametro real de la perforacion (o si es un pozo ancho/aljibe) antes de seguir.");
+  }
 
   if (waterLevelMeters) {
     const tank = tankHeightMeters ?? 5;
@@ -796,6 +806,16 @@ function normalizeQuoteExtraction(
 
 function normalizePositiveNumber(value: number | null) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+// Detecta una perforación explícitamente angosta (1" o 2", o medida <63mm).
+// "1'" / "1\"" / "1 pulgada" / "2 pulgadas" / "50mm" → ninguna bomba entra.
+function mentionsTooNarrowPerforation(sourceText: string) {
+  const narrowInches = /(^|[^\d])[12]\s*(?:'|′|"|”|''|pulg(?:adas?)?)/i.test(sourceText);
+  const narrowMm = Array.from(sourceText.toLowerCase().matchAll(/(\d{2,3})\s*mm/g))
+    .map((match) => Number(match[1]))
+    .some((value) => Number.isFinite(value) && value < 63);
+  return narrowInches || narrowMm;
 }
 
 function normalizePumpDiameter(sourceText: string, extracted: number | null) {

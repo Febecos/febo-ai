@@ -5,7 +5,7 @@ import { getSql } from "@/lib/db";
 import {
   deliverOutgoingWebhooks,
   getAutomaticReplyCandidate,
-  getPumpUrlSlug,
+  getPumpCatalogExtras,
   getSettingValue,
   isConversationAiEnabled,
   recordAgentReply,
@@ -458,9 +458,9 @@ async function sendAutomaticReply(input: {
       try {
         const product = await fetchCatalogBySlug(slug);
         if (product) {
-          // Resolver el slug real desde la DB usando el codigo del producto
-          const realSlug = await getPumpUrlSlug(product.sugerencia.codigo) ?? slug;
-          catalogContext = formatCatalogContext(product, realSlug);
+          // Resolver el slug real y el precio base desde la DB usando el codigo del producto
+          const extras = await getPumpCatalogExtras(product.sugerencia.codigo);
+          catalogContext = formatCatalogContext(product, extras.urlSlug ?? slug, extras.precioBase);
         }
       } catch (e) {
         console.warn("[webhook] catalog enrichment failed:", e);

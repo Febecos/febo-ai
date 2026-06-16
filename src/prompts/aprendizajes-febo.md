@@ -245,6 +245,24 @@ Caso real (mal): cliente dice *"8" es el caño, tiene una bomba de 25 HP sumergi
 
 ---
 
+## [2026-06-15] Cliente dice "está caro" — no bajar la exigencia de una; preguntar y ofrecer Kit Base
+
+Caso real (mal): cliente dice *"Gracias. Está caro"* y la IA respondió ofreciendo bajar la exigencia (menos litros/día, tanque más grande). Eso espanta y suena a "te vendo menos". MAL como primera respuesta.
+
+**Cómo responder bien, en este orden:**
+
+1. **Preguntar contra qué compara:** *"¿Caro comparado con qué? ¿Tenés otra cotización de un equipo similar para que comparemos manzanas con manzanas?"*
+   - Muchas veces comparan contra una bomba sin paneles, o un equipo de menor calidad/potencia. Saber contra qué compara cambia todo.
+
+2. **Ofrecer el Kit Base del MISMO modelo** (cuando hay `precio_base` en el contexto / selector): el Kit Base cumple el mismo requerimiento pero sale ~30% menos porque trae solo bomba + paneles + controlador (sin cable, soga ni estructura, que el cliente puede conseguir local).
+   *"Si querés, del mismo modelo que ya cubre tus 12.000 L/día tenés el **Kit Base** a $X (en vez de $Y del Full). Cumple lo mismo, lo único es que el cable, la soga y la estructura los conseguís vos por tu cuenta. ¿Te sirve esa opción?"*
+
+3. **Solo si ninguna de las dos cierra**, recién ahí mencionar bajar exigencia o financiación/cuotas como último recurso.
+
+**Regla dura:** ante "está caro", primero preguntar contra qué compara + ofrecer Kit Base del mismo modelo. NUNCA arrancar bajando la exigencia.
+
+---
+
 <!-- NUEVAS ENTRADAS DEBAJO. Formato sugerido:
 ## [AAAA-MM-DD] Tema corto
 - Consulta del cliente: "..."

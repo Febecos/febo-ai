@@ -248,7 +248,7 @@ export function extractSlugFromReferralText(headline?: string, body?: string): s
   return `kit-bomba-solar-${diam}-${watts}w-completo`;
 }
 
-export function formatCatalogContext(product: CatalogProductResult, slug: string): string {
+export function formatCatalogContext(product: CatalogProductResult, slug: string, precioBase?: number | null): string {
   const s = product.sugerencia;
   const precio = s.precio_full
     ? `$${s.precio_full.toLocaleString("es-AR")}`
@@ -256,7 +256,10 @@ export function formatCatalogContext(product: CatalogProductResult, slug: string
   const paneles = s.cant_paneles ? `${s.cant_paneles} panel${s.cant_paneles > 1 ? "es" : ""} fotovoltaico${s.cant_paneles > 1 ? "s" : ""}` : "paneles fotovoltaicos";
   const wattsPanel = s.watts_panel ? ` ${s.watts_panel}W` : "";
   const link = `https://selector.febecos.com/catalogo-v2/${slug}`;
-  return `catalogContext: Kit Full ${s.diam_bomba ?? ""} ${s.watts ?? ""}W | Precio: ${precio} | Incluye: bomba solar sumergible + ${paneles}${wattsPanel} + controlador MPPT + cables y accesorios | NO incluye instalación | Si el cliente quiere instalación: decirle que nos escriba al 011 2739-9430 y lo coordinamos | URL: ${link}`;
+  const precioBaseTxt = precioBase
+    ? ` | Precio Kit Base (mismo modelo, solo bomba + paneles + controlador, sin cable/soga/estructura): $${precioBase.toLocaleString("es-AR")} — ofrecerlo SOLO si el cliente dice que el Full está caro`
+    : "";
+  return `catalogContext: Kit Full ${s.diam_bomba ?? ""} ${s.watts ?? ""}W | Precio: ${precio}${precioBaseTxt} | Incluye: bomba solar sumergible + ${paneles}${wattsPanel} + controlador MPPT + cables y accesorios | NO incluye instalación | Si el cliente quiere instalación: decirle que nos escriba al 011 2739-9430 y lo coordinamos | URL: ${link}`;
 }
 
 /**

@@ -4417,12 +4417,15 @@ export async function updateConversation(input: {
   };
 }
 
-export async function getPumpUrlSlug(codigo: string): Promise<string | null> {
-  if (!isDbConfigured() || !codigo) return null;
+export async function getPumpCatalogExtras(codigo: string): Promise<{ urlSlug: string | null; precioBase: number | null }> {
+  if (!isDbConfigured() || !codigo) return { urlSlug: null, precioBase: null };
   const sql = getSql();
   const rows = await sql`
-    select url_slug from pumps where codigo = ${codigo} limit 1
-  ` as { url_slug: string | null }[];
-  return rows[0]?.url_slug ?? null;
+    select url_slug, precio_base from pumps where codigo = ${codigo} limit 1
+  ` as { url_slug: string | null; precio_base: number | null }[];
+  return {
+    urlSlug: rows[0]?.url_slug ?? null,
+    precioBase: rows[0]?.precio_base ?? null
+  };
 }
 

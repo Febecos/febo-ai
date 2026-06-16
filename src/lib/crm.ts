@@ -3126,45 +3126,49 @@ export async function listConversationMessages(conversationId: string, limit = 1
   const safeLimit = Math.min(Math.max(limit, 20), 500);
 
   return (await sql`
-    select
-      m.id::text,
-      m.direction,
-      m.body,
-      m.consultype,
-      m.needs_human,
-      m.created_at::text,
-      m.wa_message_id,
-      m.metadata->>'whatsapp_status' as whatsapp_status,
-      m.metadata->>'whatsapp_error' as whatsapp_error,
-      m.metadata->>'source' as source,
-      case
-        when jsonb_typeof(m.metadata->'reply_options') = 'array' then m.metadata->'reply_options'
-        else '[]'::jsonb
-      end as reply_options,
-      mm.id::text as media_id,
-      mm.mime_type as media_mime_type,
-      mm.filename as media_filename,
-      mm.media_url,
-      mm.storage_provider as media_storage_provider,
-      m.created_by::text,
-      u.full_name as created_by_name,
-      m.deleted_at::text,
-      m.reply_to_message_id::text,
-      reply_msg.body as reply_to_body,
-      reply_msg.direction as reply_to_direction
-    from messages m
-    left join app_users u on u.id = m.created_by
-    left join lateral (
-      select id, mime_type, filename, media_url, storage_provider
-      from message_media
-      where message_id = m.id
-      order by created_at desc
-      limit 1
-    ) mm on true
-    left join messages reply_msg on reply_msg.id = m.reply_to_message_id
-    where m.conversation_id = ${conversationId}
-    order by m.created_at asc
-    limit ${safeLimit}
+    select * from (
+      select
+        m.id::text,
+        m.direction,
+        m.body,
+        m.consultype,
+        m.needs_human,
+        m.created_at::text,
+        m.wa_message_id,
+        m.metadata->>'whatsapp_status' as whatsapp_status,
+        m.metadata->>'whatsapp_error' as whatsapp_error,
+        m.metadata->>'source' as source,
+        case
+          when jsonb_typeof(m.metadata->'reply_options') = 'array' then m.metadata->'reply_options'
+          else '[]'::jsonb
+        end as reply_options,
+        mm.id::text as media_id,
+        mm.mime_type as media_mime_type,
+        mm.filename as media_filename,
+        mm.media_url,
+        mm.storage_provider as media_storage_provider,
+        m.created_by::text,
+        u.full_name as created_by_name,
+        m.deleted_at::text,
+        m.reply_to_message_id::text,
+        reply_msg.body as reply_to_body,
+        reply_msg.direction as reply_to_direction
+      from messages m
+      left join app_users u on u.id = m.created_by
+      left join lateral (
+        select id, mime_type, filename, media_url, storage_provider
+        from message_media
+        where message_id = m.id
+        order by created_at desc
+        limit 1
+      ) mm on true
+      left join messages reply_msg on reply_msg.id = m.reply_to_message_id
+      where m.conversation_id = ${conversationId}
+        and m.deleted_at is null
+      order by m.created_at desc
+      limit ${safeLimit}
+    ) recent
+    order by created_at asc
   `) as ConversationMessage[];
 }
 

@@ -109,13 +109,12 @@ También tenemos otros modelos según la profundidad y el uso. Date una vuelta p
 https://selector.febecos.com/catalogo
 ```
 
-**Mensaje 2 (`segundoMensaje`) — selector + invitación a dar datos:**
+**Mensaje 2 (`segundoMensaje`) — pregunta corta de cierre (igual que Caso A):**
 ```
-Si ya tenés la perforación lista, con nuestra herramienta online podés calcular el equipo ideal para tu campo en 2 minutos:
-https://selector.febecos.com/formulario
+¿Es esto lo que estás buscando para tu campo, o tenés alguna consulta puntual sobre tu instalación o consumo?
+```
 
-O si preferís, contame cuántos metros tiene el pozo y para qué uso (riego, bebederos, consumo) y te calculo yo acá.
-```
+> ⚠️ El segundo mensaje SIEMPRE es esta pregunta corta. **NO** mandes el catálogo completo, el link al formulario/selector ni el texto de ROI en el segundo mensaje — eso quedó descartado (16/06). Si el cliente después pide calcular o ver más opciones, recién ahí le pasás el selector/catálogo.
 
 **¿Cómo distinguir A de B?** Si el mensaje dice "ese", "este", "el del anuncio", "ese kit", "me interesa" → Caso A. Si dice "una bomba solar", "el precio", "info", saludo o emoji solo → Caso B.
 

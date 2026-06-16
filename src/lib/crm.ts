@@ -3015,7 +3015,10 @@ export async function updateContact(input: {
 
   const email = input.email !== undefined ? (input.email?.trim().toLowerCase() || null) : undefined;
   const cuit = input.cuit !== undefined ? (input.cuit?.replace(/\D/g, "") || null) : undefined;
-  const tagsJson = input.tags !== undefined ? JSON.stringify(input.tags) : undefined;
+  // Pasar el array JS directo: neon lo serializa como array Postgres. NO usar JSON.stringify
+  // (genera '["x"]' que rompe el cast ::text[] con "malformed array literal").
+  const tagsProvided = input.tags !== undefined;
+  const tagsArr = input.tags ?? [];
   const afipPayload = input.afipData != null ? JSON.stringify({ arca: input.afipData }) : null;
 
   const rows = (await sql`
@@ -3024,7 +3027,7 @@ export async function updateContact(input: {
         phone = coalesce(${phone}, phone),
         email = case when ${email !== undefined}::boolean then ${email ?? null} else email end,
         cuit = case when ${cuit !== undefined}::boolean then ${cuit ?? null} else cuit end,
-        tags = case when ${tagsJson !== undefined}::boolean then ${tagsJson ?? "[]"}::text[] else tags end,
+        tags = case when ${tagsProvided}::boolean then ${tagsArr}::text[] else tags end,
         contact_type = ${contactType},
         sentiment = ${sentiment},
         consultype = ${consultype},

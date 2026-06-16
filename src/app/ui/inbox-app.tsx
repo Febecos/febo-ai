@@ -638,10 +638,6 @@ function ToolWorkspace({
             resetMobileDetailSignal={conversationNavSignal}
             onSetFavorite={setConversationFavorite}
             onToggleFavorite={toggleFavorite}
-            onOpenContact={(contactId) => {
-              setFocusedContact({ id: contactId, signal: Date.now() });
-              setActiveTool("contacts");
-            }}
             users={users}
           />
         ) : null}
@@ -3273,33 +3269,22 @@ function TagPicker({ selected, onChange }: { selected: string[]; onChange: (tags
   );
 }
 
-function ContactsPanel({
-  focusedContact,
-  onContactCreated,
-  onContactSaved,
-  users
+// Modal reutilizable de edición de contacto. Lo usan tanto el tab Contactos como
+// el botón "Contacto" dentro de una conversación (se abre como overlay, sin cambiar de vista).
+function ContactEditorModal({
+  contact,
+  users,
+  onClose,
+  onSaved
 }: {
-  focusedContact: { id: string; signal: number };
-  onContactCreated: (payload: { conversationId: string; conversations: ConversationSummary[] }) => void;
-  onContactSaved: (contact: ContactSummary) => void;
+  contact: ContactSummary;
   users: AppUser[];
+  onClose: () => void;
+  onSaved: (saved: ContactSummary, allContacts: ContactSummary[]) => void;
 }) {
-  const [contacts, setContacts] = useState<ContactSummary[]>([]);
-  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
-  const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [afipLoading, setAfipLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [showNewForm, setShowNewForm] = useState(false);
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 50;
-
-  const editing = useMemo(() => contacts.find((c) => c.id === editingId) ?? null, [contacts, editingId]);
-
-  const [newContactForm, setNewContactForm] = useState({ displayName: "", phone: "", templateId: "", sendTemplate: true });
   const [form, setForm] = useState({
     displayName: "",
     phone: "",
@@ -3316,6 +3301,219 @@ function ContactsPanel({
     additional: [] as Array<{ id: string; title: string; value: string }>
   });
 
+  useEffect(() => {
+    const info = contact.imported_payload?.contact_info as { notes?: string; additional?: Array<{ id: string; title: string; value: string }> } | undefined;
+    const arca = contact.imported_payload?.arca as Record<string, string> | undefined;
+    setForm({
+      displayName: contact.display_name ?? "",
+      phone: contact.phone,
+      email: contact.email ?? "",
+      cuit: contact.cuit ?? "",
+      tags: contact.tags ?? [],
+      contactType: contact.contact_type || "prospecto",
+      assignedTo: contact.assigned_to ?? "",
+      notes: info?.notes ?? "",
+      domicilio: arca?.domicilio ?? "",
+      codigoPostal: arca?.codigoPostal ?? "",
+      localidad: arca?.localidad ?? "",
+      provincia: arca?.provincia ?? "",
+      additional: info?.additional ?? []
+    });
+  }, [contact.id]);
+
+  async function lookupAfip() {
+    const cuit = form.cuit.replace(/\D/g, "");
+    if (cuit.length !== 11) { setMessage("El CUIT debe tener 11 dígitos."); return; }
+    setAfipLoading(true);
+    setMessage("");
+    const res = await fetch(`/api/afip?cuit=${cuit}`);
+    const data = await readJsonResponse(res);
+    setAfipLoading(false);
+    if (!res.ok) { setMessage(data?.error ?? "No pudimos consultar ARCA."); return; }
+    setForm((f) => ({
+      ...f,
+      displayName: f.displayName || data.razonSocial || f.displayName,
+      domicilio: data.domicilio ?? f.domicilio,
+      codigoPostal: data.codigoPostal ?? f.codigoPostal,
+      localidad: data.localidad ?? f.localidad,
+      provincia: data.provincia ?? f.provincia
+    }));
+    setMessage(`ARCA: ${data.razonSocial ?? "datos cargados"}`);
+    setTimeout(() => setMessage(""), 3000);
+  }
+
+  async function saveContact(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true); setMessage("");
+    const response = await fetch("/api/contacts", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        contactId: contact.id,
+        displayName: form.displayName,
+        phone: form.phone,
+        email: form.email || null,
+        cuit: form.cuit || null,
+        tags: form.tags,
+        contactType: form.contactType,
+        consultype: form.tags[0] ?? contact.consultype,
+        assignedTo: form.assignedTo || null,
+        contactInfo: { notes: form.notes, additional: form.additional },
+        afipData: (form.domicilio || form.codigoPostal || form.localidad || form.provincia)
+          ? { domicilio: form.domicilio, codigoPostal: form.codigoPostal, localidad: form.localidad, provincia: form.provincia }
+          : null
+      })
+    });
+    const payload = await readJsonResponse(response);
+    setSaving(false);
+    if (!response.ok) { setMessage(payload?.error ?? "No pudimos guardar el contacto."); return; }
+    const nextContacts: ContactSummary[] = payload?.contacts ?? [];
+    const saved = nextContacts.find((c) => c.id === contact.id) ?? contact;
+    onSaved(saved, nextContacts);
+  }
+
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card contacts-modal">
+        <div className="modal-header">
+          <span><UsersRound size={16} /> {contact.display_name || contact.phone}</span>
+          <button className="icon-btn" onClick={onClose} type="button">✕</button>
+        </div>
+        <form className="modal-body" onSubmit={saveContact}>
+          <div className="form-grid">
+            <label className="field">
+              Nombre y apellido
+              <input value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
+            </label>
+            <label className="field">
+              WhatsApp
+              <input required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            </label>
+            <label className="field wide">
+              Email
+              <input type="email" placeholder="correo@ejemplo.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </label>
+          </div>
+
+          <div className="cuit-row">
+            <label className="field" style={{ flex: 1 }}>
+              CUIT
+              <input placeholder="20-12345678-9" value={form.cuit} onChange={(e) => setForm({ ...form, cuit: e.target.value })} />
+            </label>
+            <button type="button" className="secondary small cuit-lookup-btn" disabled={afipLoading} onClick={lookupAfip}>
+              {afipLoading ? "Consultando..." : "Consultar ARCA"}
+            </button>
+          </div>
+
+          <div className="form-grid">
+            <label className="field wide">
+              Domicilio
+              <input placeholder="Calle y número" value={form.domicilio} onChange={(e) => setForm({ ...form, domicilio: e.target.value })} />
+            </label>
+            <label className="field">
+              Localidad
+              <input placeholder="Localidad" value={form.localidad} onChange={(e) => setForm({ ...form, localidad: e.target.value })} />
+            </label>
+            <label className="field">
+              Código postal
+              <input placeholder="CP" value={form.codigoPostal} onChange={(e) => setForm({ ...form, codigoPostal: e.target.value })} />
+            </label>
+            <label className="field wide">
+              Provincia
+              <input placeholder="Provincia" value={form.provincia} onChange={(e) => setForm({ ...form, provincia: e.target.value })} />
+            </label>
+          </div>
+
+          <div className="form-grid">
+            <label className="field">
+              Tipo
+              <select value={form.contactType} onChange={(e) => setForm({ ...form, contactType: e.target.value })}>
+                <option value="prospecto">Prospecto</option>
+                <option value="cliente">Cliente</option>
+                <option value="revendedor">Revendedor</option>
+                <option value="tecnico">Técnico</option>
+              </select>
+            </label>
+            <label className="field">
+              Asignado a
+              <select value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}>
+                <option value="">Sin asignar</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>{user.full_name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="field-group">
+            <span className="field-label">Etiquetas</span>
+            <TagPicker selected={form.tags} onChange={(tags) => setForm({ ...form, tags })} />
+          </div>
+
+          <label className="field">
+            Notas internas
+            <textarea rows={3} placeholder="Notas sobre este contacto..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          </label>
+
+          <div className="additional-info">
+            <div className="additional-header">
+              <span>Info adicional</span>
+              <button type="button" className="secondary small" onClick={() => setForm({ ...form, additional: [...form.additional, { id: crypto.randomUUID(), title: "", value: "" }] })}>+ Agregar</button>
+            </div>
+            {form.additional.map((item, idx) => (
+              <div className="additional-row" key={item.id}>
+                <input placeholder="Campo" value={item.title} onChange={(e) => { const next = [...form.additional]; next[idx] = { ...item, title: e.target.value }; setForm({ ...form, additional: next }); }} />
+                <input placeholder="Valor" value={item.value} onChange={(e) => { const next = [...form.additional]; next[idx] = { ...item, value: e.target.value }; setForm({ ...form, additional: next }); }} />
+                <button type="button" className="icon-btn danger" onClick={() => setForm({ ...form, additional: form.additional.filter((_, i) => i !== idx) })}>✕</button>
+              </div>
+            ))}
+          </div>
+
+          <div className="contact-meta">
+            <span>Origen: {contact.imported_from || contact.source || "manual"}</span>
+            <span>Visto: {formatMessageTime(contact.last_seen_at)}</span>
+            {contact.conversation_id ? <span>Conv: {contact.conversation_status}</span> : null}
+          </div>
+
+          <div className="modal-actions">
+            <button className="secondary" onClick={onClose} type="button">Cerrar</button>
+            <button className="primary" disabled={saving} type="submit">
+              <Save size={15} /> {saving ? "Guardando..." : "Guardar"}
+            </button>
+          </div>
+          {message ? <span className={`inline ${message.includes("pudimos") ? "warn" : "ok"}`}>{message}</span> : null}
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ContactsPanel({
+  focusedContact,
+  onContactCreated,
+  onContactSaved,
+  users
+}: {
+  focusedContact: { id: string; signal: number };
+  onContactCreated: (payload: { conversationId: string; conversations: ConversationSummary[] }) => void;
+  onContactSaved: (contact: ContactSummary) => void;
+  users: AppUser[];
+}) {
+  const [contacts, setContacts] = useState<ContactSummary[]>([]);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [message, setMessage] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
+
+  const editing = useMemo(() => contacts.find((c) => c.id === editingId) ?? null, [contacts, editingId]);
+
+  const [newContactForm, setNewContactForm] = useState({ displayName: "", phone: "", templateId: "", sendTemplate: true });
+
   useEffect(() => { void loadContacts(); void loadContactTemplates(); }, []);
 
   // Abrir la ficha del contacto cuando se pide desde otra vista (ej. botón "Contacto"
@@ -3329,27 +3527,6 @@ function ContactsPanel({
       setEditingId(focusedContact.id);
     }
   }, [focusedContact.id, focusedContact.signal, contacts]);
-
-  useEffect(() => {
-    if (!editing) return;
-    const info = editing.imported_payload?.contact_info as { notes?: string; additional?: Array<{ id: string; title: string; value: string }> } | undefined;
-    const arca = editing.imported_payload?.arca as Record<string, string> | undefined;
-    setForm({
-      displayName: editing.display_name ?? "",
-      phone: editing.phone,
-      email: editing.email ?? "",
-      cuit: editing.cuit ?? "",
-      tags: editing.tags ?? [],
-      contactType: editing.contact_type || "prospecto",
-      assignedTo: editing.assigned_to ?? "",
-      notes: info?.notes ?? "",
-      domicilio: arca?.domicilio ?? "",
-      codigoPostal: arca?.codigoPostal ?? "",
-      localidad: arca?.localidad ?? "",
-      provincia: arca?.provincia ?? "",
-      additional: info?.additional ?? []
-    });
-  }, [editingId]);
 
   async function loadContacts(nextQuery = query) {
     setLoading(true);
@@ -3373,27 +3550,6 @@ function ContactsPanel({
     setNewContactForm((cur) => ({ ...cur, templateId: cur.templateId || pickInitialTemplateId(activeTemplates) }));
   }
 
-  async function lookupAfip() {
-    const cuit = form.cuit.replace(/\D/g, "");
-    if (cuit.length !== 11) { setMessage("El CUIT debe tener 11 dígitos."); return; }
-    setAfipLoading(true);
-    setMessage("");
-    const res = await fetch(`/api/afip?cuit=${cuit}`);
-    const data = await readJsonResponse(res);
-    setAfipLoading(false);
-    if (!res.ok) { setMessage(data?.error ?? "No pudimos consultar ARCA."); return; }
-    setForm((f) => ({
-      ...f,
-      displayName: f.displayName || data.razonSocial || f.displayName,
-      domicilio: data.domicilio ?? f.domicilio,
-      codigoPostal: data.codigoPostal ?? f.codigoPostal,
-      localidad: data.localidad ?? f.localidad,
-      provincia: data.provincia ?? f.provincia
-    }));
-    setMessage(`ARCA: ${data.razonSocial ?? "datos cargados"}`);
-    setTimeout(() => setMessage(""), 3000);
-  }
-
   async function createContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (newContactForm.sendTemplate && !newContactForm.templateId) { setMessage("Selecciona una plantilla inicial."); return; }
@@ -3411,40 +3567,6 @@ function ContactsPanel({
     setShowNewForm(false);
     setMessage(newContactForm.sendTemplate ? "Contacto creado y plantilla enviada." : "Contacto creado.");
     onContactCreated({ conversationId: payload.conversationId, conversations: payload?.conversations ?? [] });
-  }
-
-  async function saveContact(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!editing) return;
-    setSaving(true); setMessage("");
-    const response = await fetch("/api/contacts", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        contactId: editing.id,
-        displayName: form.displayName,
-        phone: form.phone,
-        email: form.email || null,
-        cuit: form.cuit || null,
-        tags: form.tags,
-        contactType: form.contactType,
-        consultype: form.tags[0] ?? editing.consultype,
-        assignedTo: form.assignedTo || null,
-        contactInfo: { notes: form.notes, additional: form.additional },
-        afipData: (form.domicilio || form.codigoPostal || form.localidad || form.provincia)
-          ? { domicilio: form.domicilio, codigoPostal: form.codigoPostal, localidad: form.localidad, provincia: form.provincia }
-          : null
-      })
-    });
-    const payload = await readJsonResponse(response);
-    setSaving(false);
-    if (!response.ok) { setMessage(payload?.error ?? "No pudimos guardar el contacto."); return; }
-    const nextContacts: ContactSummary[] = payload?.contacts ?? [];
-    setContacts(nextContacts);
-    const savedContact = nextContacts.find((c) => c.id === editing.id);
-    if (savedContact) onContactSaved(savedContact);
-    setMessage("Guardado.");
-    setTimeout(() => setMessage(""), 2000);
   }
 
   function searchContacts(event: FormEvent<HTMLFormElement>) {
@@ -3526,132 +3648,19 @@ function ContactsPanel({
         </div>
       ) : null}
 
-      {/* Edit modal */}
+      {/* Edit modal (componente reutilizable) */}
       {editing ? (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setEditingId(null); }}>
-          <div className="modal-card contacts-modal">
-            <div className="modal-header">
-              <span><UsersRound size={16} /> {editing.display_name || editing.phone}</span>
-              <button className="icon-btn" onClick={() => setEditingId(null)} type="button">✕</button>
-            </div>
-            <form className="modal-body" onSubmit={saveContact}>
-
-              {/* Datos personales */}
-              <div className="form-grid">
-                <label className="field">
-                  Nombre y apellido
-                  <input value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
-                </label>
-                <label className="field">
-                  WhatsApp
-                  <input required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                </label>
-                <label className="field wide">
-                  Email
-                  <input type="email" placeholder="correo@ejemplo.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                </label>
-              </div>
-
-              {/* CUIT + ARCA */}
-              <div className="cuit-row">
-                <label className="field" style={{ flex: 1 }}>
-                  CUIT
-                  <input
-                    placeholder="20-12345678-9"
-                    value={form.cuit}
-                    onChange={(e) => setForm({ ...form, cuit: e.target.value })}
-                  />
-                </label>
-                <button type="button" className="secondary small cuit-lookup-btn" disabled={afipLoading} onClick={lookupAfip}>
-                  {afipLoading ? "Consultando..." : "Consultar ARCA"}
-                </button>
-              </div>
-
-              {/* Dirección (cargada desde ARCA o manual) */}
-              <div className="form-grid">
-                <label className="field wide">
-                  Domicilio
-                  <input placeholder="Calle y número" value={form.domicilio} onChange={(e) => setForm({ ...form, domicilio: e.target.value })} />
-                </label>
-                <label className="field">
-                  Localidad
-                  <input placeholder="Localidad" value={form.localidad} onChange={(e) => setForm({ ...form, localidad: e.target.value })} />
-                </label>
-                <label className="field">
-                  Código postal
-                  <input placeholder="CP" value={form.codigoPostal} onChange={(e) => setForm({ ...form, codigoPostal: e.target.value })} />
-                </label>
-                <label className="field wide">
-                  Provincia
-                  <input placeholder="Provincia" value={form.provincia} onChange={(e) => setForm({ ...form, provincia: e.target.value })} />
-                </label>
-              </div>
-
-              {/* Tipo + Asignado */}
-              <div className="form-grid">
-                <label className="field">
-                  Tipo
-                  <select value={form.contactType} onChange={(e) => setForm({ ...form, contactType: e.target.value })}>
-                    <option value="prospecto">Prospecto</option>
-                    <option value="cliente">Cliente</option>
-                    <option value="revendedor">Revendedor</option>
-                    <option value="tecnico">Técnico</option>
-                  </select>
-                </label>
-                <label className="field">
-                  Asignado a
-                  <select value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}>
-                    <option value="">Sin asignar</option>
-                    {users.map((user) => (
-                      <option key={user.id} value={user.id}>{user.full_name}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              {/* Etiquetas multi-select */}
-              <div className="field-group">
-                <span className="field-label">Etiquetas</span>
-                <TagPicker selected={form.tags} onChange={(tags) => setForm({ ...form, tags })} />
-              </div>
-
-              {/* Notas */}
-              <label className="field">
-                Notas internas
-                <textarea rows={3} placeholder="Notas sobre este contacto..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-              </label>
-
-              {/* Info adicional */}
-              <div className="additional-info">
-                <div className="additional-header">
-                  <span>Info adicional</span>
-                  <button type="button" className="secondary small" onClick={() => setForm({ ...form, additional: [...form.additional, { id: crypto.randomUUID(), title: "", value: "" }] })}>+ Agregar</button>
-                </div>
-                {form.additional.map((item, idx) => (
-                  <div className="additional-row" key={item.id}>
-                    <input placeholder="Campo" value={item.title} onChange={(e) => { const next = [...form.additional]; next[idx] = { ...item, title: e.target.value }; setForm({ ...form, additional: next }); }} />
-                    <input placeholder="Valor" value={item.value} onChange={(e) => { const next = [...form.additional]; next[idx] = { ...item, value: e.target.value }; setForm({ ...form, additional: next }); }} />
-                    <button type="button" className="icon-btn danger" onClick={() => setForm({ ...form, additional: form.additional.filter((_, i) => i !== idx) })}>✕</button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="contact-meta">
-                <span>Origen: {editing.imported_from || editing.source || "manual"}</span>
-                <span>Visto: {formatMessageTime(editing.last_seen_at)}</span>
-                {editing.conversation_id ? <span>Conv: {editing.conversation_status}</span> : null}
-              </div>
-
-              <div className="modal-actions">
-                <button className="secondary" onClick={() => setEditingId(null)} type="button">Cerrar</button>
-                <button className="primary" disabled={saving} type="submit">
-                  <Save size={15} /> {saving ? "Guardando..." : "Guardar"}
-                </button>
-              </div>
-              {message ? <span className={`inline ${message.includes("pudimos") ? "warn" : "ok"}`}>{message}</span> : null}
-            </form>
-          </div>
-        </div>
+        <ContactEditorModal
+          contact={editing}
+          users={users}
+          onClose={() => setEditingId(null)}
+          onSaved={(saved, allContacts) => {
+            setContacts(allContacts);
+            onContactSaved(saved);
+            setMessage("Guardado.");
+            setTimeout(() => setMessage(""), 2000);
+          }}
+        />
       ) : null}
 
       {/* New contact modal */}
@@ -4750,7 +4759,6 @@ function InboxList({
   onSetFavorite,
   resetMobileDetailSignal,
   onToggleFavorite,
-  onOpenContact,
   users
 }: {
   conversations: ConversationSummary[];
@@ -4763,7 +4771,6 @@ function InboxList({
   onSetFavorite: (conversationId: string, active: boolean) => void;
   resetMobileDetailSignal: number;
   onToggleFavorite: (conversationId: string) => void;
-  onOpenContact: (contactId: string) => void;
   users: AppUser[];
 }) {
   const [items, setItems] = useState(conversations);
@@ -4891,6 +4898,10 @@ function InboxList({
     notes: "",
     additional: [] as ContactAdditionalInfo[]
   });
+  // Ficha completa del contacto abierta como overlay SOBRE la conversación (estilo FEBO-REV):
+  // no cambia de vista; al cerrar seguís en la conversación.
+  const [editorContact, setEditorContact] = useState<ContactSummary | null>(null);
+  const [editorLoading, setEditorLoading] = useState(false);
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
   const visibleDueFollowUps = useMemo(
     () => dueFollowUps.filter((followUp) => !dismissedDueFollowUps.includes(followUp.id)),
@@ -6120,6 +6131,19 @@ function InboxList({
     }));
   }
 
+  async function openContactEditor() {
+    if (!selected?.contact_id || !selected.phone || editorLoading) return;
+    setEditorLoading(true);
+    try {
+      const res = await fetch(`/api/contacts?q=${encodeURIComponent(selected.phone)}`);
+      const payload = await readJsonResponse(res);
+      const found = (payload?.contacts as ContactSummary[] | undefined)?.find((c) => c.id === selected.contact_id);
+      if (found) setEditorContact(found);
+    } finally {
+      setEditorLoading(false);
+    }
+  }
+
   async function saveContactDetails(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
 
@@ -6970,9 +6994,7 @@ function InboxList({
             <div className="toolbar">
               <button
                 className="contact-open-button"
-                onClick={() => {
-                  if (selected.contact_id) onOpenContact(selected.contact_id);
-                }}
+                onClick={() => void openContactEditor()}
                 title="Abrir ficha completa del contacto"
                 type="button"
               >
@@ -7144,6 +7166,27 @@ function InboxList({
                   </button>
                 </form>
               </aside>
+            ) : null}
+
+            {editorContact ? (
+              <ContactEditorModal
+                contact={editorContact}
+                users={users}
+                onClose={() => setEditorContact(null)}
+                onSaved={(saved) => {
+                  setItems((prev) => prev.map((it) => it.contact_id === saved.id
+                    ? {
+                        ...it,
+                        display_name: saved.display_name,
+                        consultype: saved.consultype,
+                        contact_type: saved.contact_type,
+                        assigned_to: saved.assigned_to,
+                        assigned_name: saved.assigned_name
+                      }
+                    : it));
+                  setEditorContact(null);
+                }}
+              />
             ) : null}
 
             {summaryOpen ? (

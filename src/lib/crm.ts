@@ -1,5 +1,24 @@
 import crypto from "node:crypto";
+import { config } from "./config";
 import { getSql, isDbConfigured } from "./db";
+
+/**
+ * Vuelca/actualiza un contacto en la base de clientes unificada (CRM central).
+ * Dedup server-side por CUIT → email → whatsapp. Requiere INTERNAL_SERVICE_SECRET
+ * (mismo valor que el selector) para autenticar. Fire-and-forget: nunca rompe el flujo.
+ */
+function upsertClienteUnificado(payload: Record<string, unknown>) {
+  const secret = config.INTERNAL_SERVICE_SECRET;
+  if (!secret) return; // sin secret el endpoint responde 401 — evitamos la llamada inútil
+  fetch("https://febecos.com/api/admin?action=upsert_cliente", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${secret}`
+    },
+    body: JSON.stringify(payload)
+  }).catch(() => {});
+}
 
 export type AppUser = {
   id: string;
@@ -2179,16 +2198,12 @@ export async function recordIncomingMessage(input: {
 
   // Volcar contacto nuevo a la base de clientes unificada (fire-and-forget, dedup por whatsapp)
   if (isNewContact) {
-    fetch("https://febecos.com/api/admin?action=upsert_cliente", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo: "cliente_final",
-        nombre: input.contactName ?? null,
-        whatsapp: phone,
-        origen: "febo_ai"
-      })
-    }).catch(() => {});
+    upsertClienteUnificado({
+      tipo: "cliente_final",
+      nombre: input.contactName ?? null,
+      whatsapp: phone,
+      origen: "febo_ai"
+    });
   }
 
   const existing = (await sql`
@@ -2326,15 +2341,11 @@ export async function recordSelectorCheckoutLead(input: SelectorCheckoutLead) {
 
   // Volcar a la base de clientes unificada si es contacto nuevo
   if (isNewSelectorContact) {
-    fetch("https://febecos.com/api/admin?action=upsert_cliente", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo: "cliente_final",
-        whatsapp: phone,
-        origen: "selector"
-      })
-    }).catch(() => {});
+    upsertClienteUnificado({
+      tipo: "cliente_final",
+      whatsapp: phone,
+      origen: "selector"
+    });
   }
 
   const existingConversation = (await sql`
@@ -3025,8 +3036,25 @@ export async function updateContact(input: {
         ),
         updated_at = now()
     where id = ${input.contactId}
-    returning id::text
-  `) as Array<{ id: string }>;
+    returning id::text, phone, display_name, email, cuit
+  `) as Array<{ id: string; phone: string | null; display_name: string | null; email: string | null; cuit: string | null }>;
+
+  // Cuando se graba un email, volcarlo a la base de clientes unificada (dedup CUIT→email→whatsapp)
+  const saved = rows[0];
+  if (saved?.email && saved.phone) {
+    upsertClienteUnificado({
+      tipo: "cliente_final",
+      nombre: saved.display_name ?? null,
+      whatsapp: saved.phone,
+      email: saved.email,
+      cuit: saved.cuit ?? null,
+      domicilio: input.afipData?.domicilio ?? null,
+      localidad: input.afipData?.localidad ?? null,
+      provincia: input.afipData?.provincia ?? null,
+      cod_postal: input.afipData?.codigoPostal ?? null,
+      origen: "febo_ai"
+    });
+  }
 
   if (input.assignedTo !== undefined) {
     await sql`

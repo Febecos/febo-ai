@@ -152,6 +152,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Conversacion no encontrada." }, { status: 404 });
   }
 
+  const channel = {
+    phoneNumberId: target.account_phone_number_id,
+    accessToken: target.account_access_token
+  };
+
   try {
     const usesQrBridge = isWhatsAppQrBridge({
       provider: target.account_provider,
@@ -173,15 +178,15 @@ export async function POST(request: NextRequest) {
 
       if (mediaKind === "video") {
         try {
-          const sent = await sendWhatsAppVideoLink(target.phone, parsed.data.media.url, caption);
+          const sent = await sendWhatsAppVideoLink(target.phone, parsed.data.media.url, caption, channel);
           waMessageId = getSentMessageId(sent);
         } catch (videoError) {
-          const sent = await sendWhatsAppDocumentLink(target.phone, parsed.data.media.url, parsed.data.media.filename, caption);
+          const sent = await sendWhatsAppDocumentLink(target.phone, parsed.data.media.url, parsed.data.media.filename, caption, channel);
           waMessageId = getSentMessageId(sent);
           console.warn("WhatsApp linked video send failed; sent as document instead.", videoError);
         }
       } else {
-        const sent = await sendWhatsAppDocumentLink(target.phone, parsed.data.media.url, parsed.data.media.filename, caption);
+        const sent = await sendWhatsAppDocumentLink(target.phone, parsed.data.media.url, parsed.data.media.filename, caption, channel);
         waMessageId = getSentMessageId(sent);
       }
 
@@ -215,26 +220,26 @@ export async function POST(request: NextRequest) {
       let uploaded: { id: string } | null = null;
 
       if (mediaKind === "audio") {
-        uploaded = await uploadWhatsAppMedia(whatsappFile);
-        const sent = await sendWhatsAppAudio(target.phone, uploaded.id);
+        uploaded = await uploadWhatsAppMedia(whatsappFile, channel);
+        const sent = await sendWhatsAppAudio(target.phone, uploaded.id, channel);
         waMessageId = getSentMessageId(sent);
       } else if (mediaKind === "image") {
-        uploaded = await uploadWhatsAppMedia(whatsappFile);
-        const sent = await sendWhatsAppImage(target.phone, uploaded.id, caption);
+        uploaded = await uploadWhatsAppMedia(whatsappFile, channel);
+        const sent = await sendWhatsAppImage(target.phone, uploaded.id, caption, channel);
         waMessageId = getSentMessageId(sent);
       } else if (mediaKind === "video") {
-        uploaded = await uploadWhatsAppMedia(whatsappFile);
+        uploaded = await uploadWhatsAppMedia(whatsappFile, channel);
         try {
-          const sent = await sendWhatsAppVideo(target.phone, uploaded.id, caption);
+          const sent = await sendWhatsAppVideo(target.phone, uploaded.id, caption, channel);
           waMessageId = getSentMessageId(sent);
         } catch (videoError) {
-          const sent = await sendWhatsAppDocument(target.phone, uploaded.id, whatsappFile.name || file.name || "video.mp4", caption);
+          const sent = await sendWhatsAppDocument(target.phone, uploaded.id, whatsappFile.name || file.name || "video.mp4", caption, channel);
           waMessageId = getSentMessageId(sent);
           console.warn("WhatsApp video send failed; sent as document instead.", videoError);
         }
       } else {
-        uploaded = await uploadWhatsAppMedia(whatsappFile);
-        const sent = await sendWhatsAppDocument(target.phone, uploaded.id, whatsappFile.name || file.name || "archivo", caption);
+        uploaded = await uploadWhatsAppMedia(whatsappFile, channel);
+        const sent = await sendWhatsAppDocument(target.phone, uploaded.id, whatsappFile.name || file.name || "archivo", caption, channel);
         waMessageId = getSentMessageId(sent);
       }
 
@@ -288,7 +293,7 @@ export async function POST(request: NextRequest) {
             body: parsed.data.text,
             conversationId: parsed.data.conversationId
           })
-        : await sendWhatsAppText(target.phone, parsed.data.text, replyToWaMessageId);
+        : await sendWhatsAppText(target.phone, parsed.data.text, replyToWaMessageId, { channel });
       await recordManualOutboundMessage({
         conversationId: parsed.data.conversationId,
         contactId: target.contact_id,

@@ -538,14 +538,25 @@ export async function downloadWhatsAppMedia(mediaId: string) {
   };
 }
 
+export type WaChannelCreds = {
+  phoneNumberId?: string | null;
+  accessToken?: string | null;
+};
+
+function resolveWaCreds(channel?: WaChannelCreds) {
+  return {
+    phoneNumberId: channel?.phoneNumberId || requireEnv("WHATSAPP_PHONE_NUMBER_ID"),
+    accessToken: channel?.accessToken || requireEnv("WHATSAPP_ACCESS_TOKEN")
+  };
+}
+
 export async function sendWhatsAppText(
   to: string,
   body: string,
   replyToWaMessageId?: string | null,
-  opts: { contactId?: string | null; campaign?: string | null } = {}
+  opts: { contactId?: string | null; campaign?: string | null; channel?: WaChannelCreds } = {}
 ) {
-  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
-  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+  const { phoneNumberId, accessToken } = resolveWaCreds(opts.channel);
 
   const decoratedBody = decorateLinksWithUtm(body, opts);
 
@@ -757,9 +768,8 @@ export async function sendWhatsAppTemplate(input: {
   return response.json();
 }
 
-export async function uploadWhatsAppMedia(file: File) {
-  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
-  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+export async function uploadWhatsAppMedia(file: File, channel?: WaChannelCreds) {
+  const { phoneNumberId, accessToken } = resolveWaCreds(channel);
   const formData = new FormData();
 
   formData.append("messaging_product", "whatsapp");
@@ -780,9 +790,8 @@ export async function uploadWhatsAppMedia(file: File) {
   return (await response.json()) as { id: string };
 }
 
-export async function sendWhatsAppAudio(to: string, mediaId: string) {
-  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
-  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+export async function sendWhatsAppAudio(to: string, mediaId: string, channel?: WaChannelCreds) {
+  const { phoneNumberId, accessToken } = resolveWaCreds(channel);
 
   const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
     method: "POST",
@@ -808,9 +817,8 @@ export async function sendWhatsAppAudio(to: string, mediaId: string) {
   return response.json();
 }
 
-export async function sendWhatsAppImage(to: string, mediaId: string, caption?: string) {
-  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
-  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+export async function sendWhatsAppImage(to: string, mediaId: string, caption?: string, channel?: WaChannelCreds) {
+  const { phoneNumberId, accessToken } = resolveWaCreds(channel);
 
   const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
     method: "POST",
@@ -837,9 +845,8 @@ export async function sendWhatsAppImage(to: string, mediaId: string, caption?: s
   return response.json();
 }
 
-export async function sendWhatsAppVideo(to: string, mediaId: string, caption?: string) {
-  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
-  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+export async function sendWhatsAppVideo(to: string, mediaId: string, caption?: string, channel?: WaChannelCreds) {
+  const { phoneNumberId, accessToken } = resolveWaCreds(channel);
 
   const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
     method: "POST",
@@ -866,9 +873,8 @@ export async function sendWhatsAppVideo(to: string, mediaId: string, caption?: s
   return response.json();
 }
 
-export async function sendWhatsAppVideoLink(to: string, link: string, caption?: string) {
-  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
-  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+export async function sendWhatsAppVideoLink(to: string, link: string, caption?: string, channel?: WaChannelCreds) {
+  const { phoneNumberId, accessToken } = resolveWaCreds(channel);
 
   const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
     method: "POST",
@@ -895,9 +901,8 @@ export async function sendWhatsAppVideoLink(to: string, link: string, caption?: 
   return response.json();
 }
 
-export async function sendWhatsAppDocument(to: string, mediaId: string, filename: string, caption?: string) {
-  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
-  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+export async function sendWhatsAppDocument(to: string, mediaId: string, filename: string, caption?: string, channel?: WaChannelCreds) {
+  const { phoneNumberId, accessToken } = resolveWaCreds(channel);
 
   const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
     method: "POST",
@@ -925,9 +930,8 @@ export async function sendWhatsAppDocument(to: string, mediaId: string, filename
   return response.json();
 }
 
-export async function sendWhatsAppDocumentLink(to: string, link: string, filename: string, caption?: string) {
-  const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
-  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+export async function sendWhatsAppDocumentLink(to: string, link: string, filename: string, caption?: string, channel?: WaChannelCreds) {
+  const { phoneNumberId, accessToken } = resolveWaCreds(channel);
 
   const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
     method: "POST",

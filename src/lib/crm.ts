@@ -90,6 +90,8 @@ export type ConversationReplyTarget = {
   account_provider: string | null;
   bridge_url: string | null;
   bridge_token: string | null;
+  account_phone_number_id: string | null;
+  account_access_token: string | null;
 };
 
 export type ContactSummary = {
@@ -3743,7 +3745,9 @@ export async function getConversationReplyTarget(conversationId: string) {
       ca.slug as account_slug,
       ca.settings->>'provider' as account_provider,
       ca.settings->>'bridge_url' as bridge_url,
-      ca.settings->>'bridge_token' as bridge_token
+      ca.settings->>'bridge_token' as bridge_token,
+      ca.external_account_id as account_phone_number_id,
+      ca.settings->>'access_token' as account_access_token
     from conversations c
     join contacts ct on ct.id = c.contact_id
     left join channel_accounts ca on ca.id = c.account_id

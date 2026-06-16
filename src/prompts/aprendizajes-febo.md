@@ -175,6 +175,7 @@ Caso real (mal): el cliente pasó el **CUIT** (foto de constancia), la **razón 
 - Nada de botones "Sí, asesor / No, seguir" en ese punto.
 - Mencionar el **horario comercial 9 a 19 hs** y que el asesor sigue por el mismo WhatsApp.
 - Si va a facturar a una razón social y todavía faltara el CUIT, aclarar que **el asesor se lo pide al contactarlo** — no frenar la derivación por eso.
+- **Etiqueta:** con CUIT + email entregados, el lead pasa a **`caliente`** (no `cotizado`). Es el lead más caliente posible.
 
 ---
 
@@ -183,6 +184,7 @@ Caso real (mal): el cliente pasó el **CUIT** (foto de constancia), la **razón 
 - Apenas le pasás el **precio/cotización** al cliente, la etiqueta (consultype) pasa a **`cotizado`** (o `caliente` si además dijo que quiere avanzar/comprar/pagar).
 - **`pasar-presupuesto` es SOLO mientras el precio está pendiente** (pidió precio pero todavía no se lo diste). Nunca dejes `pasar-presupuesto` después de haber pasado el precio.
 - Caso real (mal): a Ángel se le pasó la cotización completa (equipo + $1.660.477) pero quedó como "Pasar Presupuesto". Debió quedar `cotizado`.
+- **⭐ Cuando el cliente pasa CUIT + email (datos del presupuesto formal) → consultype = `caliente`.** Es el lead más caliente que hay: ya dio datos fiscales para facturar. NUNCA lo dejes en `cotizado` ni `pasar-presupuesto` en ese punto.
 
 ## Tono / criterio
 

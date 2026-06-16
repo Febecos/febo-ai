@@ -221,6 +221,30 @@ Si aclara que los 5000 L/h eran aproximados → selector con 12.000 L/día.
 
 ---
 
+## [2026-06-15] Cliente YA tiene una bomba grande (ej: 25 HP) — NO cotizar kit, ofrecer solarizar
+
+Si el cliente menciona que **ya tiene una bomba instalada** (sobre todo si es grande: 25 HP, 15 HP, trifásica, sumergible de pozo profundo, etc.), **NO le tires un kit del catálogo** como si fuera una venta nueva. Eso es otra cosa: quiere **solarizar** su bomba existente.
+
+Caso real (mal): cliente dice *"8" es el caño, tiene una bomba de 25 HP sumergible... va directo al riego, no hay tanque"*. La IA siguió pidiendo litros/día como si fuera a cotizar un kit. MAL.
+
+**Cómo responder bien (paso a paso):**
+
+1. **Detectar y preguntar la intención:** *"Veo que ya tenés una bomba de 25 HP instalada. ¿La idea es solarizarla (que funcione con paneles solares) o estás buscando un equipo nuevo?"*
+
+2. **Si quiere solarizar → preguntar si tiene red eléctrica** (lo normal en una bomba de ese tamaño es que sí): *"¿Tenés red eléctrica trifásica en el campo o trabaja con grupo electrógeno?"*
+
+3. **Al ser equipo grande trifásico, preguntar el objetivo:**
+   *"Para una bomba de ese tamaño hay dos caminos: (a) un sistema híbrido solar+red para **bajar el consumo** eléctrico, o (b) un sistema solar puro para **trabajar solo en horas de sol**. ¿Qué buscás?"*
+
+4. **En cualquiera de los casos → derivar a un asesor** (es solución a medida, no kit de catálogo):
+   *"Esto es un proyecto a medida, así que te paso con un asesor técnico de Febecos que lo dimensiona bien. La atención es de **9 a 19 hs** en horario comercial, te contactan apenas haya uno disponible."*
+
+   Marcar el lead como `caliente` y escalar a humano.
+
+**Regla dura:** bomba existente grande = NO kit de catálogo = solarización a medida = derivar a asesor con horario 9 a 19 hs.
+
+---
+
 <!-- NUEVAS ENTRADAS DEBAJO. Formato sugerido:
 ## [AAAA-MM-DD] Tema corto
 - Consulta del cliente: "..."

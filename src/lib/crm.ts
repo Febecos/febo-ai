@@ -3069,6 +3069,49 @@ export async function updateContact(input: {
   return rows[0] ?? null;
 }
 
+/**
+ * Persiste el CUIT/email que el agente detectó en la conversación (texto o constancia)
+ * y vuelca ese contacto a la base de clientes unificada. Solo escribe lo que viene
+ * (coalesce), nunca pisa con null. Es el camino automático del flujo de presupuesto.
+ */
+export async function saveDetectedContactData(input: {
+  contactId: string;
+  cuit?: string | null;
+  email?: string | null;
+  nombre?: string | null;
+}) {
+  if (!isDbConfigured() || !input.contactId) return;
+
+  const cuit = input.cuit ? input.cuit.replace(/\D/g, "") || null : null;
+  const email = input.email ? input.email.trim().toLowerCase() || null : null;
+  if (!cuit && !email) return;
+
+  const sql = getSql();
+  const rows = (await sql`
+    update contacts
+    set cuit = coalesce(${cuit}, cuit),
+        email = coalesce(${email}, email),
+        display_name = coalesce(display_name, ${input.nombre ?? null}),
+        updated_at = now()
+    where id = ${input.contactId}
+    returning phone, display_name, email, cuit
+  `) as Array<{ phone: string | null; display_name: string | null; email: string | null; cuit: string | null }>;
+
+  const saved = rows[0];
+  // Volcar al CRM unificado: cuando el cliente da datos fiscales (cuit/email) es el
+  // lead más caliente, debe quedar en clientes. Dedup server-side CUIT→email→whatsapp.
+  if (saved?.phone && (saved.email || saved.cuit)) {
+    upsertClienteUnificado({
+      tipo: "cliente_final",
+      nombre: saved.display_name ?? null,
+      whatsapp: saved.phone,
+      email: saved.email ?? null,
+      cuit: saved.cuit ?? null,
+      origen: "febo_ai"
+    });
+  }
+}
+
 export async function listConversationMessages(conversationId: string, limit = 120) {
   if (!isDbConfigured()) {
     return [];

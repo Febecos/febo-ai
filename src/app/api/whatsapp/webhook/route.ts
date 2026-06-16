@@ -12,6 +12,7 @@ import {
   recordFollowUpSuggestion,
   recordIncomingMessage,
   recordWhatsAppMessageStatuses,
+  saveDetectedContactData,
   saveMessageMedia,
   updateMessageBody
 } from "@/lib/crm";
@@ -635,6 +636,16 @@ async function sendAutomaticReply(input: {
       replyOptions: sentReplyOptions
     });
 
+    // Si el cliente pasó CUIT y/o email, guardarlos en el contacto y volcar al CRM unificado
+    if (stored.contactId && (result.cuitDetectado || result.emailDetectado)) {
+      await saveDetectedContactData({
+        contactId: stored.contactId,
+        cuit: result.cuitDetectado ?? null,
+        email: result.emailDetectado ?? null,
+        nombre: result.nombre ?? null
+      });
+    }
+
     // Registrar segundo mensaje como burbuja separada (sin needsHuman ni botones)
     if (result.segundoMensaje && sent2) {
       await recordAgentReply({
@@ -741,7 +752,9 @@ function buildAgentFallbackResult() {
     imagenes: [],
     archivos: [],
     action: "create_ticket" as const,
-    actionSubject: "fallback por error de respuesta automatica"
+    actionSubject: "fallback por error de respuesta automatica",
+    cuitDetectado: null,
+    emailDetectado: null
   };
 }
 

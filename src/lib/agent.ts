@@ -41,7 +41,9 @@ const agentSchema = z.object({
   imagenes: z.array(z.string()),
   archivos: z.array(z.string()),
   action: z.enum(["none", "create_lead", "create_ticket", "record_event", "send_selector_flow"]),
-  actionSubject: z.string().nullable()
+  actionSubject: z.string().nullable(),
+  cuitDetectado: z.string().nullable().optional(),
+  emailDetectado: z.string().nullable().optional()
 });
 
 export type AgentResult = z.infer<typeof agentSchema>;
@@ -305,6 +307,7 @@ export async function runFebecosAgent(input: {
       "Si selectorQuote no esta disponible pero falta algun dato tecnico, pedi solo ese dato. No inventes precios ni modelos.",
       "Si selectorQuote.error existe, deriva o pedi disculpas brevemente; no inventes una cotizacion alternativa.",
       "Solo si el cliente ya confirmo que quiere asesor, si pidio compra/cierre/factura/envio/pago, o si el caso requiere solucion a medida, entonces tu respuesta puede decir que lo vas a pasar/derivar y escalar debe ser true.",
+      "Datos fiscales: si el cliente proporciona su CUIT (en texto o en una imagen de constancia AFIP/ARCA) o su email, devolvelos en cuitDetectado y emailDetectado. Si en este mensaje no los dio, dejalos en null. No inventes ni completes con datos de mensajes viejos: solo lo que aparece ahora.",
       "Regla de integracion: devolve exclusivamente JSON valido con las claves del esquema pedido.",
       "No muestres el JSON al usuario final; el campo respuesta es el unico texto que se envia por WhatsApp.",
       "Si no hay catalogo, stock o precio disponible en el contexto, no inventes modelos ni importes: pedi el dato faltante o escala segun las reglas del prompt."
@@ -346,7 +349,9 @@ export async function runFebecosAgent(input: {
                 imagenes: "array de ids/urls de imagenes a enviar, si aplica",
                 archivos: "array de ids/urls de archivos a enviar, si aplica",
                 action: "none | create_lead | create_ticket | record_event | send_selector_flow",
-                actionSubject: "resumen corto opcional"
+                actionSubject: "resumen corto opcional",
+                cuitDetectado: "CUIT del cliente si lo proporcionó en este mensaje o imagen (constancia AFIP/ARCA), solo dígitos o con guiones; null si no lo dio",
+                emailDetectado: "email del cliente si lo proporcionó en este mensaje; null si no lo dio"
               }
             })
           }
@@ -370,7 +375,9 @@ export async function runFebecosAgent(input: {
             "imagenes",
             "archivos",
             "action",
-            "actionSubject"
+            "actionSubject",
+            "cuitDetectado",
+            "emailDetectado"
           ],
           properties: {
             respuesta: { type: "string" },
@@ -397,7 +404,9 @@ export async function runFebecosAgent(input: {
               type: "string",
               enum: ["none", "create_lead", "create_ticket", "record_event", "send_selector_flow"]
             },
-            actionSubject: { type: ["string", "null"] }
+            actionSubject: { type: ["string", "null"] },
+            cuitDetectado: { type: ["string", "null"] },
+            emailDetectado: { type: ["string", "null"] }
           }
         },
         strict: true

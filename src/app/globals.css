@@ -7025,6 +7025,11 @@ select {
   margin-top: 4px;
 }
 
+.modal-card.contacts-modal {
+  max-height: 92vh;
+  max-width: 760px;
+}
+
 .contacts-modal .contact-meta {
   color: var(--muted);
   display: flex;

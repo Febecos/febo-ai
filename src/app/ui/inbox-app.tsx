@@ -638,6 +638,10 @@ function ToolWorkspace({
             resetMobileDetailSignal={conversationNavSignal}
             onSetFavorite={setConversationFavorite}
             onToggleFavorite={toggleFavorite}
+            onOpenContact={(contactId) => {
+              setFocusedContact({ id: contactId, signal: Date.now() });
+              setActiveTool("contacts");
+            }}
             users={users}
           />
         ) : null}
@@ -3314,12 +3318,17 @@ function ContactsPanel({
 
   useEffect(() => { void loadContacts(); void loadContactTemplates(); }, []);
 
+  // Abrir la ficha del contacto cuando se pide desde otra vista (ej. botón "Contacto"
+  // en la conversación). Como los contactos cargan async al montar el panel, reintentamos
+  // cuando la lista cambia, una sola vez por signal.
+  const handledFocusSignal = useRef(0);
   useEffect(() => {
-    if (focusedContact.id) {
-      const found = contacts.find((c) => c.id === focusedContact.id);
-      if (found) setEditingId(found.id);
+    if (!focusedContact.id || focusedContact.signal === handledFocusSignal.current) return;
+    if (contacts.some((c) => c.id === focusedContact.id)) {
+      handledFocusSignal.current = focusedContact.signal;
+      setEditingId(focusedContact.id);
     }
-  }, [focusedContact.id, focusedContact.signal]);
+  }, [focusedContact.id, focusedContact.signal, contacts]);
 
   useEffect(() => {
     if (!editing) return;
@@ -4741,6 +4750,7 @@ function InboxList({
   onSetFavorite,
   resetMobileDetailSignal,
   onToggleFavorite,
+  onOpenContact,
   users
 }: {
   conversations: ConversationSummary[];
@@ -4753,6 +4763,7 @@ function InboxList({
   onSetFavorite: (conversationId: string, active: boolean) => void;
   resetMobileDetailSignal: number;
   onToggleFavorite: (conversationId: string) => void;
+  onOpenContact: (contactId: string) => void;
   users: AppUser[];
 }) {
   const [items, setItems] = useState(conversations);
@@ -6957,7 +6968,15 @@ function InboxList({
             </div>
 
             <div className="toolbar">
-              <button className="contact-open-button" onClick={() => setContactDetailOpen((open) => !open)} type="button">
+              <button
+                className="contact-open-button"
+                onClick={() => {
+                  if (selected.contact_id) onOpenContact(selected.contact_id);
+                }}
+                title="Abrir ficha completa del contacto"
+                type="button"
+              >
+                <UsersRound size={15} />
                 <span>Contacto</span>
                 <strong>{selected.display_name || selected.phone}</strong>
               </button>

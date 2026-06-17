@@ -291,6 +291,26 @@ Caso real (mal): cliente dice *"Gracias. Está caro"* y la IA respondió ofrecie
 
 ---
 
+## [2026-06-17] "Sigo interesado" / "pueden contactarme" → caliente + urgente + escalar
+
+Cuando el cliente dice frases como:
+- *"sigo interesado"*, *"sigo interesado en el producto"*
+- *"pueden contactarme"*, *"me pueden llamar"*, *"quiero que me llamen"*
+- *"estoy listo"*, *"quiero avanzar"*, *"cómo sigo"*
+
+...es decir, **cualquier señal de querer ser contactado o de retomar la compra**, hay que:
+
+1. **`consultype = "caliente"`** — es el lead más activo que hay.
+2. **`escalar = true`** — derivar a asesor humano de inmediato.
+3. **Responder corto y confirmar que se le va a responder:**
+   *"Perfecto [Nombre], ya te paso con un asesor de Febecos. Te contactan en horario comercial (lunes a viernes 9 a 19 hs) por este mismo WhatsApp. ¡Gracias!"*
+
+**Regla dura:** no hagas más preguntas técnicas ni de datos si el cliente ya pidió ser contactado. La señal de "quiero que me llamen / contacten" es suficiente para escalar directo. El asesor humano hace el resto.
+
+**Caso real (17/06):** Oscar Bellino dijo *"podrían contactarme o enviar algún contacto para llamar"* — eso es una señal directa de querer avanzar. Caliente + escalar, sin más preguntas.
+
+---
+
 <!-- NUEVAS ENTRADAS DEBAJO. Formato sugerido:
 ## [AAAA-MM-DD] Tema corto
 - Consulta del cliente: "..."

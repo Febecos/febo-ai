@@ -166,20 +166,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // El comprobante de pago se procesa SIEMPRE, esté la IA activa o no:
+    // cuando el cliente paga, la conversacion normalmente ya la tomo un humano
+    // (IA desactivada). Igual hay que confirmar, etiquetar y registrar Purchase.
+    if (paymentProofDetected) {
+      schedulePaymentConfirmation({ message, stored });
+      continue;
+    }
+
     if (!stored.aiEnabled) {
       continue;
     }
 
-    if (paymentProofDetected) {
-      schedulePaymentConfirmation({ message, stored });
-    } else {
-      scheduleAutomaticReply({
-        message,
-        interactiveId: isText ? message.interactiveId : undefined,
-        agentMessage,
-        stored
-      });
-    }
+    scheduleAutomaticReply({
+      message,
+      interactiveId: isText ? message.interactiveId : undefined,
+      agentMessage,
+      stored
+    });
   }
 
   return NextResponse.json({ ok: true });

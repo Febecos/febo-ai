@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import { config } from "./config";
 
 export type EmailAttachment = {
@@ -6,10 +7,37 @@ export type EmailAttachment = {
   content: string;
 };
 
+let transporter: nodemailer.Transporter | null = null;
+
+function getTransporter() {
+  if (transporter) {
+    return transporter;
+  }
+
+  const host = config.SMTP_HOST;
+  const user = config.SMTP_USER;
+  const pass = config.SMTP_PASS;
+
+  if (!host || !user || !pass) {
+    return null;
+  }
+
+  const port = Number(config.SMTP_PORT) || 465;
+
+  transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass }
+  });
+
+  return transporter;
+}
+
 /**
- * Envía un email interno vía la API REST de Resend (sin dependencia npm).
- * Requiere RESEND_API_KEY en el entorno; si falta, no rompe el flujo: loguea y sale.
- * El dominio del remitente (febecos.com) debe estar verificado en Resend.
+ * Envía un email interno vía SMTP (Neolo — la misma casilla que usa el resto del
+ * ecosistema Febecos). El remitente es la casilla autenticada (SMTP_USER, ej.
+ * ventas@febecos.com). Si faltan credenciales SMTP, no rompe el flujo: loguea y sale.
  */
 export async function sendInternalEmail(input: {
   to?: string;
@@ -18,38 +46,29 @@ export async function sendInternalEmail(input: {
   html: string;
   attachments?: EmailAttachment[];
 }): Promise<boolean> {
-  const apiKey = config.RESEND_API_KEY;
+  const tx = getTransporter();
 
-  if (!apiKey) {
-    console.warn("[mailer] RESEND_API_KEY no configurado; no se envió el email interno.");
+  if (!tx) {
+    console.warn("[mailer] SMTP no configurado (SMTP_HOST/USER/PASS); no se envió el email interno.");
     return false;
   }
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        from: input.from ?? config.PAYMENT_NOTIFY_FROM,
-        to: input.to ?? config.PAYMENT_NOTIFY_TO,
-        subject: input.subject,
-        html: input.html,
-        attachments: input.attachments?.length ? input.attachments : undefined
-      })
+    await tx.sendMail({
+      from: input.from ?? `"${config.PAYMENT_NOTIFY_FROM_NAME}" <${config.SMTP_USER}>`,
+      to: input.to ?? config.PAYMENT_NOTIFY_TO,
+      subject: input.subject,
+      html: input.html,
+      attachments: input.attachments?.map((attachment) => ({
+        filename: attachment.filename,
+        content: attachment.content,
+        encoding: "base64"
+      }))
     });
-
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      console.error("[mailer] Resend respondió error:", res.status, detail);
-      return false;
-    }
 
     return true;
   } catch (error) {
-    console.error("[mailer] No pudimos enviar el email interno.", error);
+    console.error("[mailer] No pudimos enviar el email interno por SMTP.", error);
     return false;
   }
 }

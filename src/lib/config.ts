@@ -30,8 +30,11 @@ const schema = z.object({
   CLOUDFLARE_R2_BUCKET: z.string().optional(),
   CLOUDFLARE_R2_PUBLIC_BASE_URL: z.string().url().optional(),
   CRON_SECRET: z.string().optional(),
-  RESEND_API_KEY: z.string().optional(),
-  PAYMENT_NOTIFY_FROM: z.string().default("Febecos Ventas <ventas@febecos.com>"),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().default("465"),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  PAYMENT_NOTIFY_FROM_NAME: z.string().default("Febecos Ventas"),
   PAYMENT_NOTIFY_TO: z.string().default("administracion@febecos.com")
 });
 

@@ -324,7 +324,7 @@ Esto corre **esté la IA activa o no** (el caso normal es que ya la haya tomado 
 
 5. Envía un **email interno** desde `ventas@febecos.com` a `administracion@febecos.com` con el **comprobante adjunto**, detectando por el CBU/CVU de la imagen en qué cuenta ingresó el pago. Las cuentas salen de la fuente única `febecos.com/api/config-banco` (panel admin → Cuentas bancarias, solo las activas). Si no matchea ninguna cuenta, manda el email igual avisando "no se pudo detectar la cuenta, verificar manualmente".
 
-> ⚙️ El email sale por **SMTP de Neolo** (la misma casilla que usa todo el ecosistema), NO Resend. Requiere en el entorno de febo-ai (Vercel): `SMTP_HOST` (mail.febecos.com), `SMTP_PORT` (465), `SMTP_USER` (ventas@febecos.com), `SMTP_PASS` (pass Neolo de ventas@). Destinatario configurable con `PAYMENT_NOTIFY_TO` (default administracion@febecos.com).
+> ⚙️ El email sale por **Resend** (el mismo transporte que usa todo el ecosistema Febecos; dominio febecos.com verificado). Requiere en el entorno de febo-ai (Vercel): `RESEND_API_KEY`. Opcionales con default: `RESEND_FROM` ("Febecos Ventas <ventas@febecos.com>"), `PAYMENT_NOTIFY_TO` ("administracion@febecos.com").
 
 Cuando el asesor envíe el archivo de **remito** por WhatsApp desde FEBO AI (nombre con "remito"), el sistema cambia automáticamente la etiqueta a **`cliente`**.
 

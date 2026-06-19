@@ -15,6 +15,7 @@ import {
   recordWhatsAppMessageStatuses,
   saveDetectedContactData,
   saveMessageMedia,
+  updateConversation,
   updateMessageBody
 } from "@/lib/crm";
 import { sendPushNotificationToAll } from "@/lib/push";
@@ -385,7 +386,7 @@ async function sendPaymentConfirmation(input: {
   stored: StoredIncomingMessage;
 }) {
   const { message, stored } = input;
-  const confirmationText = "¡Muchas gracias por el comprobante! Ya lo registramos. En breve el equipo te envía la factura y te confirma los datos del envío.";
+  const confirmationText = "¡Muchas gracias por el comprobante! Administración lo estará revisando para continuar la operatoria.";
   const sent = await sendWhatsAppText(message.from, confirmationText, null, {
     contactId: stored.contactId ?? null
   });
@@ -398,6 +399,17 @@ async function sendPaymentConfirmation(input: {
     needsHuman: false,
     waMessageId: getSentMessageId(sent)
   });
+
+  // Al recibir un comprobante la IA NO debe seguir respondiendo: lo toma
+  // administracion. Apagamos el toggle y solo dejamos marcado el Purchase.
+  if (stored.threadId) {
+    await updateConversation({
+      conversationId: stored.threadId,
+      aiEnabled: false,
+      actorUserId: null,
+      actorName: "FEBO AI"
+    }).catch((e) => console.error("No pudimos desactivar la IA tras el comprobante.", e));
+  }
 
   if (stored.threadId) {
     await createManualConversationEvent({

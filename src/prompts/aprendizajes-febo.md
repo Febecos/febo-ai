@@ -313,14 +313,18 @@ Cuando el cliente dice frases como:
 
 ## [2026-06-19] Comprobante de pago → flujo automático
 
-Cuando el cliente envía una imagen que es un comprobante de pago (transferencia, Mercado Pago, recibo bancario), el sistema lo detecta automáticamente y:
+Cuando el cliente envía una imagen que es un comprobante de pago (transferencia, Mercado Pago, recibo bancario), el sistema lo detecta automáticamente (visión GPT-4o mini) y:
 
-1. Envía confirmación al cliente: *"¡Muchas gracias por el comprobante! Ya lo registramos. En breve el equipo te envía la factura y te confirma los datos del envío."*
+1. Responde al cliente SOLO esto: *"¡Muchas gracias por el comprobante! Administración lo estará revisando para continuar la operatoria."*
 2. Cambia la etiqueta a **`otro`** (Pendiente factura, envío o remito)
-3. Registra el evento **Purchase** automáticamente
-4. Deja la IA **activa** (verde) — no escala ni pausa la conversación
+3. Registra el evento **Purchase** (queda marcado como enviado)
+4. **Apaga la IA** de esa conversación — a partir del comprobante lo maneja administración, la IA no responde más
 
-**El asesor no necesita hacer nada manualmente** — el evento Purchase ya queda registrado. El asesor debe preparar la factura y el remito, y cuando envíe el archivo de remito por WhatsApp desde FEBO AI, el sistema cambia automáticamente la etiqueta a **`cliente`**.
+Esto corre **esté la IA activa o no** (el caso normal es que ya la haya tomado un humano).
+
+**Próximo paso (en desarrollo):** enviar un email interno desde `ventas@` a `administracion@febecos.com` con el comprobante adjunto, detectando por el CBU de la imagen en qué cuenta ingresó el pago (según las cuentas cargadas en el admin de febecos.com).
+
+Cuando el asesor envíe el archivo de **remito** por WhatsApp desde FEBO AI (nombre con "remito"), el sistema cambia automáticamente la etiqueta a **`cliente`**.
 
 ---
 

@@ -160,6 +160,41 @@ async function getOperatingPrompt() {
   return operatingPrompt;
 }
 
+export async function classifyAsPaymentProof(dataBase64: string, mimeType: string): Promise<boolean> {
+  try {
+    const response = await getOpenAI().responses.create({
+      model: "gpt-4o-mini",
+      instructions: "Analiza la imagen. Responde SOLO con: si / no — sin nada más.",
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: "¿Esta imagen es un comprobante de pago, transferencia bancaria, recibo de depósito o pago (Mercado Pago, banco, billetera virtual, etc.)?"
+            },
+            {
+              type: "input_image",
+              image_url: `data:${mimeType};base64,${dataBase64}`,
+              detail: "low"
+            }
+          ]
+        }
+      ]
+    });
+
+    const answer = response.output_text
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "");
+
+    return answer.startsWith("si");
+  } catch {
+    return false;
+  }
+}
+
 export async function transcribeAudio(input: {
   dataBase64: string;
   mimeType: string;

@@ -1,8 +1,9 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import { refreshConversationMemory, runFebecosAgent, transcribeAudio } from "@/lib/agent";
+import { classifyAsPaymentProof, refreshConversationMemory, runFebecosAgent, transcribeAudio } from "@/lib/agent";
 import { config } from "@/lib/config";
 import { getSql } from "@/lib/db";
 import {
+  createManualConversationEvent,
   deliverOutgoingWebhooks,
   getAutomaticReplyCandidate,
   getPumpCatalogExtras,
@@ -138,6 +139,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let paymentProofDetected = false;
+
     if (isWhatsAppMediaMessage(message) && stored.messageId) {
       try {
         const media = await downloadWhatsAppMedia(message.mediaId);
@@ -153,6 +156,10 @@ export async function POST(request: NextRequest) {
         });
 
         agentMessage = getInboundMediaBody(message);
+
+        if (message.type === "image" && media.dataBase64) {
+          paymentProofDetected = await classifyAsPaymentProof(media.dataBase64, media.mimeType).catch(() => false);
+        }
       } catch (error) {
         console.error("No pudimos procesar archivo de WhatsApp.", error);
         await updateMessageBody(stored.messageId, `${getInboundMediaLabel(message)} recibido (no pudimos descargarlo).`);
@@ -163,12 +170,16 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    scheduleAutomaticReply({
-      message,
-      interactiveId: isText ? message.interactiveId : undefined,
-      agentMessage,
-      stored
-    });
+    if (paymentProofDetected) {
+      schedulePaymentConfirmation({ message, stored });
+    } else {
+      scheduleAutomaticReply({
+        message,
+        interactiveId: isText ? message.interactiveId : undefined,
+        agentMessage,
+        stored
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });
@@ -350,6 +361,49 @@ function formatArs(value: number) {
 
 type InboundWhatsAppMessage = ReturnType<typeof extractInboundMessages>[number];
 type StoredIncomingMessage = Awaited<ReturnType<typeof recordIncomingMessage>>;
+
+function schedulePaymentConfirmation(input: {
+  message: InboundWhatsAppMessage;
+  stored: StoredIncomingMessage;
+}) {
+  after(async () => {
+    try {
+      await sleep(5_000);
+      await sendPaymentConfirmation(input);
+    } catch (error) {
+      console.error("No pudimos confirmar el comprobante de pago.", error);
+    }
+  });
+}
+
+async function sendPaymentConfirmation(input: {
+  message: InboundWhatsAppMessage;
+  stored: StoredIncomingMessage;
+}) {
+  const { message, stored } = input;
+  const confirmationText = "¡Muchas gracias por el comprobante! Ya lo registramos. En breve el equipo te envía la factura y te confirma los datos del envío.";
+  const sent = await sendWhatsAppText(message.from, confirmationText, null, {
+    contactId: stored.contactId ?? null
+  });
+
+  await recordAgentReply({
+    contactId: stored.contactId,
+    threadId: stored.threadId,
+    answer: confirmationText,
+    intent: "otro",
+    needsHuman: false,
+    waMessageId: getSentMessageId(sent)
+  });
+
+  if (stored.threadId) {
+    await createManualConversationEvent({
+      conversationId: stored.threadId,
+      event: "manual_purchase",
+      actorUserId: null,
+      actorName: "FEBO AI"
+    }).catch((e) => console.error("No pudimos registrar el evento Purchase.", e));
+  }
+}
 
 function scheduleAutomaticReply(input: {
   message: InboundWhatsAppMessage;

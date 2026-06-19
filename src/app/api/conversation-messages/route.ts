@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
-import { getConversationReplyTarget, listConversationMessages, recordManualOutboundMessage, saveMessageMedia, softDeleteMessage, updateMessageBody } from "@/lib/crm";
+import { getConversationReplyTarget, listConversationMessages, recordManualOutboundMessage, saveMessageMedia, softDeleteMessage, updateConversation, updateMessageBody } from "@/lib/crm";
 import { getWhatsAppQrSentMessageId, isWhatsAppQrBridge, sendWhatsAppQrText } from "@/lib/whatsapp-qr";
 import {
   sendWhatsAppAudio,
@@ -260,6 +260,15 @@ export async function POST(request: NextRequest) {
         fileSize: whatsappFile.size,
         dataBase64: buffer.toString("base64")
       });
+
+      if (isRemitoFilename(whatsappFile.name || file.name || "")) {
+        await updateConversation({
+          conversationId: parsed.data.conversationId,
+          consultype: "cliente",
+          actorUserId: user.id,
+          actorName: user.full_name
+        }).catch((e) => console.error("No pudimos actualizar etiqueta post-remito.", e));
+      }
     } else if ("kind" in parsed.data && parsed.data.kind === "selector-flow") {
       if (usesQrBridge) {
         return NextResponse.json({ error: "El selector Flow solo esta disponible en WhatsApp Cloud API." }, { status: 400 });
@@ -314,6 +323,10 @@ export async function POST(request: NextRequest) {
     ok: true,
     messages: await listConversationMessages(parsed.data.conversationId)
   });
+}
+
+function isRemitoFilename(filename: string): boolean {
+  return /remito/i.test(filename);
 }
 
 function sanitizeBlobPathname(filename: string) {

@@ -160,38 +160,82 @@ async function getOperatingPrompt() {
   return operatingPrompt;
 }
 
-export async function classifyAsPaymentProof(dataBase64: string, mimeType: string): Promise<boolean> {
+export type PaymentProofAnalysis = {
+  esComprobante: boolean;
+  cbuDestino: string | null;
+  aliasDestino: string | null;
+  titularDestino: string | null;
+  monto: string | null;
+};
+
+export async function analyzePaymentProof(dataBase64: string, mimeType: string): Promise<PaymentProofAnalysis> {
+  const empty: PaymentProofAnalysis = {
+    esComprobante: false,
+    cbuDestino: null,
+    aliasDestino: null,
+    titularDestino: null,
+    monto: null
+  };
+
   try {
     const response = await getOpenAI().responses.create({
       model: "gpt-4o-mini",
-      instructions: "Analiza la imagen. Responde SOLO con: si / no — sin nada más.",
+      instructions: [
+        "Analiza si la imagen es un comprobante de pago/transferencia (Mercado Pago, banco, billetera virtual, depósito).",
+        "Si lo es, extraé los datos de la cuenta DESTINO (a quién se le pagó / 'Para' / destinatario), no del que paga.",
+        "cbuDestino: el CBU o CVU de destino (solo dígitos, sin espacios) si aparece; null si no.",
+        "aliasDestino: el alias de la cuenta destino si aparece; null si no.",
+        "titularDestino: nombre del titular de la cuenta destino si aparece; null si no.",
+        "monto: el importe transferido tal cual figura (ej '$2.535.641'); null si no.",
+        "Devolvé exclusivamente JSON válido con el esquema pedido."
+      ].join("\n"),
       input: [
         {
           role: "user",
           content: [
             {
               type: "input_text",
-              text: "¿Esta imagen es un comprobante de pago, transferencia bancaria, recibo de depósito o pago (Mercado Pago, banco, billetera virtual, etc.)?"
+              text: "Analizá esta imagen y devolvé el JSON pedido."
             },
             {
               type: "input_image",
               image_url: `data:${mimeType};base64,${dataBase64}`,
-              detail: "low"
+              detail: "high"
             }
           ]
         }
-      ]
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "payment_proof_analysis",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["esComprobante", "cbuDestino", "aliasDestino", "titularDestino", "monto"],
+            properties: {
+              esComprobante: { type: "boolean" },
+              cbuDestino: { type: ["string", "null"] },
+              aliasDestino: { type: ["string", "null"] },
+              titularDestino: { type: ["string", "null"] },
+              monto: { type: ["string", "null"] }
+            }
+          },
+          strict: true
+        }
+      }
     });
 
-    const answer = response.output_text
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "");
-
-    return answer.startsWith("si");
+    const parsed = JSON.parse(normalizeJson(response.output_text)) as PaymentProofAnalysis;
+    return {
+      esComprobante: Boolean(parsed.esComprobante),
+      cbuDestino: parsed.cbuDestino ? parsed.cbuDestino.replace(/\D/g, "") || null : null,
+      aliasDestino: parsed.aliasDestino || null,
+      titularDestino: parsed.titularDestino || null,
+      monto: parsed.monto || null
+    };
   } catch {
-    return false;
+    return empty;
   }
 }
 

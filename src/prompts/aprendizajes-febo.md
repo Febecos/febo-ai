@@ -322,7 +322,9 @@ Cuando el cliente envía una imagen que es un comprobante de pago (transferencia
 
 Esto corre **esté la IA activa o no** (el caso normal es que ya la haya tomado un humano).
 
-**Próximo paso (en desarrollo):** enviar un email interno desde `ventas@` a `administracion@febecos.com` con el comprobante adjunto, detectando por el CBU de la imagen en qué cuenta ingresó el pago (según las cuentas cargadas en el admin de febecos.com).
+5. Envía un **email interno** desde `ventas@febecos.com` a `administracion@febecos.com` con el **comprobante adjunto**, detectando por el CBU/CVU de la imagen en qué cuenta ingresó el pago. Las cuentas salen de la fuente única `febecos.com/api/config-banco` (panel admin → Cuentas bancarias, solo las activas). Si no matchea ninguna cuenta, manda el email igual avisando "no se pudo detectar la cuenta, verificar manualmente".
+
+> ⚙️ Requiere `RESEND_API_KEY` en el entorno de febo-ai (Vercel). El dominio febecos.com debe estar verificado en Resend. From/To configurables con `PAYMENT_NOTIFY_FROM` / `PAYMENT_NOTIFY_TO`.
 
 Cuando el asesor envíe el archivo de **remito** por WhatsApp desde FEBO AI (nombre con "remito"), el sistema cambia automáticamente la etiqueta a **`cliente`**.
 

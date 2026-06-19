@@ -1,5 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import { classifyAsPaymentProof, refreshConversationMemory, runFebecosAgent, transcribeAudio } from "@/lib/agent";
+import { analyzePaymentProof, PaymentProofAnalysis, refreshConversationMemory, runFebecosAgent, transcribeAudio } from "@/lib/agent";
+import { fetchActiveBankAccounts, matchBankAccount } from "@/lib/banks";
+import { sendInternalEmail } from "@/lib/mailer";
 import { config } from "@/lib/config";
 import { getSql } from "@/lib/db";
 import {
@@ -140,7 +142,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    let paymentProofDetected = false;
+    let paymentProof: PaymentProofAnalysis | null = null;
+    let paymentProofImage: { base64: string; mime: string } | null = null;
 
     if (isWhatsAppMediaMessage(message) && stored.messageId) {
       try {
@@ -159,7 +162,11 @@ export async function POST(request: NextRequest) {
         agentMessage = getInboundMediaBody(message);
 
         if (message.type === "image" && media.dataBase64) {
-          paymentProofDetected = await classifyAsPaymentProof(media.dataBase64, media.mimeType).catch(() => false);
+          const analysis = await analyzePaymentProof(media.dataBase64, media.mimeType).catch(() => null);
+          if (analysis?.esComprobante) {
+            paymentProof = analysis;
+            paymentProofImage = { base64: media.dataBase64, mime: media.mimeType };
+          }
         }
       } catch (error) {
         console.error("No pudimos procesar archivo de WhatsApp.", error);
@@ -169,9 +176,10 @@ export async function POST(request: NextRequest) {
 
     // El comprobante de pago se procesa SIEMPRE, esté la IA activa o no:
     // cuando el cliente paga, la conversacion normalmente ya la tomo un humano
-    // (IA desactivada). Igual hay que confirmar, etiquetar y registrar Purchase.
-    if (paymentProofDetected) {
-      schedulePaymentConfirmation({ message, stored });
+    // (IA desactivada). Igual hay que confirmar, etiquetar, registrar Purchase
+    // y avisar a administracion por mail con el comprobante adjunto.
+    if (paymentProof && paymentProofImage) {
+      schedulePaymentConfirmation({ message, stored, analysis: paymentProof, image: paymentProofImage });
       continue;
     }
 
@@ -370,6 +378,8 @@ type StoredIncomingMessage = Awaited<ReturnType<typeof recordIncomingMessage>>;
 function schedulePaymentConfirmation(input: {
   message: InboundWhatsAppMessage;
   stored: StoredIncomingMessage;
+  analysis: PaymentProofAnalysis;
+  image: { base64: string; mime: string };
 }) {
   after(async () => {
     try {
@@ -384,8 +394,10 @@ function schedulePaymentConfirmation(input: {
 async function sendPaymentConfirmation(input: {
   message: InboundWhatsAppMessage;
   stored: StoredIncomingMessage;
+  analysis: PaymentProofAnalysis;
+  image: { base64: string; mime: string };
 }) {
-  const { message, stored } = input;
+  const { message, stored, analysis, image } = input;
   const confirmationText = "¡Muchas gracias por el comprobante! Administración lo estará revisando para continuar la operatoria.";
   const sent = await sendWhatsAppText(message.from, confirmationText, null, {
     contactId: stored.contactId ?? null
@@ -411,6 +423,11 @@ async function sendPaymentConfirmation(input: {
     }).catch((e) => console.error("No pudimos desactivar la IA tras el comprobante.", e));
   }
 
+  // Aviso interno a administracion con el comprobante adjunto.
+  await notifyAdministracionDelPago({ message, analysis, image }).catch((e) =>
+    console.error("No pudimos avisar a administracion del comprobante.", e)
+  );
+
   if (stored.threadId) {
     await createManualConversationEvent({
       conversationId: stored.threadId,
@@ -419,6 +436,61 @@ async function sendPaymentConfirmation(input: {
       actorName: "FEBO AI"
     }).catch((e) => console.error("No pudimos registrar el evento Purchase.", e));
   }
+}
+
+async function notifyAdministracionDelPago(input: {
+  message: InboundWhatsAppMessage;
+  analysis: PaymentProofAnalysis;
+  image: { base64: string; mime: string };
+}) {
+  const { message, analysis, image } = input;
+
+  const accounts = await fetchActiveBankAccounts();
+  const matched = matchBankAccount(accounts, { cbu: analysis.cbuDestino, alias: analysis.aliasDestino });
+
+  const clienteNombre = message.contactName?.trim() || "Cliente sin nombre";
+  const cuentaLinea = matched
+    ? `<strong>${escapeHtml(matched.titulo)}</strong> — ${escapeHtml(matched.banco ?? "")} · CBU ${escapeHtml(matched.cbu ?? "")}${matched.alias ? ` · Alias ${escapeHtml(matched.alias)}` : ""}`
+    : "<strong>⚠️ No se pudo detectar la cuenta destino</strong> — verificar manualmente con el comprobante adjunto.";
+
+  const detectado = [
+    analysis.cbuDestino ? `CBU/CVU detectado: ${escapeHtml(analysis.cbuDestino)}` : null,
+    analysis.aliasDestino ? `Alias detectado: ${escapeHtml(analysis.aliasDestino)}` : null,
+    analysis.titularDestino ? `Titular detectado: ${escapeHtml(analysis.titularDestino)}` : null
+  ].filter(Boolean).join("<br>");
+
+  const subject = matched
+    ? `Nuevo pago por transferencia — verificar ingreso en ${matched.titulo}`
+    : "Nuevo pago por transferencia — cuenta a verificar";
+
+  const html = [
+    `<p>Se recibió un comprobante de pago de <strong>${escapeHtml(clienteNombre)}</strong> (WhatsApp ${escapeHtml(message.from)}).</p>`,
+    analysis.monto ? `<p><strong>Monto:</strong> ${escapeHtml(analysis.monto)}</p>` : "",
+    `<p><strong>Verificar el ingreso en la cuenta:</strong><br>${cuentaLinea}</p>`,
+    detectado ? `<p style="color:#555;font-size:13px">Datos leídos del comprobante:<br>${detectado}</p>` : "",
+    "<p>El comprobante va adjunto a este email.</p>"
+  ].filter(Boolean).join("\n");
+
+  const extension = image.mime.includes("png") ? "png" : image.mime.includes("webp") ? "webp" : "jpg";
+
+  await sendInternalEmail({
+    subject,
+    html,
+    attachments: [
+      {
+        filename: `comprobante-${message.from}.${extension}`,
+        content: image.base64
+      }
+    ]
+  });
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function scheduleAutomaticReply(input: {

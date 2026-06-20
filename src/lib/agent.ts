@@ -320,9 +320,13 @@ export async function runFebecosAgent(input: {
     return farewellResult;
   }
 
+  // Para dimensionar/correr el selector NUNCA usamos el texto del anuncio de Meta:
+  // sus specs de marketing ("Hasta 33.000 L/dia", "perforaciones de 5 a 40 mts")
+  // son del PRODUCTO, no del cliente. Lo limpiamos del mensaje y del historial
+  // antes de extraer datos, asi el selector no corre con numeros inventados.
   const quoteExtraction = await extractQuoteRequest({
-    message: input.message,
-    history: conversationHistory,
+    message: stripAdContext(input.message),
+    history: conversationHistory.map((message) => ({ ...message, text: stripAdContext(message.text) })),
     memory: conversationMemory
   });
   const selectorQuote = await getSelectorQuote(quoteExtraction);
@@ -716,6 +720,20 @@ function normalizeSpanish(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+// Quita el bloque de contexto del anuncio de Meta ("[Vino de un anuncio...]")
+// que el webhook adjunta al final del mensaje. El anuncio trae specs de
+// marketing del producto (litros/dia, profundidad) que NO son datos del cliente
+// y romperian el dimensionamiento si el selector las tomara como requerimiento.
+// El bloque siempre se agrega al final, asi que cortamos desde el marcador.
+function stripAdContext(text: string) {
+  if (!text) {
+    return text;
+  }
+
+  const index = text.search(/\[Vino de un anuncio/i);
+  return index >= 0 ? text.slice(0, index).trim() : text;
 }
 
 async function extractQuoteRequest(input: {

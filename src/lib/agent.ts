@@ -195,13 +195,19 @@ export async function analyzePaymentProof(dataBase64: string, mimeType: string):
           content: [
             {
               type: "input_text",
-              text: "Analizá esta imagen y devolvé el JSON pedido."
+              text: "Analizá este comprobante (imagen o PDF) y devolvé el JSON pedido."
             },
-            {
-              type: "input_image",
-              image_url: `data:${mimeType};base64,${dataBase64}`,
-              detail: "high"
-            }
+            mimeType.includes("pdf")
+              ? {
+                  type: "input_file",
+                  filename: "comprobante.pdf",
+                  file_data: `data:application/pdf;base64,${dataBase64}`
+                }
+              : {
+                  type: "input_image",
+                  image_url: `data:${mimeType};base64,${dataBase64}`,
+                  detail: "high"
+                }
           ]
         }
       ],

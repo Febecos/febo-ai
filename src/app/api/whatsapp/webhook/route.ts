@@ -161,7 +161,15 @@ export async function POST(request: NextRequest) {
 
         agentMessage = getInboundMediaBody(message);
 
-        if (message.type === "image" && media.dataBase64) {
+        // El comprobante puede venir como imagen O como documento PDF
+        // (muchos bancos/billeteras lo mandan en PDF). Analizamos ambos.
+        const isImage = message.type === "image";
+        const isPdfDoc =
+          message.type === "document" &&
+          ((media.mimeType ?? "").toLowerCase().includes("pdf") ||
+            (message.filename ?? "").toLowerCase().endsWith(".pdf"));
+
+        if ((isImage || isPdfDoc) && media.dataBase64) {
           const analysis = await analyzePaymentProof(media.dataBase64, media.mimeType).catch(() => null);
           if (analysis?.esComprobante) {
             paymentProof = analysis;
@@ -471,7 +479,13 @@ async function notifyAdministracionDelPago(input: {
     "<p>El comprobante va adjunto a este email.</p>"
   ].filter(Boolean).join("\n");
 
-  const extension = image.mime.includes("png") ? "png" : image.mime.includes("webp") ? "webp" : "jpg";
+  const extension = image.mime.includes("pdf")
+    ? "pdf"
+    : image.mime.includes("png")
+      ? "png"
+      : image.mime.includes("webp")
+        ? "webp"
+        : "jpg";
 
   await sendInternalEmail({
     subject,

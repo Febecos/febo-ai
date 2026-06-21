@@ -15,6 +15,7 @@ import {
   recordFollowUpSuggestion,
   recordIncomingMessage,
   recordWhatsAppMessageStatuses,
+  findPedidosForPayment,
   getContactBillingInfo,
   saveDetectedContactData,
   saveMessageMedia,
@@ -473,6 +474,15 @@ async function notifyAdministracionDelPago(input: {
   const matched = matchBankAccount(accounts, { cbu: analysis.cbuDestino, alias: analysis.aliasDestino });
 
   const clienteNombre = billing?.display_name?.trim() || message.contactName?.trim() || "Cliente sin nombre";
+
+  // Buscar el/los pedido(s) que pueden corresponder a este pago (DB central compartida).
+  const montoArs = parseMontoArs(analysis.monto);
+  const pedidos = await findPedidosForPayment({
+    nombre: clienteNombre !== "Cliente sin nombre" ? clienteNombre : null,
+    cuit: billing?.cuit ?? null,
+    phone: message.from,
+    montoArs
+  }).catch(() => []);
   const cuentaLinea = matched
     ? `<strong>${escapeHtml(matched.titulo)}</strong> — ${escapeHtml(matched.banco ?? "")} · CBU ${escapeHtml(matched.cbu ?? "")}${matched.alias ? ` · Alias ${escapeHtml(matched.alias)}` : ""}`
     : "<strong>⚠️ No se pudo detectar la cuenta destino</strong> — verificar manualmente con el comprobante adjunto.";
@@ -496,10 +506,27 @@ async function notifyAdministracionDelPago(input: {
     ? `Nuevo pago por transferencia — verificar ingreso en ${matched.titulo}`
     : "Nuevo pago por transferencia — cuenta a verificar";
 
+  // Pedido(s) que pueden corresponder a este pago.
+  const fmtPesos = (n: number | null) =>
+    typeof n === "number" ? new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n) : "—";
+  const matchLabel = { nombre: "por nombre", cuit: "por CUIT", telefono: "por WhatsApp", monto: "por monto" };
+  const pedidosLinea = pedidos.length
+    ? pedidos
+        .map((p) => {
+          const flag = p.montoMatch ? " ✅ <strong>coincide el monto</strong>" : "";
+          const total = p.totalPesos ? ` · Total aprox. ${fmtPesos(p.totalPesos)}` : "";
+          return `<li><strong>${escapeHtml(p.pedidoNumero)}</strong> — ${escapeHtml(p.clienteNombre)} · estado ${escapeHtml(p.estado ?? "—")}${total} <span style="color:#888">(${matchLabel[p.matchedBy]})</span>${flag}</li>`;
+        })
+        .join("")
+    : null;
+
   const html = [
     `<p>Se recibió un comprobante de pago.</p>`,
     `<p><strong>Cliente:</strong><br>${clienteDatos}</p>`,
     analysis.monto ? `<p><strong>Monto:</strong> ${escapeHtml(analysis.monto)}</p>` : "",
+    pedidosLinea
+      ? `<p><strong>Pedido(s) que podrían corresponder:</strong></p><ul>${pedidosLinea}</ul>`
+      : "<p style=\"color:#888\">No se encontró un pedido que coincida automáticamente — verificar a mano.</p>",
     `<p><strong>Verificar el ingreso en la cuenta:</strong><br>${cuentaLinea}</p>`,
     detectado ? `<p style="color:#555;font-size:13px">Datos leídos del comprobante:<br>${detectado}</p>` : "",
     "<p>El comprobante va adjunto a este email.</p>"
@@ -531,6 +558,17 @@ function escapeHtml(value: string) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+// Parsea un monto en formato argentino ("$5.101.500,00") a número en pesos.
+function parseMontoArs(value: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+  // Quitar todo salvo dígitos, punto y coma; punto = miles, coma = decimal.
+  const clean = value.replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", ".");
+  const num = Number(clean);
+  return Number.isFinite(num) && num > 0 ? num : null;
 }
 
 function scheduleAutomaticReply(input: {

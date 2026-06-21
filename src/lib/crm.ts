@@ -2968,6 +2968,161 @@ export async function listContacts(filters: ContactFilters = {}) {
   `) as ContactSummary[];
 }
 
+export type PedidoMatch = {
+  pedidoNumero: string;
+  presupuestoNumero: string | null;
+  estado: string | null;
+  clienteNombre: string;
+  totalPesos: number | null;
+  moneda: string | null;
+  montoMatch: boolean;
+  matchedBy: "nombre" | "cuit" | "telefono" | "monto";
+};
+
+function pedidoTotalPesos(precio: unknown, moneda: string | null, tc: unknown): number | null {
+  const valor = Number(precio);
+  if (!Number.isFinite(valor) || valor <= 0) {
+    return null;
+  }
+  // En la DB, precio_ofrecido suele estar en USD y `tc` es el tipo de cambio a pesos
+  // (la columna `moneda` no es confiable: a veces dice "ARS" con tc=1500). Regla:
+  // si hay tc > 1, el precio está en USD → convertir a pesos multiplicando por tc.
+  const cambio = Number(tc);
+  if (Number.isFinite(cambio) && cambio > 1) {
+    return valor * cambio;
+  }
+  // Sin tc: si la moneda es USD no podemos convertir con confianza → null;
+  // si es pesos (o no especifica), el valor ya está en pesos.
+  const esUsd = /usd|u\$|dol/i.test(moneda ?? "");
+  return esUsd ? null : valor;
+}
+
+/**
+ * Busca pedidos (FV) que puedan corresponder a un pago recibido, en la DB central
+ * compartida (presupuestos + fv_pedidos). Prioridad de match pedida por el equipo:
+ * nombre+apellido → CUIT → WhatsApp → monto. Devuelve candidatos rankeados.
+ */
+export async function findPedidosForPayment(input: {
+  nombre?: string | null;
+  cuit?: string | null;
+  phone?: string | null;
+  montoArs?: number | null;
+}): Promise<PedidoMatch[]> {
+  if (!isDbConfigured()) {
+    return [];
+  }
+
+  const sql = getSql();
+  const cuitDigits = (input.cuit ?? "").replace(/\D/g, "");
+  const phone8 = (input.phone ?? "").replace(/\D/g, "").slice(-8);
+  const name = (input.nombre ?? "").trim().toLowerCase();
+  const nameLike = name ? `%${name}%` : "";
+  const montoArs = typeof input.montoArs === "number" && input.montoArs > 0 ? input.montoArs : null;
+
+  type Row = {
+    presupuesto_numero: string | null;
+    cliente_nombre: string | null;
+    cliente_apellido: string | null;
+    cliente_razon_social: string | null;
+    cliente_cuit: string | null;
+    cliente_telefono: string | null;
+    precio_ofrecido: string | number | null;
+    moneda: string | null;
+    tc: string | number | null;
+    pedido_numero: string;
+    pedido_estado: string | null;
+  };
+
+  // Candidatos por identidad (cuit / telefono / nombre) entre presupuestos con pedido FV.
+  const identidad = (await sql`
+    SELECT p.numero AS presupuesto_numero, p.cliente_nombre, p.cliente_apellido,
+           p.cliente_razon_social, p.cliente_cuit, p.cliente_telefono,
+           p.precio_ofrecido, p.moneda, p.tc,
+           fp.numero AS pedido_numero, fp.estado AS pedido_estado
+    FROM presupuestos p
+    JOIN fv_pedidos fp ON fp.payload->>'presupuesto_numero' = p.numero
+    WHERE
+      (${cuitDigits} <> '' AND regexp_replace(coalesce(p.cliente_cuit,''), '[^0-9]', '', 'g') = ${cuitDigits})
+      OR (${phone8} <> '' AND right(regexp_replace(coalesce(p.cliente_telefono,''), '[^0-9]', '', 'g'), 8) = ${phone8})
+      OR (${nameLike} <> '' AND lower(trim(coalesce(p.cliente_nombre,'') || ' ' || coalesce(p.cliente_apellido,''))) LIKE ${nameLike})
+    ORDER BY p.created_at DESC
+    LIMIT 15
+  `) as Row[];
+
+  // Para match por monto, además traemos los pedidos FV más recientes.
+  const recientes = montoArs
+    ? ((await sql`
+        SELECT p.numero AS presupuesto_numero, p.cliente_nombre, p.cliente_apellido,
+               p.cliente_razon_social, p.cliente_cuit, p.cliente_telefono,
+               p.precio_ofrecido, p.moneda, p.tc,
+               fp.numero AS pedido_numero, fp.estado AS pedido_estado
+        FROM presupuestos p
+        JOIN fv_pedidos fp ON fp.payload->>'presupuesto_numero' = p.numero
+        ORDER BY p.created_at DESC
+        LIMIT 60
+      `) as Row[])
+    : [];
+
+  const seen = new Map<string, PedidoMatch>();
+
+  const consider = (row: Row, matchedBy: PedidoMatch["matchedBy"]) => {
+    const totalPesos = pedidoTotalPesos(row.precio_ofrecido, row.moneda, row.tc);
+    const montoMatch = Boolean(
+      montoArs && totalPesos && Math.abs(totalPesos - montoArs) / montoArs <= 0.02
+    );
+    const nombre =
+      [row.cliente_nombre, row.cliente_apellido].filter(Boolean).join(" ").trim() ||
+      row.cliente_razon_social ||
+      "—";
+    const existing = seen.get(row.pedido_numero);
+    const rank = { nombre: 1, cuit: 2, telefono: 3, monto: 4 } as const;
+    if (existing && rank[existing.matchedBy] <= rank[matchedBy]) {
+      if (montoMatch) existing.montoMatch = true;
+      return;
+    }
+    seen.set(row.pedido_numero, {
+      pedidoNumero: row.pedido_numero,
+      presupuestoNumero: row.presupuesto_numero,
+      estado: row.pedido_estado,
+      clienteNombre: nombre,
+      totalPesos,
+      moneda: row.moneda,
+      montoMatch,
+      matchedBy
+    });
+  };
+
+  // Clasificar cada candidato de identidad por la clave de mayor prioridad que cumple.
+  for (const row of identidad) {
+    const rowCuit = (row.cliente_cuit ?? "").replace(/\D/g, "");
+    const rowPhone8 = (row.cliente_telefono ?? "").replace(/\D/g, "").slice(-8);
+    const rowName = `${row.cliente_nombre ?? ""} ${row.cliente_apellido ?? ""}`.toLowerCase();
+    if (name && rowName.includes(name)) {
+      consider(row, "nombre");
+    } else if (cuitDigits && rowCuit === cuitDigits) {
+      consider(row, "cuit");
+    } else if (phone8 && rowPhone8 === phone8) {
+      consider(row, "telefono");
+    }
+  }
+
+  // Match por monto entre los recientes (solo si no entró ya por identidad).
+  for (const row of recientes) {
+    const totalPesos = pedidoTotalPesos(row.precio_ofrecido, row.moneda, row.tc);
+    if (montoArs && totalPesos && Math.abs(totalPesos - montoArs) / montoArs <= 0.02) {
+      consider(row, "monto");
+    }
+  }
+
+  const rank = { nombre: 1, cuit: 2, telefono: 3, monto: 4 } as const;
+  return Array.from(seen.values())
+    .sort((a, b) => {
+      if (a.montoMatch !== b.montoMatch) return a.montoMatch ? -1 : 1;
+      return rank[a.matchedBy] - rank[b.matchedBy];
+    })
+    .slice(0, 5);
+}
+
 export async function getContactBillingInfo(contactId: string | null | undefined) {
   if (!isDbConfigured() || !contactId) {
     return null;

@@ -169,10 +169,21 @@ export async function POST(request: NextRequest) {
           ((media.mimeType ?? "").toLowerCase().includes("pdf") ||
             (message.filename ?? "").toLowerCase().endsWith(".pdf"));
 
+        // Señal fuerte por nombre: bancos/billeteras nombran el archivo
+        // "comprobante...", "comprobante-de-pago", "transferencia...". Si el
+        // nombre lo dice, lo tratamos como comprobante aunque la visión dude.
+        const nameLooksLikeProof = /comprob|transferenc|comprobante-operacion/i.test(message.filename ?? "");
+
         if ((isImage || isPdfDoc) && media.dataBase64) {
           const analysis = await analyzePaymentProof(media.dataBase64, media.mimeType).catch(() => null);
-          if (analysis?.esComprobante) {
-            paymentProof = analysis;
+          if (analysis?.esComprobante || (isPdfDoc && nameLooksLikeProof)) {
+            paymentProof = analysis ?? {
+              esComprobante: true,
+              cbuDestino: null,
+              aliasDestino: null,
+              titularDestino: null,
+              monto: null
+            };
             paymentProofImage = { base64: media.dataBase64, mime: media.mimeType };
           }
         }

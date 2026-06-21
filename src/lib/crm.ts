@@ -2968,6 +2968,36 @@ export async function listContacts(filters: ContactFilters = {}) {
   `) as ContactSummary[];
 }
 
+export async function getContactBillingInfo(contactId: string | null | undefined) {
+  if (!isDbConfigured() || !contactId) {
+    return null;
+  }
+
+  const sql = getSql();
+  const rows = (await sql`
+    select
+      ct.display_name,
+      ct.phone,
+      ct.email,
+      ct.cuit,
+      ct.consultype,
+      u.full_name as assigned_name
+    from contacts ct
+    left join app_users u on u.id = ct.assigned_to
+    where ct.id = ${contactId}::uuid
+    limit 1
+  `) as Array<{
+    display_name: string | null;
+    phone: string | null;
+    email: string | null;
+    cuit: string | null;
+    consultype: string | null;
+    assigned_name: string | null;
+  }>;
+
+  return rows[0] ?? null;
+}
+
 export async function updateContact(input: {
   contactId: string;
   displayName?: string | null;

@@ -15,6 +15,7 @@ import {
   recordFollowUpSuggestion,
   recordIncomingMessage,
   recordWhatsAppMessageStatuses,
+  getContactBillingInfo,
   saveDetectedContactData,
   saveMessageMedia,
   updateConversation,
@@ -443,7 +444,7 @@ async function sendPaymentConfirmation(input: {
   }
 
   // Aviso interno a administracion con el comprobante adjunto.
-  await notifyAdministracionDelPago({ message, analysis, image }).catch((e) =>
+  await notifyAdministracionDelPago({ message, analysis, image, contactId: stored.contactId ?? null }).catch((e) =>
     console.error("No pudimos avisar a administracion del comprobante.", e)
   );
 
@@ -461,16 +462,29 @@ async function notifyAdministracionDelPago(input: {
   message: InboundWhatsAppMessage;
   analysis: PaymentProofAnalysis;
   image: { base64: string; mime: string };
+  contactId: string | null;
 }) {
-  const { message, analysis, image } = input;
+  const { message, analysis, image, contactId } = input;
 
-  const accounts = await fetchActiveBankAccounts();
+  const [accounts, billing] = await Promise.all([
+    fetchActiveBankAccounts(),
+    getContactBillingInfo(contactId)
+  ]);
   const matched = matchBankAccount(accounts, { cbu: analysis.cbuDestino, alias: analysis.aliasDestino });
 
-  const clienteNombre = message.contactName?.trim() || "Cliente sin nombre";
+  const clienteNombre = billing?.display_name?.trim() || message.contactName?.trim() || "Cliente sin nombre";
   const cuentaLinea = matched
     ? `<strong>${escapeHtml(matched.titulo)}</strong> — ${escapeHtml(matched.banco ?? "")} · CBU ${escapeHtml(matched.cbu ?? "")}${matched.alias ? ` · Alias ${escapeHtml(matched.alias)}` : ""}`
     : "<strong>⚠️ No se pudo detectar la cuenta destino</strong> — verificar manualmente con el comprobante adjunto.";
+
+  // Datos del cliente que envía (del CRM de FEBO AI).
+  const clienteDatos = [
+    `<strong>${escapeHtml(clienteNombre)}</strong>`,
+    `WhatsApp: ${escapeHtml(message.from)}`,
+    billing?.email ? `Email: ${escapeHtml(billing.email)}` : null,
+    billing?.cuit ? `CUIT: ${escapeHtml(billing.cuit)}` : null,
+    billing?.assigned_name ? `Asesor asignado: ${escapeHtml(billing.assigned_name)}` : null
+  ].filter(Boolean).join("<br>");
 
   const detectado = [
     analysis.cbuDestino ? `CBU/CVU detectado: ${escapeHtml(analysis.cbuDestino)}` : null,
@@ -483,7 +497,8 @@ async function notifyAdministracionDelPago(input: {
     : "Nuevo pago por transferencia — cuenta a verificar";
 
   const html = [
-    `<p>Se recibió un comprobante de pago de <strong>${escapeHtml(clienteNombre)}</strong> (WhatsApp ${escapeHtml(message.from)}).</p>`,
+    `<p>Se recibió un comprobante de pago.</p>`,
+    `<p><strong>Cliente:</strong><br>${clienteDatos}</p>`,
     analysis.monto ? `<p><strong>Monto:</strong> ${escapeHtml(analysis.monto)}</p>` : "",
     `<p><strong>Verificar el ingreso en la cuenta:</strong><br>${cuentaLinea}</p>`,
     detectado ? `<p style="color:#555;font-size:13px">Datos leídos del comprobante:<br>${detectado}</p>` : "",

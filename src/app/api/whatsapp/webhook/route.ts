@@ -1,5 +1,5 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import { analyzePaymentProof, PaymentProofAnalysis, refreshConversationMemory, runFebecosAgent, transcribeAudio } from "@/lib/agent";
+import { analyzePaymentProof, describeClientImage, PaymentProofAnalysis, refreshConversationMemory, runFebecosAgent, transcribeAudio } from "@/lib/agent";
 import { fetchActiveBankAccounts, matchBankAccount } from "@/lib/banks";
 import { sendInternalEmail } from "@/lib/mailer";
 import { config } from "@/lib/config";
@@ -187,6 +187,19 @@ export async function POST(request: NextRequest) {
               monto: null
             };
             paymentProofImage = { base64: media.dataBase64, mime: media.mimeType };
+          } else if (isImage) {
+            // No es comprobante → leemos la imagen con visión y le pasamos el
+            // contenido al agente para que responda (no que diga "no puedo verla").
+            const desc = await describeClientImage(media.dataBase64, media.mimeType).catch(() => null);
+            if (desc) {
+              const caption = isWhatsAppMediaMessage(message) ? message.caption : null;
+              agentMessage = `${caption ? caption + "\n\n" : ""}[El cliente envió una imagen. Contenido detectado: ${desc}]`;
+              // Persistir la descripción en el cuerpo (como la transcripción de audio)
+              // para que el asesor humano y los próximos turnos sepan qué era la imagen.
+              if (stored.messageId) {
+                await updateMessageBody(stored.messageId, `🖼️ Imagen: ${desc}`).catch(() => {});
+              }
+            }
           }
         }
       } catch (error) {

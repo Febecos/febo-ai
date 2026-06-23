@@ -245,6 +245,43 @@ export async function analyzePaymentProof(dataBase64: string, mimeType: string):
   }
 }
 
+/**
+ * Describe una imagen que mandó el cliente (que NO es comprobante) para que el
+ * agente pueda responder sobre su contenido en vez de decir "no puedo verla".
+ * Enfocado en bombas solares / anuncios Febecos: detecta modelo/potencia/pulgadas
+ * y transcribe el texto clave. Devuelve null si no hay nada útil.
+ */
+export async function describeClientImage(dataBase64: string, mimeType: string): Promise<string | null> {
+  try {
+    const response = await getOpenAI().responses.create({
+      model: "gpt-4o-mini",
+      instructions: [
+        "Sos el asistente de Febecos (bombas solares sumergibles para perforaciones, kits con paneles).",
+        "Un cliente mandó esta imagen por WhatsApp. Describí en 1-2 frases QUÉ muestra.",
+        "Si es un anuncio o producto de bomba solar (de Febecos u otro), decí la POTENCIA si se ve (210W/300W/400W/500W/600W/750W/1000W/1100W/1300W/1500W) y las PULGADAS (2\"/3\"/4\") si se ven, y transcribí el texto clave visible (modelo, precio, 'kit', etc.).",
+        "Si NO tiene que ver con bombas/Febecos (foto personal, otra cosa, captura ilegible), decilo breve.",
+        "Respondé SOLO la descripción, en español rioplatense, sin saludos ni JSON."
+      ].join("\n"),
+      input: [
+        {
+          role: "user",
+          content: [
+            { type: "input_text", text: "Describí esta imagen." },
+            mimeType.includes("pdf")
+              ? { type: "input_file", filename: "imagen.pdf", file_data: `data:application/pdf;base64,${dataBase64}` }
+              : { type: "input_image", image_url: `data:${mimeType};base64,${dataBase64}`, detail: "high" }
+          ]
+        }
+      ]
+    });
+
+    const text = response.output_text?.trim();
+    return text || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function transcribeAudio(input: {
   dataBase64: string;
   mimeType: string;
@@ -388,6 +425,7 @@ export async function runFebecosAgent(input: {
       "Si el cliente pide algo puntual nombrando una potencia o modelo (ej '500W', 'kit full de 500') y hay selectorQuote.status='ok', pasale el link de la ficha usando el url_slug: https://selector.febecos.com/catalogo-v2/{result.sugerencia.url_slug}. Pasalo asi: 'Aca podes ver todo el detalle del equipo: {link}'. Si no hay selectorQuote, NO inventes modelo ni precio: pedi el dato tecnico que falte y/o ofrece revisar juntos con los 4 datos (profundidad/nivel de agua, altura tanque, diametro perforacion, uso/litros).",
       "GATE DURO: si el cliente abre con un mensaje vago o pide precio ('Precio?', 'Hola', 'Info', 'cuanto sale', un emoji) y NO hay contexto de que producto habla (sin bloque de anuncio con datos, sin equipo/uso mencionado, no viene del selector), NO mandes las 4 preguntas tecnicas ni un rango de precio. Respondé pidiendo que diga que equipo busca o mande una captura de la publi por la que llego. Recien con contexto seguis con el flujo normal.",
       "El mensaje del cliente puede traer al final un bloque entre corchetes con el contexto del anuncio de Meta. Si dice '[Vino de un anuncio de Meta - titulo... texto... link...]', usa esos datos para saber que producto vio y responde sobre ESE equipo (no pidas captura). Si dice '[Vino de un anuncio... pero no llego el contenido del anuncio]', o el cliente abre con algo vago (solo 'Precio?', 'Hola', 'Info', un emoji) sin contexto, no inventes el producto: deci con honestidad que no podes ver la imagen ni donde toco y pedile una captura de la publicacion o que te diga que equipo estaba viendo.",
+      "IMAGEN YA LEIDA: si el mensaje trae un bloque '[El cliente envió una imagen. Contenido detectado: ...]', ESO es el resultado de leer la imagen que mandó el cliente (visión). USALA como lo que el cliente te mostró: NUNCA digas que no podés ver la imagen ni le pidas que te cuente qué dice. Si el contenido detectado es un kit/modelo de bomba con potencia (ej '500W') o pulgadas, respondé sobre ESE modelo igual que si lo hubiera nombrado (ficha + precio según las reglas de publi: link kit-bomba-solar-{diam}-{watts}w-completo). Si la descripción dice que la imagen no tiene que ver con bombas o es ilegible, ahí sí pedí amablemente que aclare qué equipo busca.",
       "CRITICO — specs del anuncio son del PRODUCTO, NO del cliente: el bloque '[Vino de un anuncio de Meta...]' contiene el texto de marketing del equipo que Febecos publicita (ej. 'Hasta 33.000 litros por dia', 'para pozos de 5 a 40 mts'). Esos numeros describen la capacidad maxima del equipo, NO son los datos tecnicos del campo del cliente. NUNCA los uses como 'litros requeridos' ni 'altura requerida' del cliente para calcular selectorQuote. Los datos tecnicos del cliente son solo los que el cliente menciona explicitamente en su propio mensaje (profundidad, litros que necesita, diametro, uso). Si el cliente no los dio, preguntalos.",
       "El diametro de la bomba define el modelo: 2\" para perforaciones angostas (~63-80mm), 4\" para perforaciones anchas (110mm+) y mas caudal/riego. La misma potencia puede venir en 2\" y 4\" (ej 500W existe en ambas). Si el cliente llega desde una publi/anuncio que promociona un modelo puntual (ej publi de Facebook de la 4\" 500W), ESE es el modelo que aplica: pasale el link de ese (kit-bomba-solar-4-500w), no el de otro diametro, salvo que sus datos pidan claramente otro.",
       "Si preguntan cuanto tiempo de uso continuo aguantan las bombas o cuantas horas funcionan, responde que estan preparadas para trabajar todo el dia sin problemas: las solares sumergibles son para uso continuo durante las horas de sol, no se recalientan ni se desgastan por trabajar todo el dia. De noche/sin sol no bombean (no usan bateria para operar). Para llenar reservorios o piletas, durante el dia la bomba va llenando; el dato que define el equipo es profundidad y diametro, no las horas.",
@@ -728,17 +766,18 @@ function normalizeSpanish(value: string) {
     .trim();
 }
 
-// Quita el bloque de contexto del anuncio de Meta ("[Vino de un anuncio...]")
-// que el webhook adjunta al final del mensaje. El anuncio trae specs de
-// marketing del producto (litros/dia, profundidad) que NO son datos del cliente
-// y romperian el dimensionamiento si el selector las tomara como requerimiento.
-// El bloque siempre se agrega al final, asi que cortamos desde el marcador.
+// Quita los bloques de contexto que el webhook adjunta al final del mensaje:
+// el anuncio de Meta ("[Vino de un anuncio...]") y la descripción de una imagen
+// leída por visión ("[El cliente envió una imagen. Contenido detectado: ...]").
+// Ambos traen specs de marketing del PRODUCTO (litros/dia, profundidad, mm) que
+// NO son datos del cliente y romperian el dimensionamiento si el selector las
+// tomara como requerimiento. Cortamos desde el primer marcador (siempre al final).
 function stripAdContext(text: string) {
   if (!text) {
     return text;
   }
 
-  const index = text.search(/\[Vino de un anuncio/i);
+  const index = text.search(/\[Vino de un anuncio|\[El cliente envió una imagen/i);
   return index >= 0 ? text.slice(0, index).trim() : text;
 }
 

@@ -1,6 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { analyzePaymentProof, describeClientImage, PaymentProofAnalysis, refreshConversationMemory, runFebecosAgent, transcribeAudio } from "@/lib/agent";
 import { fetchActiveBankAccounts, matchBankAccount } from "@/lib/banks";
+import { emitEvento } from "@/lib/eventos";
 import { sendInternalEmail } from "@/lib/mailer";
 import { config } from "@/lib/config";
 import { getSql } from "@/lib/db";
@@ -458,9 +459,37 @@ async function sendPaymentConfirmation(input: {
   }
 
   // Aviso interno a administracion con el comprobante adjunto.
-  await notifyAdministracionDelPago({ message, analysis, image, contactId: stored.contactId ?? null }).catch((e) =>
-    console.error("No pudimos avisar a administracion del comprobante.", e)
-  );
+  const pagoResumen = await notifyAdministracionDelPago({ message, analysis, image, contactId: stored.contactId ?? null }).catch((e) => {
+    console.error("No pudimos avisar a administracion del comprobante.", e);
+    return null;
+  });
+
+  // BUS DE EVENTOS (Pilar 2): emitir pago.comprobante_detectado para que Gestión
+  // concilie/dispare facturación. Idempotente por mensaje del comprobante.
+  const mejorPedido = pagoResumen?.pedidos.find((p) => p.montoMatch) ?? pagoResumen?.pedidos[0] ?? null;
+  await emitEvento({
+    tipo: "pago.comprobante_detectado",
+    entidad: mejorPedido ? "pedido" : "contacto",
+    entidadId: mejorPedido?.pedidoNumero ?? stored.contactId ?? message.from,
+    idempotencyKey: stored.messageId ? `febo-ai:comprobante:${stored.messageId}` : null,
+    payload: {
+      whatsapp: message.from,
+      contactId: stored.contactId ?? null,
+      conversationId: stored.threadId ?? null,
+      cliente: pagoResumen?.clienteNombre ?? message.contactName ?? null,
+      cuit: pagoResumen?.cuit ?? null,
+      montoTexto: analysis.monto ?? null,
+      montoArs: pagoResumen?.montoArs ?? null,
+      cuentaDestino: pagoResumen?.cuenta
+        ? { titulo: pagoResumen.cuenta.titulo, banco: pagoResumen.cuenta.banco, cbu: pagoResumen.cuenta.cbu }
+        : null,
+      cbuDetectado: analysis.cbuDestino ?? null,
+      pedidoMatch: mejorPedido
+        ? { numero: mejorPedido.pedidoNumero, origen: mejorPedido.origen, estado: mejorPedido.estado, montoMatch: mejorPedido.montoMatch }
+        : null,
+      pedidosCandidatos: (pagoResumen?.pedidos ?? []).map((p) => ({ numero: p.pedidoNumero, origen: p.origen, montoMatch: p.montoMatch }))
+    }
+  });
 
   if (stored.threadId) {
     await createManualConversationEvent({
@@ -564,6 +593,9 @@ async function notifyAdministracionDelPago(input: {
       }
     ]
   });
+
+  // Datos para emitir el evento al bus (pago.comprobante_detectado).
+  return { montoArs, cuenta: matched, pedidos, clienteNombre, cuit: billing?.cuit ?? null };
 }
 
 function escapeHtml(value: string) {

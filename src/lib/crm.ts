@@ -6,8 +6,11 @@ import { getSql, isDbConfigured } from "./db";
  * Vuelca/actualiza un contacto en la base de clientes unificada (CRM central).
  * Dedup server-side por CUIT → email → whatsapp. Requiere INTERNAL_SERVICE_SECRET
  * (mismo valor que el selector) para autenticar. Fire-and-forget: nunca rompe el flujo.
+ *
+ * Si se pasa `contactId`, al volver la respuesta (`{ ok, id }`) se guarda ese `id`
+ * como `contacts.cliente_id` → link único al CRM central (Pilar 1 / D4 del RFC 99.9).
  */
-function upsertClienteUnificado(payload: Record<string, unknown>) {
+function upsertClienteUnificado(payload: Record<string, unknown>, contactId?: string | null) {
   const secret = config.INTERNAL_SERVICE_SECRET;
   if (!secret) return; // sin secret el endpoint responde 401 — evitamos la llamada inútil
   fetch("https://febecos.com/api/admin?action=upsert_cliente", {
@@ -17,7 +20,20 @@ function upsertClienteUnificado(payload: Record<string, unknown>) {
       Authorization: `Bearer ${secret}`
     },
     body: JSON.stringify(payload)
-  }).catch(() => {});
+  })
+    .then(async (res) => {
+      if (!contactId || !res.ok || !isDbConfigured()) return;
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; id?: number | string } | null;
+      const clienteId = data?.ok && data.id != null ? Number(data.id) : null;
+      if (!clienteId || !Number.isFinite(clienteId)) return;
+      // Guardar el link único; solo si cambió (evita escrituras inútiles).
+      await getSql()`
+        update contacts
+        set cliente_id = ${clienteId}, updated_at = now()
+        where id = ${contactId} and cliente_id is distinct from ${clienteId}
+      `;
+    })
+    .catch(() => {});
 }
 
 export type AppUser = {
@@ -2205,7 +2221,7 @@ export async function recordIncomingMessage(input: {
       nombre: input.contactName ?? null,
       whatsapp: phone,
       origen: "febo_ai"
-    });
+    }, contactId);
   }
 
   const existing = (await sql`
@@ -2347,7 +2363,7 @@ export async function recordSelectorCheckoutLead(input: SelectorCheckoutLead) {
       tipo: "cliente_final",
       whatsapp: phone,
       origen: "selector"
-    });
+    }, contactId);
   }
 
   const existingConversation = (await sql`
@@ -2977,6 +2993,7 @@ export type PedidoMatch = {
   moneda: string | null;
   montoMatch: boolean;
   matchedBy: "nombre" | "cuit" | "telefono" | "monto";
+  origen: "fv" | "bomba";
 };
 
 function pedidoTotalPesos(precio: unknown, moneda: string | null, tc: unknown): number | null {
@@ -3063,58 +3080,101 @@ export async function findPedidosForPayment(input: {
       `) as Row[])
     : [];
 
-  const seen = new Map<string, PedidoMatch>();
+  // Bomba: tabla `pedidos` (no tiene cuit/telefono → match por nombre del comprador y por monto;
+  // precio_final ya está en pesos).
+  type BombaRow = {
+    numero: string | null;
+    id: string;
+    revendedor_nombre: string | null;
+    precio_final: number | string | null;
+    estado: string | null;
+  };
+  const bombaIdentidad = name
+    ? ((await sql`
+        SELECT numero, id::text AS id, revendedor_nombre, precio_final, estado
+        FROM pedidos
+        WHERE lower(coalesce(revendedor_nombre,'')) LIKE ${nameLike}
+        ORDER BY created_at DESC LIMIT 15
+      `) as BombaRow[])
+    : [];
+  const bombaRecientes = montoArs
+    ? ((await sql`
+        SELECT numero, id::text AS id, revendedor_nombre, precio_final, estado
+        FROM pedidos
+        ORDER BY created_at DESC LIMIT 60
+      `) as BombaRow[])
+    : [];
 
-  const consider = (row: Row, matchedBy: PedidoMatch["matchedBy"]) => {
-    const totalPesos = pedidoTotalPesos(row.precio_ofrecido, row.moneda, row.tc);
+  const seen = new Map<string, PedidoMatch>();
+  const rank = { nombre: 1, cuit: 2, telefono: 3, monto: 4 } as const;
+
+  type Candidate = Omit<PedidoMatch, "montoMatch" | "matchedBy">;
+
+  const consider = (c: Candidate, matchedBy: PedidoMatch["matchedBy"]) => {
     const montoMatch = Boolean(
-      montoArs && totalPesos && Math.abs(totalPesos - montoArs) / montoArs <= 0.02
+      montoArs && c.totalPesos && Math.abs(c.totalPesos - montoArs) / montoArs <= 0.02
     );
-    const nombre =
-      [row.cliente_nombre, row.cliente_apellido].filter(Boolean).join(" ").trim() ||
-      row.cliente_razon_social ||
-      "—";
-    const existing = seen.get(row.pedido_numero);
-    const rank = { nombre: 1, cuit: 2, telefono: 3, monto: 4 } as const;
+    const key = `${c.origen}:${c.pedidoNumero}`;
+    const existing = seen.get(key);
     if (existing && rank[existing.matchedBy] <= rank[matchedBy]) {
       if (montoMatch) existing.montoMatch = true;
       return;
     }
-    seen.set(row.pedido_numero, {
-      pedidoNumero: row.pedido_numero,
-      presupuestoNumero: row.presupuesto_numero,
-      estado: row.pedido_estado,
-      clienteNombre: nombre,
-      totalPesos,
-      moneda: row.moneda,
-      montoMatch,
-      matchedBy
-    });
+    seen.set(key, { ...c, montoMatch, matchedBy });
   };
 
-  // Clasificar cada candidato de identidad por la clave de mayor prioridad que cumple.
+  const fvCandidate = (row: Row): Candidate => ({
+    pedidoNumero: row.pedido_numero,
+    presupuestoNumero: row.presupuesto_numero,
+    estado: row.pedido_estado,
+    clienteNombre:
+      [row.cliente_nombre, row.cliente_apellido].filter(Boolean).join(" ").trim() ||
+      row.cliente_razon_social ||
+      "—",
+    totalPesos: pedidoTotalPesos(row.precio_ofrecido, row.moneda, row.tc),
+    moneda: row.moneda,
+    origen: "fv"
+  });
+
+  const bombaCandidate = (row: BombaRow): Candidate => {
+    const precio = Number(row.precio_final);
+    return {
+      pedidoNumero: row.numero || `(${row.id.slice(0, 8)})`,
+      presupuestoNumero: null,
+      estado: row.estado,
+      clienteNombre: row.revendedor_nombre || "—",
+      totalPesos: Number.isFinite(precio) && precio > 0 ? precio : null,
+      moneda: "ARS",
+      origen: "bomba"
+    };
+  };
+
+  // FV — identidad (cuit/telefono/nombre, prioridad pedida).
   for (const row of identidad) {
     const rowCuit = (row.cliente_cuit ?? "").replace(/\D/g, "");
     const rowPhone8 = (row.cliente_telefono ?? "").replace(/\D/g, "").slice(-8);
     const rowName = `${row.cliente_nombre ?? ""} ${row.cliente_apellido ?? ""}`.toLowerCase();
-    if (name && rowName.includes(name)) {
-      consider(row, "nombre");
-    } else if (cuitDigits && rowCuit === cuitDigits) {
-      consider(row, "cuit");
-    } else if (phone8 && rowPhone8 === phone8) {
-      consider(row, "telefono");
-    }
+    if (name && rowName.includes(name)) consider(fvCandidate(row), "nombre");
+    else if (cuitDigits && rowCuit === cuitDigits) consider(fvCandidate(row), "cuit");
+    else if (phone8 && rowPhone8 === phone8) consider(fvCandidate(row), "telefono");
   }
-
-  // Match por monto entre los recientes (solo si no entró ya por identidad).
+  // FV — monto.
   for (const row of recientes) {
-    const totalPesos = pedidoTotalPesos(row.precio_ofrecido, row.moneda, row.tc);
-    if (montoArs && totalPesos && Math.abs(totalPesos - montoArs) / montoArs <= 0.02) {
-      consider(row, "monto");
+    const tp = pedidoTotalPesos(row.precio_ofrecido, row.moneda, row.tc);
+    if (montoArs && tp && Math.abs(tp - montoArs) / montoArs <= 0.02) consider(fvCandidate(row), "monto");
+  }
+  // Bomba — identidad (solo nombre disponible).
+  for (const row of bombaIdentidad) {
+    if (name && (row.revendedor_nombre ?? "").toLowerCase().includes(name)) consider(bombaCandidate(row), "nombre");
+  }
+  // Bomba — monto.
+  for (const row of bombaRecientes) {
+    const tp = Number(row.precio_final);
+    if (montoArs && Number.isFinite(tp) && tp > 0 && Math.abs(tp - montoArs) / montoArs <= 0.02) {
+      consider(bombaCandidate(row), "monto");
     }
   }
 
-  const rank = { nombre: 1, cuit: 2, telefono: 3, monto: 4 } as const;
   return Array.from(seen.values())
     .sort((a, b) => {
       if (a.montoMatch !== b.montoMatch) return a.montoMatch ? -1 : 1;
@@ -3243,7 +3303,7 @@ export async function updateContact(input: {
       provincia: input.afipData?.provincia ?? null,
       cod_postal: input.afipData?.codigoPostal ?? null,
       origen: "febo_ai"
-    });
+    }, saved.id);
   }
 
   if (input.assignedTo !== undefined) {
@@ -3298,7 +3358,7 @@ export async function saveDetectedContactData(input: {
       email: saved.email ?? null,
       cuit: saved.cuit ?? null,
       origen: "febo_ai"
-    });
+    }, input.contactId);
   }
 }
 

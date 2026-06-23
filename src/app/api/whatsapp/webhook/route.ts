@@ -515,7 +515,8 @@ async function notifyAdministracionDelPago(input: {
         .map((p) => {
           const flag = p.montoMatch ? " ✅ <strong>coincide el monto</strong>" : "";
           const total = p.totalPesos ? ` · Total aprox. ${fmtPesos(p.totalPesos)}` : "";
-          return `<li><strong>${escapeHtml(p.pedidoNumero)}</strong> — ${escapeHtml(p.clienteNombre)} · estado ${escapeHtml(p.estado ?? "—")}${total} <span style="color:#888">(${matchLabel[p.matchedBy]})</span>${flag}</li>`;
+          const origen = p.origen === "bomba" ? "Bomba" : "FV";
+          return `<li><strong>${escapeHtml(p.pedidoNumero)}</strong> <span style="color:#888">[${origen}]</span> — ${escapeHtml(p.clienteNombre)} · estado ${escapeHtml(p.estado ?? "—")}${total} <span style="color:#888">(${matchLabel[p.matchedBy]})</span>${flag}</li>`;
         })
         .join("")
     : null;

@@ -10,30 +10,31 @@ import { getSql, isDbConfigured } from "./db";
  * Si se pasa `contactId`, al volver la respuesta (`{ ok, id }`) se guarda ese `id`
  * como `contacts.cliente_id` → link único al CRM central (Pilar 1 / D4 del RFC 99.9).
  */
-function upsertClienteUnificado(payload: Record<string, unknown>, contactId?: string | null) {
+async function upsertClienteUnificado(payload: Record<string, unknown>, contactId?: string | null) {
   const secret = config.INTERNAL_SERVICE_SECRET;
   if (!secret) return; // sin secret el endpoint responde 401 — evitamos la llamada inútil
-  fetch("https://febecos.com/api/admin?action=upsert_cliente", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${secret}`
-    },
-    body: JSON.stringify(payload)
-  })
-    .then(async (res) => {
-      if (!contactId || !res.ok || !isDbConfigured()) return;
-      const data = (await res.json().catch(() => null)) as { ok?: boolean; id?: number | string } | null;
-      const clienteId = data?.ok && data.id != null ? Number(data.id) : null;
-      if (!clienteId || !Number.isFinite(clienteId)) return;
-      // Guardar el link único; solo si cambió (evita escrituras inútiles).
-      await getSql()`
-        update contacts
-        set cliente_id = ${clienteId}, updated_at = now()
-        where id = ${contactId} and cliente_id is distinct from ${clienteId}
-      `;
-    })
-    .catch(() => {});
+  try {
+    const res = await fetch("https://febecos.com/api/admin?action=upsert_cliente", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${secret}`
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!contactId || !res.ok || !isDbConfigured()) return;
+    const data = (await res.json().catch(() => null)) as { ok?: boolean; id?: number | string } | null;
+    const clienteId = data?.ok && data.id != null ? Number(data.id) : null;
+    if (!clienteId || !Number.isFinite(clienteId)) return;
+    // Guardar el link único; solo si cambió (evita escrituras inútiles).
+    await getSql()`
+      update contacts
+      set cliente_id = ${clienteId}, updated_at = now()
+      where id = ${contactId} and cliente_id is distinct from ${clienteId}
+    `;
+  } catch {
+    // fire-and-forget: nunca rompe el flujo
+  }
 }
 
 export type AppUser = {
@@ -3292,7 +3293,7 @@ export async function updateContact(input: {
   // Cuando se graba un email, volcarlo a la base de clientes unificada (dedup CUIT→email→whatsapp)
   const saved = rows[0];
   if (saved?.email && saved.phone) {
-    upsertClienteUnificado({
+    await upsertClienteUnificado({
       tipo: "cliente_final",
       nombre: saved.display_name ?? null,
       whatsapp: saved.phone,
@@ -3351,7 +3352,7 @@ export async function saveDetectedContactData(input: {
   // Volcar al CRM unificado: cuando el cliente da datos fiscales (cuit/email) es el
   // lead más caliente, debe quedar en clientes. Dedup server-side CUIT→email→whatsapp.
   if (saved?.phone && (saved.email || saved.cuit)) {
-    upsertClienteUnificado({
+    await upsertClienteUnificado({
       tipo: "cliente_final",
       nombre: saved.display_name ?? null,
       whatsapp: saved.phone,

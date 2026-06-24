@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { config } from "./config";
 import { getSql, isDbConfigured } from "./db";
+import { emitEvento } from "./eventos";
 
 /**
  * Vuelca/actualiza un contacto en la base de clientes unificada (CRM central).
@@ -10,9 +11,9 @@ import { getSql, isDbConfigured } from "./db";
  * Si se pasa `contactId`, al volver la respuesta (`{ ok, id }`) se guarda ese `id`
  * como `contacts.cliente_id` → link único al CRM central (Pilar 1 / D4 del RFC 99.9).
  */
-async function upsertClienteUnificado(payload: Record<string, unknown>, contactId?: string | null) {
+async function upsertClienteUnificado(payload: Record<string, unknown>, contactId?: string | null): Promise<number | null> {
   const secret = config.INTERNAL_SERVICE_SECRET;
-  if (!secret) return; // sin secret el endpoint responde 401 — evitamos la llamada inútil
+  if (!secret) return null; // sin secret el endpoint responde 401 — evitamos la llamada inútil
   try {
     const res = await fetch("https://febecos.com/api/admin?action=upsert_cliente", {
       method: "POST",
@@ -22,18 +23,22 @@ async function upsertClienteUnificado(payload: Record<string, unknown>, contactI
       },
       body: JSON.stringify(payload)
     });
-    if (!contactId || !res.ok || !isDbConfigured()) return;
+    if (!res.ok) return null;
     const data = (await res.json().catch(() => null)) as { ok?: boolean; id?: number | string } | null;
     const clienteId = data?.ok && data.id != null ? Number(data.id) : null;
-    if (!clienteId || !Number.isFinite(clienteId)) return;
-    // Guardar el link único; solo si cambió (evita escrituras inútiles).
-    await getSql()`
-      update contacts
-      set cliente_id = ${clienteId}, updated_at = now()
-      where id = ${contactId} and cliente_id is distinct from ${clienteId}
-    `;
+    if (!clienteId || !Number.isFinite(clienteId)) return null;
+    // Guardar el link único en el contacto; solo si cambió (evita escrituras inútiles).
+    if (contactId && isDbConfigured()) {
+      await getSql()`
+        update contacts
+        set cliente_id = ${clienteId}, updated_at = now()
+        where id = ${contactId} and cliente_id is distinct from ${clienteId}
+      `;
+    }
+    return clienteId;
   } catch {
     // fire-and-forget: nunca rompe el flujo
+    return null;
   }
 }
 
@@ -2223,6 +2228,14 @@ export async function recordIncomingMessage(input: {
       whatsapp: phone,
       origen: "febo_ai"
     }, contactId);
+    // BUS DE EVENTOS (Pilar 2): nuevo lead entrante por WhatsApp.
+    await emitEvento({
+      tipo: "lead.creado",
+      entidad: "lead",
+      entidadId: contactId,
+      idempotencyKey: `febo-ai:lead.creado:${contactId}`,
+      payload: { whatsapp: phone, nombre: input.contactName ?? null, canal: channel, origen: "febo_ai" }
+    });
   }
 
   const existing = (await sql`
@@ -3352,7 +3365,7 @@ export async function saveDetectedContactData(input: {
   // Volcar al CRM unificado: cuando el cliente da datos fiscales (cuit/email) es el
   // lead más caliente, debe quedar en clientes. Dedup server-side CUIT→email→whatsapp.
   if (saved?.phone && (saved.email || saved.cuit)) {
-    await upsertClienteUnificado({
+    const clienteId = await upsertClienteUnificado({
       tipo: "cliente_final",
       nombre: saved.display_name ?? null,
       whatsapp: saved.phone,
@@ -3360,6 +3373,22 @@ export async function saveDetectedContactData(input: {
       cuit: saved.cuit ?? null,
       origen: "febo_ai"
     }, input.contactId);
+    // BUS DE EVENTOS (Pilar 2): el cliente entregó datos fiscales (CUIT/email).
+    await emitEvento({
+      tipo: "cliente.actualizado",
+      entidad: "cliente",
+      entidadId: clienteId != null ? String(clienteId) : (saved.cuit ?? input.contactId),
+      idempotencyKey: `febo-ai:cliente.actualizado:${input.contactId}:${saved.cuit ?? saved.email ?? ""}`,
+      payload: {
+        contactId: input.contactId,
+        clienteId,
+        whatsapp: saved.phone,
+        nombre: saved.display_name ?? null,
+        cuit: saved.cuit ?? null,
+        email: saved.email ?? null,
+        origen: "febo_ai"
+      }
+    });
   }
 }
 

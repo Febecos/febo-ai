@@ -3243,6 +3243,7 @@ export async function updateContact(input: {
     additional?: Array<{ id?: string; title?: string; value?: string }>;
   };
   afipData?: {
+    razonSocial?: string;
     domicilio?: string;
     codigoPostal?: string;
     localidad?: string;
@@ -3309,6 +3310,7 @@ export async function updateContact(input: {
     await upsertClienteUnificado({
       tipo: "cliente_final",
       nombre: saved.display_name ?? null,
+      razon_social: input.afipData?.razonSocial ?? null,
       whatsapp: saved.phone,
       email: saved.email,
       cuit: saved.cuit ?? null,

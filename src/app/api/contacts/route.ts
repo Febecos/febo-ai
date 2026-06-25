@@ -41,6 +41,7 @@ const updateContactSchema = z.object({
     })).max(20).optional()
   }).optional(),
   afipData: z.object({
+    razonSocial: z.string().max(200).optional(),
     domicilio: z.string().max(200).optional(),
     codigoPostal: z.string().max(20).optional(),
     localidad: z.string().max(100).optional(),

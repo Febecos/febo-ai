@@ -3294,6 +3294,7 @@ function ContactEditorModal({
     contactType: "prospecto",
     assignedTo: "",
     notes: "",
+    razonSocial: "",
     domicilio: "",
     codigoPostal: "",
     localidad: "",
@@ -3313,6 +3314,7 @@ function ContactEditorModal({
       contactType: contact.contact_type || "prospecto",
       assignedTo: contact.assigned_to ?? "",
       notes: info?.notes ?? "",
+      razonSocial: arca?.razonSocial ?? "",
       domicilio: arca?.domicilio ?? "",
       codigoPostal: arca?.codigoPostal ?? "",
       localidad: arca?.localidad ?? "",
@@ -3333,6 +3335,7 @@ function ContactEditorModal({
     setForm((f) => ({
       ...f,
       displayName: f.displayName || data.razonSocial || f.displayName,
+      razonSocial: data.razonSocial ?? f.razonSocial,
       domicilio: data.domicilio ?? f.domicilio,
       codigoPostal: data.codigoPostal ?? f.codigoPostal,
       localidad: data.localidad ?? f.localidad,
@@ -3359,8 +3362,8 @@ function ContactEditorModal({
         consultype: form.tags[0] ?? contact.consultype,
         assignedTo: form.assignedTo || null,
         contactInfo: { notes: form.notes, additional: form.additional },
-        afipData: (form.domicilio || form.codigoPostal || form.localidad || form.provincia)
-          ? { domicilio: form.domicilio, codigoPostal: form.codigoPostal, localidad: form.localidad, provincia: form.provincia }
+        afipData: (form.razonSocial || form.domicilio || form.codigoPostal || form.localidad || form.provincia)
+          ? { razonSocial: form.razonSocial, domicilio: form.domicilio, codigoPostal: form.codigoPostal, localidad: form.localidad, provincia: form.provincia }
           : null
       })
     });
@@ -3403,6 +3406,13 @@ function ContactEditorModal({
             <button type="button" className="secondary small cuit-lookup-btn" disabled={afipLoading} onClick={lookupAfip}>
               {afipLoading ? "Consultando..." : "Consultar ARCA"}
             </button>
+          </div>
+
+          <div className="form-grid">
+            <label className="field wide">
+              Razón social
+              <input placeholder="Razón social (ARCA)" value={form.razonSocial} onChange={(e) => setForm({ ...form, razonSocial: e.target.value })} />
+            </label>
           </div>
 
           <div className="form-grid">

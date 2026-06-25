@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 
+// ARCA/AFIP a veces tarda >8s (consulta padrón). Damos margen para no cortar con 502.
+export const maxDuration = 30;
+
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
@@ -13,7 +16,7 @@ export async function GET(request: NextRequest) {
   try {
     const res = await fetch(
       `https://febecos.com/api/admin?action=consultar_cuit&cuit=${cuit}`,
-      { signal: AbortSignal.timeout(8000) }
+      { signal: AbortSignal.timeout(25000) }
     );
 
     if (!res.ok) {
@@ -40,7 +43,10 @@ export async function GET(request: NextRequest) {
       condicionFiscal: data.condicionFiscal ?? null
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    return NextResponse.json({ error: `No pudimos consultar ARCA: ${msg}` }, { status: 502 });
+    const isTimeout = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+    const msg = isTimeout
+      ? "ARCA tardó demasiado en responder. Probá de nuevo en unos segundos."
+      : `No pudimos consultar ARCA: ${err instanceof Error ? err.message : "Error desconocido"}`;
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

@@ -1,3 +1,5 @@
+import { config } from "./config";
+
 export type BankAccount = {
   titulo: string;
   titular: string | null;
@@ -11,11 +13,21 @@ export type BankAccount = {
 /**
  * Lee las cuentas bancarias ACTIVAS desde el admin de febecos.com.
  * Fuente única: /api/config-banco (las mismas que se cargan/editan en el panel
- * "Cuentas bancarias"). El GET público devuelve solo las activas, sin auth.
+ * "Cuentas bancarias"). El GET devuelve solo las cuentas activas.
+ *
+ * SEGURIDAD (SECURITY-AUDIT.md, config-banco GET público): mandamos el header
+ * de identidad de servicio. Hoy el endpoint es público e inocuo, pero deja la
+ * puerta lista para que Admin lo gatee con auth sin romper a FEBO AI (único
+ * consumidor del GET). Si no hay secret cargado, la llamada sigue igual que antes.
  */
 export async function fetchActiveBankAccounts(): Promise<BankAccount[]> {
   try {
+    const headers: Record<string, string> = {};
+    if (config.INTERNAL_SERVICE_SECRET) {
+      headers.Authorization = `Bearer ${config.INTERNAL_SERVICE_SECRET}`;
+    }
     const res = await fetch("https://febecos.com/api/config-banco", {
+      headers,
       signal: AbortSignal.timeout(8000)
     });
 

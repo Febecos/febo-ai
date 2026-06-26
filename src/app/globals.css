@@ -1043,6 +1043,63 @@ button:disabled {
   padding: 12px;
 }
 
+.role-access-card {
+  margin: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel, rgba(255, 255, 255, 0.03));
+}
+
+.role-access-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.role-access-hint {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.role-access-table {
+  width: 100%;
+  max-width: 460px;
+  border-collapse: collapse;
+}
+
+.role-access-table th,
+.role-access-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.role-access-table th:not(:first-child),
+.role-access-table td:not(:first-child) {
+  text-align: center;
+  width: 120px;
+}
+
+.role-access-table input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.role-access-table input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.role-access-note {
+  margin: 10px 0 0;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
 .user-card {
   border: 1px solid var(--line);
   border-radius: 8px;

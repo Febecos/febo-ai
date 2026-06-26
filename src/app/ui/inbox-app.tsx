@@ -155,6 +155,21 @@ type AgentTestResponse = {
 };
 
 type ToolKey = "conversations" | "metrics" | "contacts" | "crm" | "templates" | "labels" | "settings" | "users" | "ai" | "transportistas" | "aprendizajes";
+
+// Acceso al menú por rol (espejo de crm.ts). Admin ve todo; estas son las
+// secciones operativas que la matriz puede limitar para roles no-admin.
+const MENU_MATRIX_SECTIONS = ["contacts", "crm", "templates", "labels", "ai", "transportistas"] as const;
+type MenuSectionKey = (typeof MENU_MATRIX_SECTIONS)[number];
+type RoleMenuAccess = Record<string, Partial<Record<MenuSectionKey, boolean>>>;
+// Etiquetas legibles para la matriz en "Usuarios y accesos".
+const MENU_SECTION_LABELS: Record<MenuSectionKey, string> = {
+  contacts: "Contactos",
+  crm: "Tablero CRM",
+  templates: "Seguimiento",
+  labels: "Etiquetas",
+  ai: "Probar IA",
+  transportistas: "Transportistas"
+};
 type SettingKey =
   | "auto_reply_delay_seconds"
   | "hot_lead_default_assignee_id"
@@ -275,7 +290,8 @@ export function InboxApp({
   dbConfigured,
   stats,
   users,
-  adminUsers
+  adminUsers,
+  roleMenuAccess
 }: {
   conversations: ConversationSummary[];
   currentUser: AppUser | null;
@@ -283,6 +299,7 @@ export function InboxApp({
   stats: Stats;
   users: AppUser[];
   adminUsers: UserAdminSummary[];
+  roleMenuAccess: RoleMenuAccess;
 }) {
   if (!currentUser) {
     return <LoginScreen dbConfigured={dbConfigured} />;
@@ -296,6 +313,7 @@ export function InboxApp({
         currentUser={currentUser}
         stats={stats}
         users={users}
+        roleMenuAccess={roleMenuAccess}
       />
     </main>
   );
@@ -376,13 +394,15 @@ function ToolWorkspace({
   conversations,
   currentUser,
   stats,
-  users
+  users,
+  roleMenuAccess
 }: {
   adminUsers: UserAdminSummary[];
   conversations: ConversationSummary[];
   currentUser: AppUser;
   stats: Stats;
   users: AppUser[];
+  roleMenuAccess: RoleMenuAccess;
 }) {
   const [activeTool, setActiveTool] = useState<ToolKey>("conversations");
   const [workspaceConversations, setWorkspaceConversations] = useState(conversations);
@@ -398,6 +418,20 @@ function ToolWorkspace({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const isAdmin = currentUser.role === "admin";
   const crmFavoritesStorageKey = `febo-crm-favorites:${currentUser.id}`;
+
+  // ¿El usuario puede ver una sección operativa del menú? Admin ve todo.
+  // Para roles no-admin, la matriz por rol decide (default visible).
+  const canSeeSection = useCallback(
+    (key: MenuSectionKey) => isAdmin || roleMenuAccess[currentUser.role]?.[key] !== false,
+    [isAdmin, roleMenuAccess, currentUser.role]
+  );
+
+  // Si la herramienta activa dejó de estar permitida (cambió la matriz), volver a Conversaciones.
+  useEffect(() => {
+    if ((MENU_MATRIX_SECTIONS as readonly string[]).includes(activeTool) && !canSeeSection(activeTool as MenuSectionKey)) {
+      setActiveTool("conversations");
+    }
+  }, [activeTool, canSeeSection]);
 
   useEffect(() => {
     setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "1");
@@ -548,46 +582,58 @@ function ToolWorkspace({
             M&eacute;tricas
           </button>
         ) : null}
-        <button
-          className={activeTool === "contacts" ? "active" : ""}
-          onClick={() => setActiveTool("contacts")}
-          type="button"
-        >
-          <UsersRound size={18} />
-          Contactos
-        </button>
-        <button
-          className={`mobile-hidden-tool ${activeTool === "crm" ? "active" : ""}`}
-          onClick={() => setActiveTool("crm")}
-          type="button"
-        >
-          <LayoutDashboard size={18} />
-          Tablero CRM
-        </button>
-        <button
-          className={activeTool === "templates" ? "active" : ""}
-          onClick={() => setActiveTool("templates")}
-          type="button"
-        >
-          <MessageSquareText size={18} />
-          Seguimiento
-        </button>
-        <button
-          className={activeTool === "labels" ? "active" : ""}
-          onClick={() => setActiveTool("labels")}
-          type="button"
-        >
-          <Tags size={18} />
-          Etiquetas
-        </button>
-        <button className={activeTool === "ai" ? "active" : ""} onClick={() => setActiveTool("ai")} type="button">
-          <Bot size={18} />
-          Probar IA
-        </button>
-        <button className={activeTool === "transportistas" ? "active" : ""} onClick={() => setActiveTool("transportistas")} type="button">
-          <Truck size={18} />
-          Transportistas
-        </button>
+        {canSeeSection("contacts") ? (
+          <button
+            className={activeTool === "contacts" ? "active" : ""}
+            onClick={() => setActiveTool("contacts")}
+            type="button"
+          >
+            <UsersRound size={18} />
+            Contactos
+          </button>
+        ) : null}
+        {canSeeSection("crm") ? (
+          <button
+            className={`mobile-hidden-tool ${activeTool === "crm" ? "active" : ""}`}
+            onClick={() => setActiveTool("crm")}
+            type="button"
+          >
+            <LayoutDashboard size={18} />
+            Tablero CRM
+          </button>
+        ) : null}
+        {canSeeSection("templates") ? (
+          <button
+            className={activeTool === "templates" ? "active" : ""}
+            onClick={() => setActiveTool("templates")}
+            type="button"
+          >
+            <MessageSquareText size={18} />
+            Seguimiento
+          </button>
+        ) : null}
+        {canSeeSection("labels") ? (
+          <button
+            className={activeTool === "labels" ? "active" : ""}
+            onClick={() => setActiveTool("labels")}
+            type="button"
+          >
+            <Tags size={18} />
+            Etiquetas
+          </button>
+        ) : null}
+        {canSeeSection("ai") ? (
+          <button className={activeTool === "ai" ? "active" : ""} onClick={() => setActiveTool("ai")} type="button">
+            <Bot size={18} />
+            Probar IA
+          </button>
+        ) : null}
+        {canSeeSection("transportistas") ? (
+          <button className={activeTool === "transportistas" ? "active" : ""} onClick={() => setActiveTool("transportistas")} type="button">
+            <Truck size={18} />
+            Transportistas
+          </button>
+        ) : null}
         {isAdmin ? (
           <>
             <button className={activeTool === "aprendizajes" ? "active" : ""} onClick={() => setActiveTool("aprendizajes")} type="button">
@@ -700,7 +746,7 @@ function ToolWorkspace({
           />
         ) : null}
         {activeTool === "users" && isAdmin ? (
-          <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} />
+          <AdminUsersPanel currentUser={currentUser} initialUsers={adminUsers} initialRoleAccess={roleMenuAccess} />
         ) : null}
         {activeTool === "settings" && isAdmin ? <SettingsPanel users={adminUsers.length ? adminUsers : users} /> : null}
         {activeTool === "ai" ? <AgentTester /> : null}
@@ -4505,12 +4551,45 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
 
 function AdminUsersPanel({
   currentUser,
-  initialUsers
+  initialUsers,
+  initialRoleAccess
 }: {
   currentUser: AppUser;
   initialUsers: UserAdminSummary[];
+  initialRoleAccess: RoleMenuAccess;
 }) {
   const [users, setUsers] = useState(initialUsers);
+  const [roleAccess, setRoleAccess] = useState<RoleMenuAccess>(initialRoleAccess);
+  const [accessSaving, setAccessSaving] = useState(false);
+  const [accessMessage, setAccessMessage] = useState("");
+
+  // Togglear una sección para el rol "vendedor" y persistir (admin ve todo).
+  async function toggleRoleSection(role: string, key: MenuSectionKey, visible: boolean) {
+    const current = roleAccess[role] ?? {};
+    const nextRole = { ...current, [key]: visible };
+    // Optimista: pinto el cambio ya.
+    setRoleAccess((prev) => ({ ...prev, [role]: nextRole }));
+    setAccessSaving(true);
+    setAccessMessage("");
+    const response = await fetch("/api/role-access", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role, access: nextRole })
+    });
+    const payload = await readJsonResponse(response);
+    setAccessSaving(false);
+    if (!response.ok) {
+      // Revertir si falló.
+      setRoleAccess((prev) => ({ ...prev, [role]: current }));
+      setAccessMessage(payload?.error ?? "No pudimos guardar el acceso.");
+      return;
+    }
+    if (payload?.access) {
+      setRoleAccess(payload.access);
+    }
+    setAccessMessage("Acceso actualizado.");
+    setTimeout(() => setAccessMessage(""), 2500);
+  }
   const [newUser, setNewUser] = useState({
     full_name: "",
     email: "",
@@ -4573,6 +4652,48 @@ function AdminUsersPanel({
         Usuarios y accesos
         <span>{users.length}</span>
       </div>
+
+      <div className="role-access-card">
+        <div className="role-access-head">
+          <strong>Acceso al menú por rol</strong>
+          <span className="role-access-hint">
+            El Administrador ve todo. Definí qué secciones ve el Vendedor.
+            {accessSaving ? " Guardando…" : accessMessage ? ` ${accessMessage}` : ""}
+          </span>
+        </div>
+        <table className="role-access-table">
+          <thead>
+            <tr>
+              <th>Sección</th>
+              <th>Administrador</th>
+              <th>Vendedor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {MENU_MATRIX_SECTIONS.map((key) => (
+              <tr key={key}>
+                <td>{MENU_SECTION_LABELS[key]}</td>
+                <td>
+                  <input type="checkbox" checked disabled title="El Administrador siempre ve todo" readOnly />
+                </td>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={roleAccess.vendedor?.[key] !== false}
+                    disabled={accessSaving}
+                    onChange={(e) => toggleRoleSection("vendedor", key, e.target.checked)}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="role-access-note">
+          Conversaciones siempre visible. Métricas, Aprendizajes IA, Usuarios y Configuración quedan
+          reservadas al Administrador.
+        </p>
+      </div>
+
       <div className="user-grid">
         {users.map((user) => (
           <UserEditor currentUserId={currentUser.id} key={user.id} onSave={saveUser} user={user} />

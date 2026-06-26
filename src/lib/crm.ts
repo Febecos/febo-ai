@@ -882,6 +882,67 @@ export async function upsertAppSetting(input: {
   return rows[0] ?? null;
 }
 
+// ── Acceso al menú por rol ────────────────────────────────────────────────
+// Define qué secciones del menú lateral ve cada rol. El Admin SIEMPRE ve todo
+// (no se puede limitar, para no auto-bloquearse). Las secciones sensibles
+// (metrics/aprendizajes/users/settings) son admin-only por código y NO se
+// controlan acá. Esto solo togglea las secciones operativas para roles no-admin.
+export const ROLE_MENU_SETTING_KEY = "role_menu_access";
+
+// Secciones operativas controlables por la matriz (excluye 'conversations',
+// que es la base y siempre se ve, y las admin-only).
+export const MENU_MATRIX_SECTIONS = [
+  "contacts",
+  "crm",
+  "templates",
+  "labels",
+  "ai",
+  "transportistas"
+] as const;
+
+export type MenuSectionKey = (typeof MENU_MATRIX_SECTIONS)[number];
+
+// Roles no-admin que la matriz puede limitar (el admin queda fuera: ve todo).
+export const ROLE_MENU_ROLES = ["vendedor"] as const;
+
+export type RoleMenuAccess = Record<string, Partial<Record<MenuSectionKey, boolean>>>;
+
+function defaultRoleMenuAccess(): RoleMenuAccess {
+  const allOn = Object.fromEntries(MENU_MATRIX_SECTIONS.map((key) => [key, true])) as Record<MenuSectionKey, boolean>;
+  return Object.fromEntries(ROLE_MENU_ROLES.map((role) => [role, { ...allOn }]));
+}
+
+// Devuelve la matriz mergeada con los defaults (todo visible si no hay setting).
+export async function getRoleMenuAccess(): Promise<RoleMenuAccess> {
+  const stored = await getSettingValue<RoleMenuAccess>(ROLE_MENU_SETTING_KEY, {});
+  const base = defaultRoleMenuAccess();
+  for (const role of ROLE_MENU_ROLES) {
+    const roleStored = stored?.[role] ?? {};
+    base[role] = { ...base[role], ...roleStored };
+  }
+  return base;
+}
+
+// Persiste el acceso de un rol no-admin. Sanea: solo keys conocidas, solo roles válidos.
+export async function setRoleMenuAccess(role: string, sections: Partial<Record<MenuSectionKey, boolean>>) {
+  if (!ROLE_MENU_ROLES.includes(role as (typeof ROLE_MENU_ROLES)[number])) {
+    throw new Error("Rol no controlable por la matriz.");
+  }
+  const current = await getRoleMenuAccess();
+  const clean: Partial<Record<MenuSectionKey, boolean>> = {};
+  for (const key of MENU_MATRIX_SECTIONS) {
+    clean[key] = sections[key] !== false; // default visible salvo que digan explícitamente false
+  }
+  current[role] = clean;
+  await upsertAppSetting({
+    key: ROLE_MENU_SETTING_KEY,
+    value: current,
+    label: "Acceso al menú por rol",
+    description: "Secciones del menú lateral visibles por rol (admin ve todo)."
+  });
+  return current;
+}
+
 export async function listChannelAccounts() {
   if (!isDbConfigured()) {
     return [] as ChannelAccount[];

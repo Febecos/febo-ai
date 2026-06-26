@@ -158,17 +158,29 @@ type ToolKey = "conversations" | "metrics" | "contacts" | "crm" | "templates" | 
 
 // Acceso al menú por rol (espejo de crm.ts). Admin ve todo; estas son las
 // secciones operativas que la matriz puede limitar para roles no-admin.
-const MENU_MATRIX_SECTIONS = ["contacts", "crm", "templates", "labels", "ai", "transportistas"] as const;
+const MENU_MATRIX_SECTIONS = ["metrics", "contacts", "crm", "templates", "labels", "ai", "transportistas"] as const;
 type MenuSectionKey = (typeof MENU_MATRIX_SECTIONS)[number];
 type RoleMenuAccess = Record<string, Partial<Record<MenuSectionKey, boolean>>>;
 // Etiquetas legibles para la matriz en "Usuarios y accesos".
 const MENU_SECTION_LABELS: Record<MenuSectionKey, string> = {
+  metrics: "Métricas",
   contacts: "Contactos",
   crm: "Tablero CRM",
   templates: "Seguimiento",
   labels: "Etiquetas",
   ai: "Probar IA",
   transportistas: "Transportistas"
+};
+// Default por sección para roles no-admin (espejo de crm.ts): Métricas arranca
+// apagada (era admin-only); el resto visible.
+const MENU_SECTION_DEFAULTS: Record<MenuSectionKey, boolean> = {
+  metrics: false,
+  contacts: true,
+  crm: true,
+  templates: true,
+  labels: true,
+  ai: true,
+  transportistas: true
 };
 type SettingKey =
   | "auto_reply_delay_seconds"
@@ -422,7 +434,11 @@ function ToolWorkspace({
   // ¿El usuario puede ver una sección operativa del menú? Admin ve todo.
   // Para roles no-admin, la matriz por rol decide (default visible).
   const canSeeSection = useCallback(
-    (key: MenuSectionKey) => isAdmin || roleMenuAccess[currentUser.role]?.[key] !== false,
+    (key: MenuSectionKey) => {
+      if (isAdmin) return true;
+      const stored = roleMenuAccess[currentUser.role]?.[key];
+      return stored === undefined ? MENU_SECTION_DEFAULTS[key] : stored;
+    },
     [isAdmin, roleMenuAccess, currentUser.role]
   );
 
@@ -572,7 +588,7 @@ function ToolWorkspace({
           <WhatsAppMark />
           Conversaciones
         </button>
-        {isAdmin ? (
+        {canSeeSection("metrics") ? (
           <button
             className={activeTool === "metrics" ? "active" : ""}
             onClick={() => setActiveTool("metrics")}
@@ -687,7 +703,7 @@ function ToolWorkspace({
             users={users}
           />
         ) : null}
-        {activeTool === "metrics" && isAdmin ? <MetricsPanel stats={stats} users={users} /> : null}
+        {activeTool === "metrics" && canSeeSection("metrics") ? <MetricsPanel stats={stats} users={users} /> : null}
         {activeTool === "templates" ? <TemplatesPanel currentUser={currentUser} /> : null}
         {activeTool === "labels" ? (
           <LabelsPanel

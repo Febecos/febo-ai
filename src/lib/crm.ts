@@ -890,8 +890,9 @@ export async function upsertAppSetting(input: {
 export const ROLE_MENU_SETTING_KEY = "role_menu_access";
 
 // Secciones operativas controlables por la matriz (excluye 'conversations',
-// que es la base y siempre se ve, y las admin-only).
+// que es la base y siempre se ve, y las admin-only por código).
 export const MENU_MATRIX_SECTIONS = [
+  "metrics",
   "contacts",
   "crm",
   "templates",
@@ -902,14 +903,26 @@ export const MENU_MATRIX_SECTIONS = [
 
 export type MenuSectionKey = (typeof MENU_MATRIX_SECTIONS)[number];
 
+// Default de visibilidad por sección para roles no-admin. Casi todo visible
+// (preserva el comportamiento actual), salvo Métricas que históricamente era
+// admin-only → arranca APAGADA y se concede explícitamente desde la matriz.
+export const MENU_SECTION_DEFAULTS: Record<MenuSectionKey, boolean> = {
+  metrics: false,
+  contacts: true,
+  crm: true,
+  templates: true,
+  labels: true,
+  ai: true,
+  transportistas: true
+};
+
 // Roles no-admin que la matriz puede limitar (el admin queda fuera: ve todo).
 export const ROLE_MENU_ROLES = ["vendedor"] as const;
 
 export type RoleMenuAccess = Record<string, Partial<Record<MenuSectionKey, boolean>>>;
 
 function defaultRoleMenuAccess(): RoleMenuAccess {
-  const allOn = Object.fromEntries(MENU_MATRIX_SECTIONS.map((key) => [key, true])) as Record<MenuSectionKey, boolean>;
-  return Object.fromEntries(ROLE_MENU_ROLES.map((role) => [role, { ...allOn }]));
+  return Object.fromEntries(ROLE_MENU_ROLES.map((role) => [role, { ...MENU_SECTION_DEFAULTS }]));
 }
 
 // Devuelve la matriz mergeada con los defaults (todo visible si no hay setting).
@@ -931,7 +944,8 @@ export async function setRoleMenuAccess(role: string, sections: Partial<Record<M
   const current = await getRoleMenuAccess();
   const clean: Partial<Record<MenuSectionKey, boolean>> = {};
   for (const key of MENU_MATRIX_SECTIONS) {
-    clean[key] = sections[key] !== false; // default visible salvo que digan explícitamente false
+    // valor explícito si vino booleano; si no, el default de la sección.
+    clean[key] = typeof sections[key] === "boolean" ? (sections[key] as boolean) : MENU_SECTION_DEFAULTS[key];
   }
   current[role] = clean;
   await upsertAppSetting({

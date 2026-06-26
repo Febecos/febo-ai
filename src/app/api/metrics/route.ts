@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { DashboardGranularity, DashboardStats, getDashboardStats } from "@/lib/crm";
+import { DashboardGranularity, DashboardStats, getDashboardStats, getRoleMenuAccess } from "@/lib/crm";
 import { getSql, isDbConfigured } from "@/lib/db";
 import * as XLSX from "xlsx";
 
@@ -9,8 +9,16 @@ const allowedGroups = new Set<DashboardGranularity>(["day", "week", "month"]);
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
-  if (!user || user.role !== "admin") {
+  if (!user) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  // Admin siempre; un rol no-admin solo si la matriz le concede 'metrics'.
+  if (user.role !== "admin") {
+    const access = await getRoleMenuAccess();
+    if (access[user.role]?.metrics !== true) {
+      return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+    }
   }
 
   const search = request.nextUrl.searchParams;

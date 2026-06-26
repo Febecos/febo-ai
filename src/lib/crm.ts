@@ -2703,6 +2703,20 @@ export async function recordAgentReply(input: {
       assignedTo: humanAssigneeId,
       answer: input.answer
     }).catch((error) => console.error("outgoing webhook chat_escalado failed", error));
+
+    // Bus de eventos central: conversacion.escalada (tipo acordado con DEV Gestión, 26/06).
+    // idempotency_key por conversación → re-escalar la misma charla no duplica.
+    const clienteRows = (await sql`
+      select cliente_id from contacts where id = ${input.contactId}
+    `) as Array<{ cliente_id: number | null }>;
+    await emitEvento({
+      tipo: "conversacion.escalada",
+      entidad: "conversacion",
+      entidadId: input.threadId,
+      payload: { contact_id: input.contactId, motivo: input.intent, canal: "whatsapp" },
+      idempotencyKey: `febo-ai:escalada:${input.threadId}`,
+      clienteId: clienteRows[0]?.cliente_id ?? null
+    });
   }
 
   if (consultype === "caliente") {
@@ -3210,6 +3224,7 @@ export async function getContactBillingInfo(contactId: string | null | undefined
       ct.email,
       ct.cuit,
       ct.consultype,
+      ct.cliente_id,
       u.full_name as assigned_name
     from contacts ct
     left join app_users u on u.id = ct.assigned_to
@@ -3221,6 +3236,7 @@ export async function getContactBillingInfo(contactId: string | null | undefined
     email: string | null;
     cuit: string | null;
     consultype: string | null;
+    cliente_id: number | null;
     assigned_name: string | null;
   }>;
 
@@ -3381,6 +3397,7 @@ export async function saveDetectedContactData(input: {
       entidad: "cliente",
       entidadId: clienteId != null ? String(clienteId) : (saved.cuit ?? input.contactId),
       idempotencyKey: `febo-ai:cliente.actualizado:${input.contactId}:${saved.cuit ?? saved.email ?? ""}`,
+      clienteId,
       payload: {
         contactId: input.contactId,
         clienteId,

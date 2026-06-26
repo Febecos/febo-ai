@@ -472,6 +472,7 @@ async function sendPaymentConfirmation(input: {
     entidad: mejorPedido ? "pedido" : "contacto",
     entidadId: mejorPedido?.pedidoNumero ?? stored.contactId ?? message.from,
     idempotencyKey: stored.messageId ? `febo-ai:comprobante:${stored.messageId}` : null,
+    clienteId: pagoResumen?.clienteId ?? null,
     payload: {
       whatsapp: message.from,
       contactId: stored.contactId ?? null,
@@ -595,7 +596,7 @@ async function notifyAdministracionDelPago(input: {
   });
 
   // Datos para emitir el evento al bus (pago.comprobante_detectado).
-  return { montoArs, cuenta: matched, pedidos, clienteNombre, cuit: billing?.cuit ?? null };
+  return { montoArs, cuenta: matched, pedidos, clienteNombre, cuit: billing?.cuit ?? null, clienteId: billing?.cliente_id ?? null };
 }
 
 function escapeHtml(value: string) {

@@ -3595,6 +3595,10 @@ export async function createManualConversationEvent(input: {
   event: "manual_selector_febecos" | "manual_purchase" | "manual_lead";
   actorUserId: string | null;
   actorName?: string | null;
+  // Si true, registra el evento local (marcador en la UI) pero NO dispara los
+  // webhooks salientes. Lo usa el cierre por comprobante: el Purchase a Meta lo
+  // manda registrar-venta (atribuido); el webhook viejo iba sin monto/fbp/fbc.
+  skipOutgoingWebhook?: boolean;
 }) {
   if (!isDbConfigured() || !input.conversationId) {
     return null;
@@ -3657,7 +3661,9 @@ export async function createManualConversationEvent(input: {
     returning id::text, event, payload, created_at::text
   `) as ConversationEvent[];
 
-  await deliverOutgoingWebhooks(input.event, payload);
+  if (!input.skipOutgoingWebhook) {
+    await deliverOutgoingWebhooks(input.event, payload);
+  }
 
   return rows[0] ?? null;
 }

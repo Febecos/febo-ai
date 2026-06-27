@@ -32,7 +32,10 @@ const schema = z.object({
   CRON_SECRET: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM: z.string().default("Febecos Ventas <ventas@febecos.com>"),
-  PAYMENT_NOTIFY_TO: z.string().default("administracion@febecos.com")
+  PAYMENT_NOTIFY_TO: z.string().default("administracion@febecos.com"),
+  // Si está en "true", el Purchase a Meta (registrar-venta) se manda con dry_run.
+  // Para el primer test con Guille: prender → verificar en Events Manager → apagar.
+  REGISTRAR_VENTA_DRY_RUN: z.string().optional()
 });
 
 export const config = schema.parse(process.env);

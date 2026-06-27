@@ -2,6 +2,7 @@ import { after, NextRequest, NextResponse } from "next/server";
 import { analyzePaymentProof, describeClientImage, PaymentProofAnalysis, refreshConversationMemory, runFebecosAgent, transcribeAudio } from "@/lib/agent";
 import { fetchActiveBankAccounts, matchBankAccount } from "@/lib/banks";
 import { emitEvento } from "@/lib/eventos";
+import { registrarVentaPurchase } from "@/lib/ventas";
 import { sendInternalEmail } from "@/lib/mailer";
 import { config } from "@/lib/config";
 import { getSql } from "@/lib/db";
@@ -492,12 +493,24 @@ async function sendPaymentConfirmation(input: {
     }
   });
 
+  // PURCHASE ATRIBUIDO A META (DEV ROI/FB): FEBO AI es dueño del cierre por
+  // WhatsApp (comprobante). Disparamos UNA vez por comprobante registrar-venta,
+  // que saca fbp/fbc del lead y atribuye la compra. Es el ÚNICO disparo de
+  // Purchase de este path → por eso el evento local va con skipOutgoingWebhook
+  // (el webhook viejo mandaba el Purchase sin monto/atribución = doble).
+  await registrarVentaPurchase({
+    whatsapp: message.from,
+    monto: pagoResumen?.montoArs ?? null,
+    codigoPresupuesto: mejorPedido?.pedidoNumero ?? null
+  }).catch((e) => console.error("No pudimos registrar la venta (Purchase atribuido).", e));
+
   if (stored.threadId) {
     await createManualConversationEvent({
       conversationId: stored.threadId,
       event: "manual_purchase",
       actorUserId: null,
-      actorName: "FEBO AI"
+      actorName: "FEBO AI",
+      skipOutgoingWebhook: true
     }).catch((e) => console.error("No pudimos registrar el evento Purchase.", e));
   }
 }

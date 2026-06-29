@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/window24-followup",
       "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/cron/notif-estado",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

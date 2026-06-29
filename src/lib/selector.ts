@@ -232,8 +232,12 @@ export function extractSlugFromReferralText(headline?: string, body?: string): s
   const text = `${headline ?? ""} ${body ?? ""}`;
   const lower = text.toLowerCase();
 
-  // Normalizar comillas tipográficas (curvas) → rectas antes de buscar diámetros
-  const normalized = lower.replace(/[""]/g, '"').replace(/['']/g, "'");
+  // Normalizar comillas tipográficas (curvas) y símbolos de pulgada → comilla recta
+  // antes de buscar diámetros. Cubre: " U+201C, " U+201D, ″ U+2033 (doble prima),
+  // ' U+2018, ' U+2019, ′ U+2032 (prima) — los anuncios usan cualquiera para 3"/4".
+  const normalized = lower
+    .replace(/[“”″]/g, '"')
+    .replace(/[‘’′]/g, "'");
   let diam: string | null = null;
   if (normalized.includes('6"') || lower.includes("6 pulgadas")) diam = "6";
   else if (normalized.includes('4"') || lower.includes("4 pulgadas")) diam = "4";

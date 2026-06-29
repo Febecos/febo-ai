@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "smoke": "tsx --test scripts/smoke/agent-rules.smoke.ts",
     "db:schema": "node scripts/apply_neon_schema.mjs",
     "import:hariaz": "node scripts/import_hariaz_prospectos.mjs"
   },
@@ -35,6 +36,7 @@
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.26.0",
     "eslint-config-next": "^15.3.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.8.0"
   }
 }

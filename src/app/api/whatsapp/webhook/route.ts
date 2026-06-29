@@ -730,10 +730,16 @@ async function sendAutomaticReply(input: {
   // buscamos la curva de rendimiento y se la pasamos al agente para que la muestre
   // directamente en vez de pedir los 4 datos técnicos.
   let catalogContext: string | null = null;
-  if (message.referral) {
-    // Intentar extraer el slug del texto del anuncio; si no, del mensaje del usuario
+  {
+    // El cliente puede identificar un KIT PUBLICADO de 3 formas: (1) click de anuncio
+    // (message.referral), (2) MANDAR el anuncio como imagen (la descripción de visión
+    // viaja en effectiveAgentMessage: "...bomba de 3" 300W... kit completo"), o (3)
+    // nombrarlo por texto. En CUALQUIERA de los 3 casos es un producto empaquetado con
+    // precio de lista → buscamos su precio en el catálogo para NO tener que dimensionar.
     const slug =
-      extractSlugFromReferralText(message.referral.headline, message.referral.body) ??
+      (message.referral
+        ? extractSlugFromReferralText(message.referral.headline, message.referral.body)
+        : null) ??
       extractSlugFromReferralText(effectiveAgentMessage);
     if (slug) {
       try {

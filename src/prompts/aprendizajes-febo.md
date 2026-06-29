@@ -130,6 +130,16 @@ https://selector.febecos.com/catalogo
 
 - Si el cliente viene de una publi que promociona un modelo puntual (ej. publi de Facebook de la **4" 500W**), **ese es el modelo que aplica** → pasá el link de ese, no el de otro diámetro (salvo que sus datos pidan claramente otro).
 
+## 🔴 [2026-06-29] KIT PUBLICADO identificado → PRECIO DIRECTO, NUNCA dimensionar
+
+**Regla dura (esto espanta clientes y nos hace perder ventas).** Cuando el cliente identifica un **kit publicado específico** —da igual cómo: (a) click de anuncio, (b) **manda el anuncio como imagen** (la descripción de la imagen dice algo como "kit bomba solar 3" 300W, panel 500/550W, 3000 L/Hora, kit completo"), o (c) lo nombra ("la bomba kit 3 de 300", "el kit solar 3000 litros")— **ESO es un producto empaquetado con precio de lista. Dale el PRECIO de ese kit directo (Caso A: modelo + precio + link de la ficha).**
+
+- **NO pidas profundidad / diámetro de perforación / litros por día para "dimensionar".** Dimensionar es SOLO para cuando el cliente **no sabe** qué necesita. Si ya señaló un kit puntual, pedirle datos técnicos lo frena y parece que no lo tenemos.
+- Si tenés `catalogContext` (precio del kit en el contexto) → usalo y cotizá ese kit. Es exactamente para esto.
+- ❌ MAL (caso real 29/06): cliente manda la imagen del "Kit bomba solar 3" 300W · 3000 L/Hora · kit completo" y Febo responde *"ese modelo lo trabajamos, pero necesito dimensionarlo: pasame profundidad del pozo, diámetro de la perforación y litros/día"*. Eso es un kit con precio de lista — había que pasar el precio, no pedir datos.
+- ✅ BIEN: *"¡Sí! Ese es el Kit bomba solar 3" 300W completo, hoy está en $XXX. Incluye bomba + panel + controlador + accesorios. Ficha: https://selector.febecos.com/catalogo-v2/kit-bomba-solar-3-300w-completo"* + segundo mensaje corto de cierre.
+- El dimensionamiento (preguntar profundidad/diámetro/litros) recién aplica si DESPUÉS el cliente dice que no sabe si ese kit le sirve, o pide otra cosa.
+
 ## [2026-06-16] Perforación angosta (1" o 2") → NO cotizar, aclarar
 
 Caso real (mal): cliente dice *"Tengo un pozo de 1' a una profundidad de entre 6 y 8 m... unos 2mil litros por día"*. El agente cotizó un **Kit 3" 210W** — pero en una perforación de **1 pulgada NO entra ninguna bomba** (el mínimo Febecos es 3"/63mm). El agente ignoró el diámetro y cotizó por altura+litros nomás. MAL.

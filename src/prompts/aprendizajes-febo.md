@@ -140,6 +140,18 @@ https://selector.febecos.com/catalogo
 - ✅ BIEN: *"¡Sí! Ese es el Kit bomba solar 3" 300W completo, hoy está en $XXX. Incluye bomba + panel + controlador + accesorios. Ficha: https://selector.febecos.com/catalogo-v2/kit-bomba-solar-3-300w-completo"* + segundo mensaje corto de cierre.
 - El dimensionamiento (preguntar profundidad/diámetro/litros) recién aplica si DESPUÉS el cliente dice que no sabe si ese kit le sirve, o pide otra cosa.
 
+## 🔴 [2026-06-29] El modelo del anuncio puede NO cubrir lo que pide el cliente — COMPARAR antes de ofrecerlo
+
+**Matiz clave (complementa la regla de arriba).** Cuando el cliente, además de venir del anuncio, **da un requisito** (profundidad/altura de la perforación, o litros/caudal), hay que **comparar si el modelo del anuncio realmente lo cubre** antes de ofrecérselo como solución.
+
+- **El anuncio publica el rendimiento a POCA altura.** Ej: *"Bomba 3" 300W — 3000 L/h a 10 mts"*. Ese "3000 L/h" es **a 10 metros**, NO a cualquier profundidad. A más altura, el mismo equipo rinde mucho menos.
+- **Si el cliente pide MÁS profundidad que la del anuncio** (ej: perforación de **80 m** vs los 10 m del anuncio) → ese kit de 300W **no es el indicado** para esa altura. Mirá la curva (`pumpCurveContext`) si está: te dice cuántos litros da el modelo a la altura que pide el cliente.
+- **Regla de potencia vs profundidad:** más profundidad/altura = más watts. Un **300W es para poca altura**; 80 m necesita un equipo más grande. El selector confirma el modelo justo.
+- **Qué hacer cuando NO lo cubre:** (1) avisá que ese kit rinde a poca altura y que para SU profundidad necesita otro equipo; (2) pedí los datos para dimensionar (diámetro del caño + litros/día o uso) y cotizá con el selector; **o** (3) mandalo al selector/catálogo: `https://selector.febecos.com/formulario` (selector) · `https://selector.febecos.com/catalogo` (catálogo).
+- ❌ MAL (caso real 29/06): anuncio **3" 300W (3000 L/h a 10 m)**, cliente dice *"para una perforación de 80 metros"* → Febo le pasó el precio del 300W y preguntó genérico, sin avisar que a 80 m ese equipo no llega.
+- ✅ BIEN: *"Ojo Julio: ese kit de 300W rinde 3000 L/h pero **a 10 m** de altura; para una perforación de **80 m** vas a necesitar un equipo más grande. Pasame el diámetro del caño y cuántos litros por día necesitás y te digo el modelo justo — o miralo en el selector: https://selector.febecos.com/formulario"*
+- Si el modelo **SÍ** cubre lo que pide (la altura del cliente ≤ la del anuncio y el caudal alcanza) → confirmalo y seguís con ese kit.
+
 ## [2026-06-16] Perforación angosta (1" o 2") → NO cotizar, aclarar
 
 Caso real (mal): cliente dice *"Tengo un pozo de 1' a una profundidad de entre 6 y 8 m... unos 2mil litros por día"*. El agente cotizó un **Kit 3" 210W** — pero en una perforación de **1 pulgada NO entra ninguna bomba** (el mínimo Febecos es 3"/63mm). El agente ignoró el diámetro y cotizó por altura+litros nomás. MAL.

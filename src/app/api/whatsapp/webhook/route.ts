@@ -730,6 +730,7 @@ async function sendAutomaticReply(input: {
   // buscamos la curva de rendimiento y se la pasamos al agente para que la muestre
   // directamente en vez de pedir los 4 datos técnicos.
   let catalogContext: string | null = null;
+  let pumpCurveContext: string | null = null;
   {
     // El cliente puede identificar un KIT PUBLICADO de 3 formas: (1) click de anuncio
     // (message.referral), (2) MANDAR el anuncio como imagen (la descripción de visión
@@ -748,6 +749,13 @@ async function sendAutomaticReply(input: {
           // Resolver el slug real y el precio base desde la DB usando el codigo del producto
           const extras = await getPumpCatalogExtras(product.sugerencia.codigo);
           catalogContext = formatCatalogContext(product, extras.urlSlug ?? slug, extras.precioBase);
+          // CURVA del modelo del anuncio: así el agente sabe cuántos litros rinde a CADA
+          // altura y puede comparar con la profundidad que pide el cliente (ej: el kit 300W
+          // da 3000 L/h a 10m pero mucho menos a 80m → no le sirve, hay que dimensionar/derivar).
+          const detail = await fetchPumpDetail(product.sugerencia.codigo).catch(() => null);
+          if (detail && detail.curvas.length > 0) {
+            pumpCurveContext = formatPumpCurveText(detail);
+          }
         }
       } catch (e) {
         console.warn("[webhook] catalog enrichment failed:", e);
@@ -755,9 +763,8 @@ async function sendAutomaticReply(input: {
     }
   }
 
-  let pumpCurveContext: string | null = null;
   const caudalKeywords = /caudal|litros|litro|l\/h|l\/d|cuanto saca|cuánto saca|rendimiento|performance|cuanto bombea|cuánto bombea/i;
-  if (caudalKeywords.test(effectiveAgentMessage) && stored.threadId) {
+  if (!pumpCurveContext && caudalKeywords.test(effectiveAgentMessage) && stored.threadId) {
     try {
       const sqlCurve = getSql();
       const recentMessages = await sqlCurve`

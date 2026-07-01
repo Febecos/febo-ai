@@ -16,6 +16,7 @@ const userNotificationSoundSchema = z.object({
 
 const settingSchema = z.object({
   key: z.enum([
+    "ai_auto_reply_enabled",
     "auto_reply_delay_seconds",
     "hot_lead_default_assignee_id",
     "notification_sound",
@@ -27,7 +28,7 @@ const settingSchema = z.object({
     "whatsapp_selector_flow_footer",
     "whatsapp_selector_flow_cta"
   ]),
-  value: z.union([z.string(), z.number(), z.null(), notificationSoundSchema, z.record(z.string(), userNotificationSoundSchema)])
+  value: z.union([z.string(), z.number(), z.boolean(), z.null(), notificationSoundSchema, z.record(z.string(), userNotificationSoundSchema)])
 });
 
 export async function GET() {
@@ -58,9 +59,15 @@ export async function POST(request: NextRequest) {
   let value:
     | string
     | number
+    | boolean
     | null
     | z.infer<typeof notificationSoundSchema>
     | Record<string, z.infer<typeof userNotificationSoundSchema>> = parsed.data.value;
+
+  // Interruptor global de respuestas automáticas de la IA (para pruebas manuales).
+  if (parsed.data.key === "ai_auto_reply_enabled") {
+    value = value === true || value === "true" || value === 1;
+  }
 
   if (parsed.data.key === "auto_reply_delay_seconds") {
     const numericValue = Number(value);

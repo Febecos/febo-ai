@@ -183,6 +183,7 @@ const MENU_SECTION_DEFAULTS: Record<MenuSectionKey, boolean> = {
   transportistas: true
 };
 type SettingKey =
+  | "ai_auto_reply_enabled"
   | "auto_reply_delay_seconds"
   | "hot_lead_default_assignee_id"
   | "notification_sound"
@@ -1381,7 +1382,7 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
 
   async function saveSetting(
     key: SettingKey,
-    value: string | number | null | NotificationSoundConfig | Record<string, UserNotificationSoundSetting>
+    value: string | number | boolean | null | NotificationSoundConfig | Record<string, UserNotificationSoundSetting>
   ) {
     setSavingKey(key);
     setMessage("");
@@ -1690,6 +1691,7 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
     setMessage("Webhook eliminado.");
   }
 
+  const aiAutoReplyEnabled = getValue("ai_auto_reply_enabled", true) !== false;
   const delayValue = Number(getValue("auto_reply_delay_seconds", 90));
   const hotLeadAssignee = String(getValue("hot_lead_default_assignee_id", "") ?? "");
   const selectorFlowId = String(getValue("whatsapp_selector_flow_id", "") ?? "");
@@ -1719,6 +1721,28 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
       </div>
 
       <div className="settings-stack">
+        <article className="settings-card ai-global-toggle">
+          <div className="ai-global-toggle-row">
+            <span>
+              <h3>Respuestas automáticas de la IA {aiAutoReplyEnabled ? "🟢" : "⏸️"}</h3>
+              <p>
+                {aiAutoReplyEnabled
+                  ? "FEBO responde solo a los mensajes que entran. Apagalo para responder a mano (pruebas)."
+                  : "PAUSADO: los mensajes entran al inbox pero FEBO NO responde. Respondé a mano y volvé a activarlo cuando termines."}
+              </p>
+            </span>
+            <button
+              type="button"
+              className={`ia-toggle ${aiAutoReplyEnabled ? "on" : ""}`}
+              disabled={savingKey === "ai_auto_reply_enabled"}
+              onClick={() => void saveSetting("ai_auto_reply_enabled", !aiAutoReplyEnabled)}
+            >
+              <span className="ia-toggle-dot" />
+              {savingKey === "ai_auto_reply_enabled" ? "Guardando" : aiAutoReplyEnabled ? "IA ACTIVA" : "IA PAUSADA"}
+            </button>
+          </div>
+        </article>
+
         <div className="settings-tile-grid">
         <article className={`settings-card settings-accordion ${openSettingsSection === "delay" ? "is-open" : ""}`}>
           <button

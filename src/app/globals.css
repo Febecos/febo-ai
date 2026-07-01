@@ -1100,6 +1100,32 @@ button:disabled {
   opacity: 0.6;
 }
 
+.ai-global-toggle {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.ai-global-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.ai-global-toggle-row h3 {
+  margin: 0 0 2px;
+}
+
+.ai-global-toggle-row p {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.75;
+  max-width: 520px;
+}
+
 .user-card {
   border: 1px solid var(--line);
   border-radius: 8px;

@@ -223,6 +223,13 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
+    // Interruptor GLOBAL (Configuración → "Respuestas automáticas de la IA").
+    // Si está pausado, el mensaje igual entra al inbox pero la IA NO responde
+    // (para hacer pruebas respondiendo a mano). Los comprobantes ya se procesaron arriba.
+    if (!(await getSettingValue("ai_auto_reply_enabled", true))) {
+      continue;
+    }
+
     scheduleAutomaticReply({
       message,
       interactiveId: isText ? message.interactiveId : undefined,

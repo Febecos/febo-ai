@@ -25,8 +25,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
 
+  // Etiquetas = config compartida de clasificación de FEBO. Cualquier usuario con
+  // acceso a la sección (gateado por la matriz de menú por rol) ve TODAS las etiquetas
+  // (incl. inactivas) para poder ver/editar su contenido, como el admin.
   return NextResponse.json({
-    labels: await listLabelDefinitions(user.role === "admin" && request.nextUrl.searchParams.get("all") === "1"),
+    labels: await listLabelDefinitions(request.nextUrl.searchParams.get("all") === "1"),
     conversationLabels: await listConversationConsultypeLabels()
   });
 }
@@ -40,21 +43,17 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
 
+  // Decisión Guille (29/06): el vendedor con acceso a Etiquetas edita como admin
+  // (ver/cambiar descripción/color/orden, restaurar base, cargar descripciones IA).
+  // El acceso a la sección lo controla la matriz de menú por rol.
   const applyAi = applyAiSchema.safeParse(body);
   if (applyAi.success) {
-    if (user.role !== "admin") {
-      return NextResponse.json({ error: "Solo administrador." }, { status: 403 });
-    }
     return NextResponse.json({ labels: await applyRecommendedLabelInstructions() });
   }
 
   const restore = restoreSchema.safeParse(body);
 
   if (restore.success) {
-    if (user.role !== "admin") {
-      return NextResponse.json({ error: "Solo administrador puede restaurar etiquetas base." }, { status: 403 });
-    }
-
     return NextResponse.json({
       labels: await restoreBaseLabelDefinitions()
     });
@@ -66,17 +65,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Etiqueta invalida." }, { status: 400 });
   }
 
-  const label = await upsertLabelDefinition(
-    user.role === "admin"
-      ? parsed.data
-      : {
-          name: parsed.data.name,
-          color: parsed.data.color,
-          instructions: "Etiqueta creada desde ventas. Revisar instrucciones desde administrador.",
-          active: true,
-          sortOrder: 500
-        }
-  );
+  const label = await upsertLabelDefinition(parsed.data);
 
   return NextResponse.json({
     label,

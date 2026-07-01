@@ -522,7 +522,7 @@ function ToolWorkspace({
   }, []);
 
   async function loadLabelDefinitions() {
-    const response = await fetch(currentUser.role === "admin" ? "/api/labels?all=1" : "/api/labels");
+    const response = await fetch("/api/labels?all=1");
     const payload = await readJsonResponse(response);
 
     if (response.ok && Array.isArray(payload?.labels)) {
@@ -2645,13 +2645,12 @@ function LabelsPanel({
   }, [labelSearch, sortedLabels]);
   const selectedLabel = sortedLabels.find((label) => label.slug === selectedSlug) ?? filteredSortedLabels[0] ?? sortedLabels[0];
   const activeCount = labels.filter((label) => label.active).length;
-  const isAdmin = currentUser.role === "admin";
 
   useEffect(() => {
-    if (isAdmin && !selectedSlug && sortedLabels[0]) {
+    if (!selectedSlug && sortedLabels[0]) {
       editLabel(sortedLabels[0]);
     }
-  }, [isAdmin, selectedSlug, sortedLabels]);
+  }, [selectedSlug, sortedLabels]);
 
   function editLabel(label: LabelDefinition) {
     setSelectedSlug(label.slug);
@@ -2698,11 +2697,6 @@ function LabelsPanel({
     if (!form.slug && payload?.label?.slug) {
       setForm((current) => ({ ...current, slug: payload.label.slug }));
       setSelectedSlug(payload.label.slug);
-    }
-
-    if (!isAdmin) {
-      setForm({ slug: "", name: "", color: "#38bdf8", instructions: "", active: true, sortOrder: 100 });
-      setSelectedSlug("");
     }
   }
 
@@ -2754,52 +2748,6 @@ function LabelsPanel({
       if (current) editLabel(current);
     }
     setMessage("Descripciones para la IA actualizadas (solo se tocó la descripción, no nombre/color).");
-  }
-
-  if (!isAdmin) {
-    return (
-      <section className="admin-panel labels-panel">
-        <div className="panel-title">
-          <div>
-            <h2>Etiquetas</h2>
-            <p>Pod&eacute;s crear etiquetas simples para ordenar conversaciones. La configuraci&oacute;n de IA queda para administrador.</p>
-            <small>{activeCount} etiquetas activas disponibles.</small>
-          </div>
-        </div>
-
-        <form className="admin-form compact-label-form" onSubmit={saveLabel}>
-          <label className="field">
-            Nombre de etiqueta
-            <input
-              placeholder="Ej: Seguimiento especial"
-              value={form.name}
-              onChange={(event) => setForm({ ...form, name: event.target.value })}
-              required
-            />
-          </label>
-          <label className="field color-field">
-            Color
-            <span>
-              <input type="color" value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} />
-              <input value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} />
-            </span>
-          </label>
-          <button className="primary" disabled={saving} type="submit">
-            <UserPlus size={17} />
-            {saving ? "Guardando" : "Agregar etiqueta"}
-          </button>
-          {message ? <span className={message.includes("No ") ? "warn" : "ok"}>{message}</span> : null}
-        </form>
-
-        <div className="label-preview-strip label-simple-strip">
-          {sortedLabels.map((label) => (
-            <span className="tag-pill preview" key={label.slug} style={{ "--tag-color": label.color } as CSSProperties}>
-              {label.name}
-            </span>
-          ))}
-        </div>
-      </section>
-    );
   }
 
   return (

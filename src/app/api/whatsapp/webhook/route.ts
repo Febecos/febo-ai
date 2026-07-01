@@ -3,6 +3,7 @@ import { analyzePaymentProof, describeClientImage, PaymentProofAnalysis, refresh
 import { fetchActiveBankAccounts, matchBankAccount } from "@/lib/banks";
 import { emitEvento } from "@/lib/eventos";
 import { registrarVentaPurchase } from "@/lib/ventas";
+import { aiShouldReplyNow, type AiReplySchedule } from "@/lib/ai-schedule";
 import { sendInternalEmail } from "@/lib/mailer";
 import { config } from "@/lib/config";
 import { getSql } from "@/lib/db";
@@ -227,6 +228,12 @@ export async function POST(request: NextRequest) {
     // Si está pausado, el mensaje igual entra al inbox pero la IA NO responde
     // (para hacer pruebas respondiendo a mano). Los comprobantes ya se procesaron arriba.
     if (!(await getSettingValue("ai_auto_reply_enabled", true))) {
+      continue;
+    }
+
+    // HORARIO semanal: en el horario de atención humana la IA se pausa; fuera responde.
+    const replySchedule = await getSettingValue<AiReplySchedule | null>("ai_reply_schedule", null);
+    if (!aiShouldReplyNow(replySchedule)) {
       continue;
     }
 

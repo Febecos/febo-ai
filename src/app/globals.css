@@ -1126,6 +1126,60 @@ button:disabled {
   max-width: 520px;
 }
 
+.ai-schedule-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.ai-schedule-enable {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ai-schedule-days {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ai-schedule-days.is-disabled {
+  opacity: 0.5;
+}
+
+.ai-schedule-day {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ai-schedule-day-name {
+  width: 84px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ai-schedule-day select {
+  min-width: 260px;
+}
+
+.ai-schedule-window {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.ai-schedule-actions {
+  margin-top: 12px;
+}
+
 .user-card {
   border: 1px solid var(--line);
   border-radius: 8px;

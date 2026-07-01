@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { CSSProperties, DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TransportistaRow, LocalidadRow } from "@/lib/febecos";
+import { DAY_KEYS, DAY_LABELS, defaultAiReplySchedule, sanitizeAiReplySchedule, type AiReplySchedule, type DayKey, type DayMode } from "@/lib/ai-schedule";
 
 // URL pública del selector — GET endpoints son públicos, CORS: *
 const SELECTOR_API = "https://selector.febecos.com/api";
@@ -184,6 +185,7 @@ const MENU_SECTION_DEFAULTS: Record<MenuSectionKey, boolean> = {
 };
 type SettingKey =
   | "ai_auto_reply_enabled"
+  | "ai_reply_schedule"
   | "auto_reply_delay_seconds"
   | "hot_lead_default_assignee_id"
   | "notification_sound"
@@ -1340,6 +1342,7 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
   });
   const [savingKey, setSavingKey] = useState("");
   const [message, setMessage] = useState("");
+  const [scheduleDraft, setScheduleDraft] = useState<AiReplySchedule | null>(null);
   const settingsNotificationAudioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
@@ -1382,7 +1385,7 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
 
   async function saveSetting(
     key: SettingKey,
-    value: string | number | boolean | null | NotificationSoundConfig | Record<string, UserNotificationSoundSetting>
+    value: string | number | boolean | null | NotificationSoundConfig | AiReplySchedule | Record<string, UserNotificationSoundSetting>
   ) {
     setSavingKey(key);
     setMessage("");
@@ -1692,6 +1695,15 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
   }
 
   const aiAutoReplyEnabled = getValue("ai_auto_reply_enabled", true) !== false;
+  const aiSchedule = sanitizeAiReplySchedule(getValue("ai_reply_schedule", defaultAiReplySchedule()));
+  const sched: AiReplySchedule = scheduleDraft ?? aiSchedule;
+  const patchScheduleDay = (day: DayKey, patch: Partial<AiReplySchedule["days"][DayKey]>) => {
+    setScheduleDraft({ ...sched, days: { ...sched.days, [day]: { ...(sched.days[day] ?? { mode: "ai_all" }), ...patch } } });
+  };
+  async function saveSchedule() {
+    const ok = await saveSetting("ai_reply_schedule", sanitizeAiReplySchedule(sched));
+    if (ok) setScheduleDraft(null);
+  }
   const delayValue = Number(getValue("auto_reply_delay_seconds", 90));
   const hotLeadAssignee = String(getValue("hot_lead_default_assignee_id", "") ?? "");
   const selectorFlowId = String(getValue("whatsapp_selector_flow_id", "") ?? "");
@@ -1739,6 +1751,76 @@ function SettingsPanel({ users }: { users: AppUser[] }) {
             >
               <span className="ia-toggle-dot" />
               {savingKey === "ai_auto_reply_enabled" ? "Guardando" : aiAutoReplyEnabled ? "IA ACTIVA" : "IA PAUSADA"}
+            </button>
+          </div>
+        </article>
+
+        <article className="settings-card ai-schedule-card">
+          <div className="ai-global-toggle-row">
+            <span>
+              <h3>Horario de atención por día 🗓️</h3>
+              <p>
+                Cuando ustedes están conectados, la IA se pausa (atienden a mano); fuera de ese horario, responde la IA.
+                Solo aplica si el interruptor de arriba está en <strong>IA ACTIVA</strong>. Zona horaria: Argentina.
+              </p>
+            </span>
+            <label className="ai-schedule-enable">
+              <input
+                type="checkbox"
+                checked={sched.enabled}
+                onChange={(e) => setScheduleDraft({ ...sched, enabled: e.target.checked })}
+              />
+              Usar horario
+            </label>
+          </div>
+
+          <div className={`ai-schedule-days ${sched.enabled ? "" : "is-disabled"}`}>
+            {DAY_KEYS.map((day) => {
+              const cfg = sched.days[day] ?? { mode: "ai_all" as DayMode };
+              const showWindow = cfg.mode === "humans_window" || cfg.mode === "ai_window";
+              return (
+                <div className="ai-schedule-day" key={day}>
+                  <span className="ai-schedule-day-name">{DAY_LABELS[day]}</span>
+                  <select
+                    value={cfg.mode}
+                    disabled={!sched.enabled}
+                    onChange={(e) => patchScheduleDay(day, { mode: e.target.value as DayMode })}
+                  >
+                    <option value="ai_all">IA todo el día</option>
+                    <option value="humans_all">Atienden ustedes (IA en pausa)</option>
+                    <option value="humans_window">Atienden ustedes de… a… (IA responde el resto)</option>
+                    <option value="ai_window">IA solo de… a…</option>
+                  </select>
+                  {showWindow ? (
+                    <span className="ai-schedule-window">
+                      <input
+                        type="time"
+                        value={cfg.from ?? "09:00"}
+                        disabled={!sched.enabled}
+                        onChange={(e) => patchScheduleDay(day, { from: e.target.value })}
+                      />
+                      <span>a</span>
+                      <input
+                        type="time"
+                        value={cfg.to ?? "18:00"}
+                        disabled={!sched.enabled}
+                        onChange={(e) => patchScheduleDay(day, { to: e.target.value })}
+                      />
+                    </span>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="ai-schedule-actions">
+            <button
+              type="button"
+              className="primary compact"
+              disabled={savingKey === "ai_reply_schedule" || !scheduleDraft}
+              onClick={() => void saveSchedule()}
+            >
+              {savingKey === "ai_reply_schedule" ? "Guardando" : scheduleDraft ? "Guardar horario" : "Sin cambios"}
             </button>
           </div>
         </article>

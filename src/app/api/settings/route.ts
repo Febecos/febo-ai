@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { listAppSettings, upsertAppSetting } from "@/lib/crm";
+import { sanitizeAiReplySchedule } from "@/lib/ai-schedule";
 
 const notificationSoundSchema = z.object({
   sound: z.enum(["chime", "ping", "soft", "alert", "none"]),
@@ -14,9 +15,21 @@ const userNotificationSoundSchema = z.object({
   volume: z.number().min(0).max(1).optional()
 });
 
+const scheduleDaySchema = z.object({
+  mode: z.enum(["ai_all", "humans_all", "humans_window", "ai_window"]),
+  from: z.string().optional(),
+  to: z.string().optional()
+});
+const scheduleSchema = z.object({
+  enabled: z.boolean(),
+  tz: z.string().optional(),
+  days: z.record(z.enum(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]), scheduleDaySchema)
+});
+
 const settingSchema = z.object({
   key: z.enum([
     "ai_auto_reply_enabled",
+    "ai_reply_schedule",
     "auto_reply_delay_seconds",
     "hot_lead_default_assignee_id",
     "notification_sound",
@@ -28,7 +41,7 @@ const settingSchema = z.object({
     "whatsapp_selector_flow_footer",
     "whatsapp_selector_flow_cta"
   ]),
-  value: z.union([z.string(), z.number(), z.boolean(), z.null(), notificationSoundSchema, z.record(z.string(), userNotificationSoundSchema)])
+  value: z.union([z.string(), z.number(), z.boolean(), z.null(), notificationSoundSchema, scheduleSchema, z.record(z.string(), userNotificationSoundSchema)])
 });
 
 export async function GET() {
@@ -62,11 +75,17 @@ export async function POST(request: NextRequest) {
     | boolean
     | null
     | z.infer<typeof notificationSoundSchema>
+    | z.infer<typeof scheduleSchema>
     | Record<string, z.infer<typeof userNotificationSoundSchema>> = parsed.data.value;
 
   // Interruptor global de respuestas automáticas de la IA (para pruebas manuales).
   if (parsed.data.key === "ai_auto_reply_enabled") {
     value = value === true || value === "true" || value === 1;
+  }
+
+  // Horario semanal de la IA: saneamos a una estructura válida antes de persistir.
+  if (parsed.data.key === "ai_reply_schedule") {
+    value = sanitizeAiReplySchedule(value);
   }
 
   if (parsed.data.key === "auto_reply_delay_seconds") {

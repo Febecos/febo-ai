@@ -443,6 +443,48 @@ export async function fetchWhatsAppMessageTemplates() {
   return templates;
 }
 
+/**
+ * Crea (envía a aprobación) una plantilla de mensaje en Meta.
+ * POST {WABA_ID}/message_templates. Meta EXIGE ejemplos para las variables.
+ * Devuelve el id/estado o lanza con el mensaje de error de Meta.
+ */
+export async function createWhatsAppMessageTemplate(input: {
+  name: string;
+  language: string;
+  category: string; // MARKETING | UTILITY | AUTHENTICATION
+  body: string;
+  example?: string[]; // valores de ejemplo para {{1}}..{{n}}, en orden
+}): Promise<{ id?: string; status?: string; category?: string }> {
+  const businessAccountId = requireEnv("WHATSAPP_BUSINESS_ACCOUNT_ID");
+  const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
+
+  const bodyComponent: Record<string, unknown> = { type: "BODY", text: input.body };
+  if (input.example && input.example.length > 0) {
+    bodyComponent.example = { body_text: [input.example] };
+  }
+
+  const response = await fetch(`https://graph.facebook.com/v20.0/${businessAccountId}/message_templates`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      name: input.name,
+      language: input.language,
+      category: input.category,
+      components: [bodyComponent]
+    })
+  });
+
+  const payload = (await response.json().catch(() => ({}))) as { id?: string; status?: string; category?: string; error?: { message?: string; error_user_msg?: string } };
+  if (!response.ok) {
+    const msg = payload.error?.error_user_msg || payload.error?.message || `HTTP ${response.status}`;
+    throw new Error(msg);
+  }
+  return { id: payload.id, status: payload.status, category: payload.category };
+}
+
 function humanizeTemplateName(name: string) {
   return name
     .replace(/[_-]+/g, " ")

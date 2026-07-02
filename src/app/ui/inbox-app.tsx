@@ -3911,8 +3911,30 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
   const [window24Config, setWindow24Config] = useState({ delayHours: 21, text: "Hola! 👋 Te escribimos desde Febecos. ¿Pudiste ver los datos del equipo que te compartimos? Si tenés alguna duda o querés que un asesor te ayude a elegir la bomba solar ideal para tu campo, estamos por acá. 😊" });
   const [window24Saving, setWindow24Saving] = useState(false);
   const [window24Loaded, setWindow24Loaded] = useState(false);
+  const [creatingReactivation, setCreatingReactivation] = useState(false);
   const [message, setMessage] = useState("");
   const isAdmin = currentUser.role === "admin";
+
+  async function createReactivationTemplates() {
+    setCreatingReactivation(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/templates/create-reactivation", { method: "POST" });
+      const payload = await readJsonResponse(response);
+      if (!response.ok) {
+        setMessage(payload?.error ?? "No pudimos crear las plantillas de reactivación.");
+        return;
+      }
+      const t = (payload?.templates ?? []) as Array<{ name: string; ok: boolean; status?: string; error?: string }>;
+      const okCount = t.filter((x) => x.ok).length;
+      const detail = t.map((x) => `${x.ok ? "✅" : "❌"} ${x.name}${x.status ? ` (${x.status})` : ""}${x.error ? ` — ${x.error}` : ""}`).join(" · ");
+      setMessage(`Plantillas: ${okCount}/${t.length} enviadas a Meta. ${detail}. Etiquetas creadas. Revisá el estado de aprobación en unos minutos con "Sincronizar Meta".`);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Error al crear plantillas.");
+    } finally {
+      setCreatingReactivation(false);
+    }
+  }
   const automationRulesByState = useMemo(() => {
     const groups = new Map<string, TemplateAutomationRule[]>();
 
@@ -4565,6 +4587,10 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
             <button className="secondary" disabled={syncingTemplates} onClick={syncMetaTemplates} type="button">
               <RefreshCcw size={17} />
               {syncingTemplates ? "Sincronizando" : "Sincronizar Meta"}
+            </button>
+            <button className="primary" disabled={creatingReactivation} onClick={() => void createReactivationTemplates()} type="button" title="Da de alta en Meta las 3 plantillas MARKETING de la campaña de reactivación + crea las 6 etiquetas. Envía a aprobación de Meta.">
+              <Bot size={16} />
+              {creatingReactivation ? "Creando…" : "Crear plantillas reactivación (Meta)"}
             </button>
             <textarea
               onChange={(event) => setBulkTemplates(event.target.value)}

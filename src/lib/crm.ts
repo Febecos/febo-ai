@@ -2296,10 +2296,12 @@ export async function recordIncomingMessage(input: {
   const contactId = contacts[0].id;
   const isNewContact = contacts[0].is_new;
 
-  // Volcar contacto nuevo a la base de clientes unificada (fire-and-forget, dedup por whatsapp)
+  // Volcar contacto nuevo a la base de clientes unificada (fire-and-forget, dedup por whatsapp).
+  // SIN `tipo`: un primer mensaje de WhatsApp es una CONSULTA, no una compra. El endpoint de
+  // Gestión default a 'contacto' (📇 no compró) en el insert; en updates no pisa el tipo real
+  // (COALESCE). "Cliente (compró)" lo determina Gestión con el flag ✓Compró (factura real).
   if (isNewContact) {
     upsertClienteUnificado({
-      tipo: "cliente_final",
       nombre: input.contactName ?? null,
       whatsapp: phone,
       origen: "febo_ai"
@@ -2447,10 +2449,10 @@ export async function recordSelectorCheckoutLead(input: SelectorCheckoutLead) {
   const contactId = contacts[0].id;
   const isNewSelectorContact = contacts[0].is_new;
 
-  // Volcar a la base de clientes unificada si es contacto nuevo
+  // Volcar a la base de clientes unificada si es contacto nuevo. SIN `tipo` (ver nota arriba:
+  // consulta ≠ compra; Gestión default 'contacto' y determina 'cliente_final' por factura real).
   if (isNewSelectorContact) {
     upsertClienteUnificado({
-      tipo: "cliente_final",
       whatsapp: phone,
       origen: "selector"
     }, contactId);
@@ -3397,11 +3399,11 @@ export async function updateContact(input: {
     returning id::text, phone, display_name, email, cuit
   `) as Array<{ id: string; phone: string | null; display_name: string | null; email: string | null; cuit: string | null }>;
 
-  // Cuando se graba un email, volcarlo a la base de clientes unificada (dedup CUIT→email→whatsapp)
+  // Cuando se graba un email, volcarlo a la base de clientes unificada (dedup CUIT→email→whatsapp).
+  // SIN `tipo`: dar datos fiscales no es una compra (ver nota arriba).
   const saved = rows[0];
   if (saved?.email && saved.phone) {
     await upsertClienteUnificado({
-      tipo: "cliente_final",
       nombre: saved.display_name ?? null,
       razon_social: input.afipData?.razonSocial ?? null,
       whatsapp: saved.phone,
@@ -3460,8 +3462,8 @@ export async function saveDetectedContactData(input: {
   // Volcar al CRM unificado: cuando el cliente da datos fiscales (cuit/email) es el
   // lead más caliente, debe quedar en clientes. Dedup server-side CUIT→email→whatsapp.
   if (saved?.phone && (saved.email || saved.cuit)) {
+    // SIN `tipo`: dar CUIT/email es un lead caliente, no una compra confirmada.
     const clienteId = await upsertClienteUnificado({
-      tipo: "cliente_final",
       nombre: saved.display_name ?? null,
       whatsapp: saved.phone,
       email: saved.email ?? null,

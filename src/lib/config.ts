@@ -37,7 +37,9 @@ const schema = z.object({
   // Para el primer test con Guille: prender → verificar en Events Manager → apagar.
   REGISTRAR_VENTA_DRY_RUN: z.string().optional(),
   // Token de herramientas admin (campaña reactivación jul-2026: alta de plantillas + motor de envío).
-  ADMIN_TOOLS_TOKEN: z.string().optional()
+  ADMIN_TOOLS_TOKEN: z.string().optional(),
+  // Read-through al CRM central (febo-gestion) para el contacto: gana el CRM en campos maestros.
+  GESTION_API_BASE_URL: z.string().url().default("https://gestion.febecos.com/api")
 });
 
 export const config = schema.parse(process.env);

@@ -1240,6 +1240,30 @@ button:disabled {
   white-space: pre-wrap;
 }
 
+.crm-sync-banner {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+.crm-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.crm-tag-pill {
+  background: rgba(56, 189, 248, 0.2);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .user-card {
   border: 1px solid var(--line);
   border-radius: 8px;

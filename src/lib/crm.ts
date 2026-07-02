@@ -140,6 +140,7 @@ export type ContactSummary = {
   last_message_at: string | null;
   conversation_id: string | null;
   conversation_status: string | null;
+  cliente_id: number | null;
 };
 
 export type MessageTemplate = {
@@ -3070,7 +3071,8 @@ export async function listContacts(filters: ContactFilters = {}) {
       ct.created_at::text,
       c.id::text as conversation_id,
       c.status as conversation_status,
-      c.last_message_at::text as last_message_at
+      c.last_message_at::text as last_message_at,
+      ct.cliente_id
     from contacts ct
     left join channel_accounts ca on ca.id = ct.account_id
     left join app_users u on u.id = ct.assigned_to

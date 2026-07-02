@@ -3401,6 +3401,8 @@ function ContactEditorModal({
   const [afipLoading, setAfipLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [crmTags, setCrmTags] = useState<string[]>([]);
+  const [crmSynced, setCrmSynced] = useState(false);
   const [form, setForm] = useState({
     displayName: "",
     phone: "",
@@ -3437,7 +3439,44 @@ function ContactEditorModal({
       provincia: arca?.provincia ?? "",
       additional: info?.additional ?? []
     });
+    setCrmTags([]);
+    setCrmSynced(false);
   }, [contact.id]);
+
+  // READ-THROUGH al CRM central (pedido Guille 02/07): si el contacto ya está vinculado a un
+  // cliente del CRM (cliente_id), traer el registro fresco y pisar los campos MAESTROS locales
+  // con lo que diga el CRM (nombre/razón social, CUIT, email, dirección, tildes). Solo pisa el
+  // FORM en memoria — no escribe nada en la DB local hasta que el operador toque "Guardar".
+  useEffect(() => {
+    if (!contact.cliente_id) return;
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(`/api/crm-lookup?clienteId=${contact.cliente_id}`);
+      const data = await readJsonResponse(res);
+      if (cancelled || !res.ok || !data?.ok || !data.cliente) return;
+      const c = data.cliente as {
+        nombre: string | null; apellido: string | null; razonSocial: string | null;
+        email: string | null; cuit: string | null; domicilio: string | null;
+        localidad: string | null; provincia: string | null; codigoPostal: string | null;
+        tags: string[];
+      };
+      const nombreCrm = c.razonSocial || [c.nombre, c.apellido].filter(Boolean).join(" ").trim();
+      setForm((f) => ({
+        ...f,
+        displayName: nombreCrm || f.displayName,
+        email: c.email || f.email,
+        cuit: c.cuit || f.cuit,
+        razonSocial: c.razonSocial || f.razonSocial,
+        domicilio: c.domicilio || f.domicilio,
+        codigoPostal: c.codigoPostal || f.codigoPostal,
+        localidad: c.localidad || f.localidad,
+        provincia: c.provincia || f.provincia
+      }));
+      setCrmTags(c.tags ?? []);
+      setCrmSynced(true);
+    })();
+    return () => { cancelled = true; };
+  }, [contact.cliente_id]);
 
   async function lookupAfip() {
     const cuit = form.cuit.replace(/\D/g, "");
@@ -3499,6 +3538,24 @@ function ContactEditorModal({
           <button className="icon-btn" onClick={onClose} type="button">✕</button>
         </div>
         <form className="modal-body" onSubmit={saveContact}>
+          {contact.cliente_id ? (
+            <div className="crm-sync-banner">
+              {crmSynced ? (
+                <>
+                  <span>🔄 Datos sincronizados desde el CRM central (Gestión). Nombre/CUIT/email/dirección reflejan lo cargado ahí.</span>
+                  {crmTags.length ? (
+                    <div className="crm-tags-row">
+                      {crmTags.map((t) => (
+                        <span className="crm-tag-pill" key={t}>{t}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <span>Vinculado al CRM central (cliente #{contact.cliente_id}) — cargando datos frescos…</span>
+              )}
+            </div>
+          ) : null}
           <div className="form-grid">
             <label className="field">
               Nombre y apellido

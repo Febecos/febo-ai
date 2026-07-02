@@ -454,6 +454,8 @@ export async function createWhatsAppMessageTemplate(input: {
   category: string; // MARKETING | UTILITY | AUTHENTICATION
   body: string;
   example?: string[]; // valores de ejemplo para {{1}}..{{n}}, en orden
+  footer?: string; // texto fijo, ≤60 chars, sin variables
+  quickReplyButtons?: string[]; // hasta 3 botones de respuesta rápida (postback, no URL)
 }): Promise<{ id?: string; status?: string; category?: string }> {
   const businessAccountId = requireEnv("WHATSAPP_BUSINESS_ACCOUNT_ID");
   const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
@@ -461,6 +463,19 @@ export async function createWhatsAppMessageTemplate(input: {
   const bodyComponent: Record<string, unknown> = { type: "BODY", text: input.body };
   if (input.example && input.example.length > 0) {
     bodyComponent.example = { body_text: [input.example] };
+  }
+
+  const components: Record<string, unknown>[] = [bodyComponent];
+
+  if (input.footer) {
+    components.push({ type: "FOOTER", text: input.footer });
+  }
+
+  if (input.quickReplyButtons && input.quickReplyButtons.length > 0) {
+    components.push({
+      type: "BUTTONS",
+      buttons: input.quickReplyButtons.map((text) => ({ type: "QUICK_REPLY", text }))
+    });
   }
 
   const response = await fetch(`https://graph.facebook.com/v20.0/${businessAccountId}/message_templates`, {
@@ -473,7 +488,7 @@ export async function createWhatsAppMessageTemplate(input: {
       name: input.name,
       language: input.language,
       category: input.category,
-      components: [bodyComponent]
+      components
     })
   });
 

@@ -43,7 +43,9 @@ export async function POST(request: NextRequest) {
         language: t.language,
         category: t.category,
         body: t.body,
-        example: t.example
+        example: t.example,
+        footer: t.footer,
+        quickReplyButtons: t.quickReplyButtons
       });
       templates.push({ name: t.name, ok: true, id: res.id, status: res.status });
     } catch (e) {

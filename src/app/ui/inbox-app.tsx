@@ -3912,8 +3912,54 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
   const [window24Saving, setWindow24Saving] = useState(false);
   const [window24Loaded, setWindow24Loaded] = useState(false);
   const [creatingReactivation, setCreatingReactivation] = useState(false);
+  const [reactivationCsv, setReactivationCsv] = useState("");
+  const [reactivationCsvName, setReactivationCsvName] = useState("");
+  const [reactivationSegment, setReactivationSegment] = useState<"a" | "b" | "c">("a");
+  const [reactivationLimit, setReactivationLimit] = useState(20);
+  const [reactivationPreview, setReactivationPreview] = useState<null | {
+    template: string;
+    totalEnCsv: number;
+    previstos: number;
+    aExcluirPorConversacionPrevia: number;
+    contactos: Array<{
+      nombre: string; whatsapp: string; email: string | null; uso: string; mensaje: string;
+      conversacionPrevia: boolean; ultimoContactoAt: string | null; incluido: boolean;
+    }>;
+  }>(null);
+  const [loadingReactivationPreview, setLoadingReactivationPreview] = useState(false);
   const [message, setMessage] = useState("");
   const isAdmin = currentUser.role === "admin";
+
+  function onReactivationCsvFile(file: File | null) {
+    if (!file) return;
+    setReactivationCsvName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => setReactivationCsv(String(reader.result ?? ""));
+    reader.readAsText(file);
+  }
+
+  async function loadReactivationPreview() {
+    setLoadingReactivationPreview(true);
+    setReactivationPreview(null);
+    setMessage("");
+    try {
+      const response = await fetch("/api/campaigns/reactivacion/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ csv: reactivationCsv, segment: reactivationSegment, offset: 0, limit: reactivationLimit, dryRun: true })
+      });
+      const payload = await readJsonResponse(response);
+      if (!response.ok) {
+        setMessage(payload?.error ?? "No pudimos armar la vista previa.");
+        return;
+      }
+      setReactivationPreview(payload);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Error al armar la vista previa.");
+    } finally {
+      setLoadingReactivationPreview(false);
+    }
+  }
 
   async function createReactivationTemplates() {
     setCreatingReactivation(true);
@@ -4602,6 +4648,87 @@ function TemplatesPanel({ currentUser }: { currentUser: AppUser }) {
               {importingTemplates ? "Importando" : "Importar lote"}
             </button>
           </div>
+
+          <div className="reactivation-dryrun-panel">
+            <h4>Campaña reactivación — vista previa (dry-run, no envía nada)</h4>
+            <p className="reactivation-dryrun-hint">
+              Subí el CSV que exportó DEV ADMIN (<code>scripts/reactivacion/A_cotizados_recientes.csv</code>,{" "}
+              <code>B_generales.csv</code> o <code>C_con_email.csv</code>) y elegí el segmento correspondiente para ver,
+              SIN mandar ningún mensaje, los contactos y el texto exacto que recibiría cada uno.
+            </p>
+            <div className="reactivation-dryrun-controls">
+              <label className="field">
+                Archivo CSV
+                <input type="file" accept=".csv" onChange={(e) => onReactivationCsvFile(e.target.files?.[0] ?? null)} />
+                {reactivationCsvName ? <small>{reactivationCsvName}</small> : null}
+              </label>
+              <label className="field">
+                Segmento
+                <select value={reactivationSegment} onChange={(e) => setReactivationSegment(e.target.value as "a" | "b" | "c")}>
+                  <option value="a">A — cotizados recientes (react_a_cotizados_0726)</option>
+                  <option value="b">B — generales (react_b_general_0726)</option>
+                  <option value="c">C — con email (react_c_email_0726)</option>
+                </select>
+              </label>
+              <label className="field">
+                Primeras N filas
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={reactivationLimit}
+                  onChange={(e) => setReactivationLimit(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
+                />
+              </label>
+              <button
+                className="primary compact"
+                type="button"
+                disabled={loadingReactivationPreview || !reactivationCsv.trim()}
+                onClick={() => void loadReactivationPreview()}
+              >
+                {loadingReactivationPreview ? "Cargando…" : "Vista previa"}
+              </button>
+            </div>
+
+            {reactivationPreview ? (
+              <div className="reactivation-dryrun-results">
+                <p>
+                  Plantilla <strong>{reactivationPreview.template}</strong> · CSV total {reactivationPreview.totalEnCsv} ·
+                  mostrando {reactivationPreview.previstos} · se excluirían por conversación WhatsApp reciente (
+                  &lt;45 días): <strong>{reactivationPreview.aExcluirPorConversacionPrevia}</strong>
+                </p>
+                <div className="reactivation-dryrun-table-wrap">
+                  <table className="reactivation-dryrun-table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>WhatsApp</th>
+                        <th>Email</th>
+                        <th>Uso</th>
+                        <th>Mensaje</th>
+                        <th>¿Incluido?</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reactivationPreview.contactos.map((c, i) => (
+                        <tr key={`${c.whatsapp}-${i}`} className={c.incluido ? "" : "is-excluded"}>
+                          <td>{c.nombre}</td>
+                          <td>{c.whatsapp}</td>
+                          <td>{c.email ?? "—"}</td>
+                          <td>{c.uso}</td>
+                          <td className="reactivation-dryrun-msg">{c.mensaje}</td>
+                          <td>
+                            {c.incluido ? "✅" : `❌ conversación previa${c.ultimoContactoAt ? ` (${c.ultimoContactoAt.slice(0, 10)})` : ""}`}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
           <form className="template-form" onSubmit={saveTemplate}>
             <div className="form-grid">
               <label className="field">

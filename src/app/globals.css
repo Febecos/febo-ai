@@ -1180,6 +1180,66 @@ button:disabled {
   margin-top: 12px;
 }
 
+.reactivation-dryrun-panel {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 16px 0;
+}
+
+.reactivation-dryrun-hint {
+  font-size: 12px;
+  opacity: 0.75;
+  margin: 4px 0 12px;
+  max-width: 720px;
+}
+
+.reactivation-dryrun-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.reactivation-dryrun-controls input[type="number"] {
+  width: 80px;
+}
+
+.reactivation-dryrun-results {
+  margin-top: 14px;
+}
+
+.reactivation-dryrun-table-wrap {
+  max-height: 480px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.reactivation-dryrun-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.reactivation-dryrun-table th,
+.reactivation-dryrun-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.reactivation-dryrun-table tr.is-excluded {
+  opacity: 0.55;
+}
+
+.reactivation-dryrun-msg {
+  max-width: 360px;
+  white-space: pre-wrap;
+}
+
 .user-card {
   border: 1px solid var(--line);
   border-radius: 8px;

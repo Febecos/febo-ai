@@ -2304,7 +2304,7 @@ export async function recordIncomingMessage(input: {
     upsertClienteUnificado({
       nombre: input.contactName ?? null,
       whatsapp: phone,
-      origen: "febo_ai"
+      origen: "febo-ai"
     }, contactId);
     // BUS DE EVENTOS (Pilar 2): nuevo lead entrante por WhatsApp.
     await emitEvento({
@@ -3413,7 +3413,7 @@ export async function updateContact(input: {
       localidad: input.afipData?.localidad ?? null,
       provincia: input.afipData?.provincia ?? null,
       cod_postal: input.afipData?.codigoPostal ?? null,
-      origen: "febo_ai"
+      origen: "febo-ai"
     }, saved.id);
   }
 
@@ -3468,7 +3468,7 @@ export async function saveDetectedContactData(input: {
       whatsapp: saved.phone,
       email: saved.email ?? null,
       cuit: saved.cuit ?? null,
-      origen: "febo_ai"
+      origen: "febo-ai"
     }, input.contactId);
     // BUS DE EVENTOS (Pilar 2): el cliente entregó datos fiscales (CUIT/email).
     await emitEvento({

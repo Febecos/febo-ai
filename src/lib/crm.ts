@@ -2297,11 +2297,14 @@ export async function recordIncomingMessage(input: {
   const isNewContact = contacts[0].is_new;
 
   // Volcar contacto nuevo a la base de clientes unificada (fire-and-forget, dedup por whatsapp).
-  // SIN `tipo`: un primer mensaje de WhatsApp es una CONSULTA, no una compra. El endpoint de
-  // Gestión default a 'contacto' (📇 no compró) en el insert; en updates no pisa el tipo real
-  // (COALESCE). "Cliente (compró)" lo determina Gestión con el flag ✓Compró (factura real).
+  // tipo='prospecto' (Guille aprobó el modelo 08/07, vía coordinador): un primer mensaje de
+  // WhatsApp es un PROSPECTO (contactado, aún no compró) — distinto de 'contacto' (genérico) y
+  // de 'cliente_final' (compra real, factura ✓Compró). La promoción a cliente_final la maneja
+  // GESTIÓN en la cadena de Ventas, nunca el intake de FEBO AI.
+  // ⚠️ NO DEPLOYAR hasta que Gestión confirme que el modelo/pantalla acepta 'prospecto'.
   if (isNewContact) {
     upsertClienteUnificado({
+      tipo: "prospecto",
       nombre: input.contactName ?? null,
       whatsapp: phone,
       origen: "febo-ai"

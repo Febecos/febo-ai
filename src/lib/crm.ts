@@ -2274,14 +2274,26 @@ export async function recordIncomingMessage(input: {
 
   const phone = normalizePhone(input.phone);
   const externalUserId = input.externalUserId ?? phone;
+
+  // Landing FEBOCASA (FV-hogar, casa.febecos.com): mismo número/flujo que Rodrigo, sin canal
+  // dedicado. El botón de WhatsApp de la landing manda el mensaje pre-cargado con el token
+  // [FEBOCASA] (spec Marketing 12/07, SPEC-LANDING-FEBOCASA.md v2) → si aparece en el primer
+  // mensaje, marcamos origen='fv-hogar' para medir el canal. Si el usuario edita el mensaje y
+  // borra el token, no hay forma de detectarlo (aceptado por Marketing: bajo volumen, se
+  // etiqueta a mano el huérfano). NO tocar el token sin avisar a Marketing.
+  const FEBOCASA_TOKEN = "[FEBOCASA]";
+  const fromFebocasa = input.text.includes(FEBOCASA_TOKEN);
+  const source = fromFebocasa ? "fv-hogar" : null;
+
   const contacts = (await sql`
-    insert into contacts (phone, account_id, external_user_id, display_name, platform, last_seen_at)
+    insert into contacts (phone, account_id, external_user_id, display_name, platform, source, last_seen_at)
     values (
       ${phone},
       (select id from channel_accounts where slug = ${accountSlug} limit 1),
       ${externalUserId},
       ${input.contactName ?? null},
       ${channel},
+      ${source},
       now()
     )
     on conflict (phone) do update
@@ -2289,6 +2301,7 @@ export async function recordIncomingMessage(input: {
         account_id = coalesce(contacts.account_id, excluded.account_id),
         external_user_id = coalesce(contacts.external_user_id, excluded.external_user_id),
         platform = coalesce(nullif(contacts.platform, ''), excluded.platform),
+        source = coalesce(contacts.source, excluded.source),
         last_seen_at = now(),
         updated_at = now()
     returning id, (xmax = 0) as is_new
@@ -2297,17 +2310,16 @@ export async function recordIncomingMessage(input: {
   const isNewContact = contacts[0].is_new;
 
   // Volcar contacto nuevo a la base de clientes unificada (fire-and-forget, dedup por whatsapp).
-  // tipo='prospecto' (Guille aprobó el modelo 08/07, vía coordinador): un primer mensaje de
-  // WhatsApp es un PROSPECTO (contactado, aún no compró) — distinto de 'contacto' (genérico) y
-  // de 'cliente_final' (compra real, factura ✓Compró). La promoción a cliente_final la maneja
-  // GESTIÓN en la cadena de Ventas, nunca el intake de FEBO AI.
-  // ⚠️ NO DEPLOYAR hasta que Gestión confirme que el modelo/pantalla acepta 'prospecto'.
+  // tipo='prospecto' (Guille aprobó el modelo 08/07, vía coordinador; guard de rank de ADMIN ya
+  // vive en Gestión): un primer mensaje de WhatsApp es un PROSPECTO (contactado, aún no compró)
+  // — distinto de 'contacto' (genérico) y de 'cliente_final' (compra real, factura ✓Compró). La
+  // promoción a cliente_final la maneja GESTIÓN en la cadena de Ventas, nunca el intake de FEBO AI.
   if (isNewContact) {
     upsertClienteUnificado({
       tipo: "prospecto",
       nombre: input.contactName ?? null,
       whatsapp: phone,
-      origen: "febo-ai"
+      origen: fromFebocasa ? "fv-hogar" : "febo-ai"
     }, contactId);
     // BUS DE EVENTOS (Pilar 2): nuevo lead entrante por WhatsApp.
     await emitEvento({

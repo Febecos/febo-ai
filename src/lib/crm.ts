@@ -1996,6 +1996,32 @@ async function getSystemAutomationUserId() {
 
 export async function listDueScheduledTemplateMessages(limit = 20) {
   const sql = getSql();
+
+  // Guard (bug real 12/07: seguimiento "Comparador" salió a un contacto que ya
+  // no tenía esa etiqueta y la conversación estaba cerrada). Un seguimiento
+  // programado por una regla de automatización (automation_rule_id) solo debe
+  // salir si, AL MOMENTO DE ENVIAR, el contacto SIGUE con la etiqueta (consultype)
+  // que disparó la regla, y la conversación no quedó cerrada/bloqueada/eliminada
+  // en el ínterin. Si cambió, se cancela en vez de mandar (no se re-evalúa: la
+  // etiqueta nueva no dispara la regla vieja sola, evita spam de una charla ya reencauzada).
+  await sql`
+    update scheduled_template_messages s
+    set status = 'cancelled',
+        updated_at = now(),
+        error = 'Cancelado automáticamente: la etiqueta del contacto o el estado de la conversación cambiaron antes del envío programado.'
+    where s.status = 'pending'
+      and s.scheduled_at <= now()
+      and s.automation_rule_id is not null
+      and exists (
+        select 1
+        from template_automation_rules r
+        join conversations c on c.id = s.conversation_id
+        join contacts ct on ct.id = c.contact_id
+        where r.id = s.automation_rule_id
+          and (ct.consultype is distinct from r.consultype or c.status in ('closed', 'lost', 'blocked', 'deleted'))
+      )
+  `;
+
   return (await sql`
     update scheduled_template_messages s
     set status = 'processing',

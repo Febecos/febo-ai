@@ -2335,19 +2335,14 @@ export async function recordIncomingMessage(input: {
   const contactId = contacts[0].id;
   const isNewContact = contacts[0].is_new;
 
-  // Volcar contacto nuevo a la base de clientes unificada (fire-and-forget, dedup por whatsapp).
-  // tipo='prospecto' (Guille aprobó el modelo 08/07, vía coordinador; guard de rank de ADMIN ya
-  // vive en Gestión): un primer mensaje de WhatsApp es un PROSPECTO (contactado, aún no compró)
-  // — distinto de 'contacto' (genérico) y de 'cliente_final' (compra real, factura ✓Compró). La
-  // promoción a cliente_final la maneja GESTIÓN en la cadena de Ventas, nunca el intake de FEBO AI.
+  // REGLA GUILLE (17/07, vía coordinador): el CRM central NO se completa con solo escribir.
+  // El primer mensaje de WhatsApp casi nunca trae email → YA NO se sube a `clientes` acá.
+  // El gate es el EMAIL (ver saveDetectedContactData/updateContact): sin mail, no se guarda en
+  // el CRM — sí queda registrada la conversación completa en las tablas propias de FEBO AI
+  // (contacts/messages), nada se pierde, solo no "asciende" al CRM hasta que deje el mail.
   if (isNewContact) {
-    upsertClienteUnificado({
-      tipo: "prospecto",
-      nombre: input.contactName ?? null,
-      whatsapp: phone,
-      origen: fromFebocasa ? "fv-hogar" : "febo-ai"
-    }, contactId);
-    // BUS DE EVENTOS (Pilar 2): nuevo lead entrante por WhatsApp.
+    // BUS DE EVENTOS (Pilar 2): nuevo lead entrante por WhatsApp (esto NO es el CRM central,
+    // es el bus propio — sigue emitiéndose siempre, con o sin email).
     await emitEvento({
       tipo: "lead.creado",
       entidad: "lead",
@@ -2490,14 +2485,10 @@ export async function recordSelectorCheckoutLead(input: SelectorCheckoutLead) {
   const contactId = contacts[0].id;
   const isNewSelectorContact = contacts[0].is_new;
 
-  // Volcar a la base de clientes unificada si es contacto nuevo. SIN `tipo` (ver nota arriba:
-  // consulta ≠ compra; Gestión default 'contacto' y determina 'cliente_final' por factura real).
-  if (isNewSelectorContact) {
-    upsertClienteUnificado({
-      whatsapp: phone,
-      origen: "selector"
-    }, contactId);
-  }
+  // REGLA GUILLE (17/07): sin email no se sube al CRM central (ver nota en recordIncomingMessage).
+  // `SelectorCheckoutLead` no trae email → ya no se pushea acá; el contacto queda igual
+  // registrado en las tablas propias de FEBO AI. Si más adelante el checkout del selector
+  // captura email, este es el lugar para retomar el push (gateado en ese campo).
 
   const existingConversation = (await sql`
     select id::text
@@ -3500,10 +3491,12 @@ export async function saveDetectedContactData(input: {
   `) as Array<{ phone: string | null; display_name: string | null; email: string | null; cuit: string | null }>;
 
   const saved = rows[0];
-  // Volcar al CRM unificado: cuando el cliente da datos fiscales (cuit/email) es el
-  // lead más caliente, debe quedar en clientes. Dedup server-side CUIT→email→whatsapp.
-  if (saved?.phone && (saved.email || saved.cuit)) {
-    // SIN `tipo`: dar CUIT/email es un lead caliente, no una compra confirmada.
+  // REGLA GUILLE (17/07, vía coordinador): el EMAIL es el gate para subir al CRM central — "si
+  // no pone mail, que no lo guarde el CRM". El CUIT se captura igual (arriba, columna local) y
+  // se manda junto si está, pero por sí solo NO dispara el upsert. Antes bastaba cuit O email;
+  // ahora requiere email sí o sí. No se pierde el lead: la conversación sigue en las tablas
+  // propias de FEBO AI aunque nunca dé el mail — solo no "asciende" al CRM central.
+  if (saved?.phone && saved.email) {
     const clienteId = await upsertClienteUnificado({
       nombre: saved.display_name ?? null,
       whatsapp: saved.phone,

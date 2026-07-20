@@ -6165,6 +6165,9 @@ function InboxList({
     }
   }
 
+  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? null;
+  const selectedTemplateExpectedParams = selectedTemplate ? new Set(selectedTemplate.body.match(/\{\{\d+\}\}/g) ?? []).size : 0;
+
   async function sendTemplateToSelected(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -7764,7 +7767,15 @@ function InboxList({
                   </div>
                   <label className="field">
                     Variables del body
-                    <textarea placeholder="Esta plantilla no requiere variables de body." value={templateParameters} onChange={(event) => setTemplateParameters(event.target.value)} />
+                    <textarea
+                      placeholder={
+                        selectedTemplateExpectedParams === 0
+                          ? "Esta plantilla no requiere variables de body."
+                          : `Esta plantilla espera ${selectedTemplateExpectedParams} variable(s): una por linea, en orden ({{1}}, {{2}}, ...).`
+                      }
+                      value={templateParameters}
+                      onChange={(event) => setTemplateParameters(event.target.value)}
+                    />
                   </label>
                   <fieldset className="template-delivery-options">
                     <legend>Entrega</legend>
@@ -7795,7 +7806,9 @@ function InboxList({
                     />
                     <small>Hora Argentina</small>
                   </fieldset>
-                  <div className="template-preview">Selecciona una plantilla para ver el contenido.</div>
+                  <div className="template-preview">
+                    {selectedTemplate ? selectedTemplate.body : "Selecciona una plantilla para ver el contenido."}
+                  </div>
                   <div className="template-warning">Recorda: Marketing requiere opt-in del contacto y se contabiliza como business-initiated si pasaron 24 h.</div>
                   <footer>
                     <button className="secondary" onClick={() => setTemplateComposerOpen(false)} type="button">Cancelar</button>

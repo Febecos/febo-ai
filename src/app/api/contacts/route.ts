@@ -126,7 +126,9 @@ export async function POST(request: NextRequest) {
         to: target.phone,
         name: template.name,
         languageCode: template.language_code,
-        bodyParameters: parsed.data.parameters
+        bodyParameters: parsed.data.parameters,
+        headerFormat: template.header_format,
+        headerMediaId: template.header_media_id
       });
 
       await recordManualOutboundMessage({

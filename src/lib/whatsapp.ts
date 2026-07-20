@@ -99,6 +99,8 @@ export type WhatsAppTemplateSummary = {
   category: string;
   body: string;
   active: boolean;
+  headerFormat: string | null;
+  headerMediaId: string | null;
 };
 
 type WhatsAppWebhookBody = {
@@ -157,7 +159,11 @@ type MetaTemplateResponse = {
     status?: string;
     components?: Array<{
       type?: string;
+      format?: string;
       text?: string;
+      example?: {
+        header_handle?: string[];
+      };
     }>;
   }>;
   paging?: {
@@ -425,6 +431,7 @@ export async function fetchWhatsAppMessageTemplates() {
       }
 
       const body = template.components?.find((component) => component.type === "BODY")?.text ?? "";
+      const header = template.components?.find((component) => component.type === "HEADER");
       const status = template.status?.toUpperCase() ?? "";
 
       templates.push({
@@ -433,7 +440,9 @@ export async function fetchWhatsAppMessageTemplates() {
         languageCode: template.language,
         category: (template.category ?? "utility").toLowerCase(),
         body,
-        active: status ? status === "APPROVED" : true
+        active: status ? status === "APPROVED" : true,
+        headerFormat: header?.format && header.format !== "TEXT" ? header.format : null,
+        headerMediaId: header?.example?.header_handle?.[0] ?? null
       });
     }
 
@@ -781,11 +790,16 @@ export async function sendWhatsAppSelectorFlow(input: {
 // template" aunque el valor sea correcto. Se detectan por formato y se mandan como date_time.
 const SPANISH_DATE_PARAM = /^\d{1,2} de (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/i;
 
+// Media type de Meta (IMAGE/VIDEO/DOCUMENT) -> nombre del objeto que espera el parametro de header.
+const HEADER_MEDIA_KEY: Record<string, string> = { IMAGE: "image", VIDEO: "video", DOCUMENT: "document" };
+
 export async function sendWhatsAppTemplate(input: {
   to: string;
   name: string;
   languageCode: string;
   bodyParameters?: string[];
+  headerFormat?: string | null;
+  headerMediaId?: string | null;
 }) {
   const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
   const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
@@ -795,6 +809,23 @@ export async function sendWhatsAppTemplate(input: {
       ? { type: "date_time", date_time: { fallback_value: trimmed } }
       : { type: "text", text: trimmed };
   });
+
+  const components: Record<string, unknown>[] = [];
+  const headerMediaKey = input.headerFormat ? HEADER_MEDIA_KEY[input.headerFormat] : undefined;
+
+  // Plantillas con imagen/video/documento en el header exigen ese parametro en cada envio,
+  // aunque el archivo sea siempre el mismo (no lo "recuerda" de cuando se aprobo la plantilla).
+  // Reusamos el media id que Meta devuelve como ejemplo de la plantilla aprobada.
+  if (headerMediaKey && input.headerMediaId) {
+    components.push({
+      type: "header",
+      parameters: [{ type: headerMediaKey, [headerMediaKey]: { id: input.headerMediaId } }]
+    });
+  }
+
+  if (parameters?.length) {
+    components.push({ type: "body", parameters });
+  }
 
   const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
     method: "POST",
@@ -812,16 +843,7 @@ export async function sendWhatsAppTemplate(input: {
         language: {
           code: input.languageCode
         },
-        ...(parameters?.length ?
-          {
-            components: [
-              {
-                type: "body",
-                parameters
-              }
-            ]
-          }
-        : {})
+        ...(components.length ? { components } : {})
       }
     })
   });

@@ -151,6 +151,8 @@ export type MessageTemplate = {
   category: string;
   body: string;
   active: boolean;
+  header_format: string | null;
+  header_media_id: string | null;
 };
 
 export type ScheduledTemplateMessage = {
@@ -163,6 +165,8 @@ export type ScheduledTemplateMessage = {
   template_language_code: string;
   template_body: string | null;
   template_category: string | null;
+  template_header_format: string | null;
+  template_header_media_id: string | null;
   phone: string;
   body_parameters: string[];
   scheduled_at: string;
@@ -1520,7 +1524,7 @@ export async function listMessageTemplates() {
 
   const sql = getSql();
   return (await sql`
-    select id::text, label, name, language_code, category, body, active
+    select id::text, label, name, language_code, category, body, active, header_format, header_media_id
     from message_templates
     order by active desc, label
   `) as MessageTemplate[];
@@ -1656,7 +1660,7 @@ export async function getMessageTemplate(templateId: string) {
 
   const sql = getSql();
   const rows = (await sql`
-    select id::text, label, name, language_code, category, body, active
+    select id::text, label, name, language_code, category, body, active, header_format, header_media_id
     from message_templates
     where id = ${templateId}
     limit 1
@@ -1673,11 +1677,13 @@ export async function upsertMessageTemplate(input: {
   category: string;
   body: string;
   active: boolean;
+  headerFormat?: string | null;
+  headerMediaId?: string | null;
 }) {
   const sql = getSql();
   const id = input.id || null;
   const rows = (await sql`
-    insert into message_templates (id, label, name, language_code, category, body, active)
+    insert into message_templates (id, label, name, language_code, category, body, active, header_format, header_media_id)
     values (
       coalesce(${id}::uuid, gen_random_uuid()),
       ${input.label},
@@ -1685,15 +1691,19 @@ export async function upsertMessageTemplate(input: {
       ${input.languageCode},
       ${input.category},
       ${input.body},
-      ${input.active}
+      ${input.active},
+      ${input.headerFormat ?? null},
+      ${input.headerMediaId ?? null}
     )
     on conflict (name, language_code) do update
     set label = excluded.label,
         category = excluded.category,
         body = excluded.body,
         active = excluded.active,
+        header_format = excluded.header_format,
+        header_media_id = excluded.header_media_id,
         updated_at = now()
-    returning id::text, label, name, language_code, category, body, active
+    returning id::text, label, name, language_code, category, body, active, header_format, header_media_id
   `) as MessageTemplate[];
 
   return rows[0];
@@ -1707,6 +1717,8 @@ export async function upsertMessageTemplates(
     category: string;
     body: string;
     active: boolean;
+    headerFormat?: string | null;
+    headerMediaId?: string | null;
   }>
 ) {
   const saved: MessageTemplate[] = [];
@@ -2055,6 +2067,8 @@ export async function listDueScheduledTemplateMessages(limit = 20) {
       (select language_code from message_templates where id = s.template_id) as template_language_code,
       (select body from message_templates where id = s.template_id) as template_body,
       (select category from message_templates where id = s.template_id) as template_category,
+      (select header_format from message_templates where id = s.template_id) as template_header_format,
+      (select header_media_id from message_templates where id = s.template_id) as template_header_media_id,
       (select full_name from app_users where id = s.created_by) as created_by_name
   `) as ScheduledTemplateMessage[];
 }

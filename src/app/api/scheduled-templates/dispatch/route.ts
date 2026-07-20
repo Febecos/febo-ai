@@ -44,7 +44,9 @@ export async function GET(request: NextRequest) {
           to: item.phone,
           name: item.template_name,
           languageCode: item.template_language_code,
-          bodyParameters: item.body_parameters
+          bodyParameters: item.body_parameters,
+          headerFormat: item.template_header_format,
+          headerMediaId: item.template_header_media_id
         });
         waMessageId = getSentMessageId(sent);
         bodyText = `Plantilla programada: ${item.template_label}`;

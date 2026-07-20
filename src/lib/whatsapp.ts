@@ -815,11 +815,13 @@ export async function sendWhatsAppTemplate(input: {
 
   // Plantillas con imagen/video/documento en el header exigen ese parametro en cada envio,
   // aunque el archivo sea siempre el mismo (no lo "recuerda" de cuando se aprobo la plantilla).
-  // Reusamos el media id que Meta devuelve como ejemplo de la plantilla aprobada.
+  // El "header_handle" que Meta devuelve como ejemplo de la plantilla aprobada es una URL
+  // publica (CDN), no un media id subido -> va en "link", no en "id" (id espera un numero,
+  // error #131009 / JSON schema si se manda como string ahi).
   if (headerMediaKey && input.headerMediaId) {
     components.push({
       type: "header",
-      parameters: [{ type: headerMediaKey, [headerMediaKey]: { id: input.headerMediaId } }]
+      parameters: [{ type: headerMediaKey, [headerMediaKey]: { link: input.headerMediaId } }]
     });
   }
 

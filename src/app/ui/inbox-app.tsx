@@ -6168,6 +6168,16 @@ function InboxList({
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? null;
   const selectedTemplateExpectedParams = selectedTemplate ? new Set(selectedTemplate.body.match(/\{\{\d+\}\}/g) ?? []).size : 0;
 
+  function getLastDayOfMonthEs() {
+    const now = new Date();
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const meses = [
+      "enero", "febrero", "marzo", "abril", "mayo", "junio",
+      "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+    ];
+    return `${lastDay.getDate()} de ${meses[lastDay.getMonth()]}`;
+  }
+
   async function sendTemplateToSelected(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -7776,6 +7786,16 @@ function InboxList({
                       value={templateParameters}
                       onChange={(event) => setTemplateParameters(event.target.value)}
                     />
+                    {selectedTemplateExpectedParams > 0 ? (
+                      <button
+                        className="secondary small"
+                        onClick={() => setTemplateParameters(getLastDayOfMonthEs())}
+                        title="Completa la variable con el ultimo dia del mes actual, ej: 30 de abril"
+                        type="button"
+                      >
+                        Autocompletar "hasta fin de mes"
+                      </button>
+                    ) : null}
                   </label>
                   <fieldset className="template-delivery-options">
                     <legend>Entrega</legend>

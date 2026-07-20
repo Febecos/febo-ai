@@ -775,6 +775,12 @@ export async function sendWhatsAppSelectorFlow(input: {
   return response.json();
 }
 
+// Fechas tipo "31 de julio" (ej. las que arma el boton "Autocompletar hasta fin de mes" del
+// inbox) se registran en Meta como variable de fecha, no de texto libre: mandarlas como
+// {type:"text"} da error #132012 "Parameter format does not match format in the created
+// template" aunque el valor sea correcto. Se detectan por formato y se mandan como date_time.
+const SPANISH_DATE_PARAM = /^\d{1,2} de (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/i;
+
 export async function sendWhatsAppTemplate(input: {
   to: string;
   name: string;
@@ -783,10 +789,12 @@ export async function sendWhatsAppTemplate(input: {
 }) {
   const phoneNumberId = requireEnv("WHATSAPP_PHONE_NUMBER_ID");
   const accessToken = requireEnv("WHATSAPP_ACCESS_TOKEN");
-  const parameters = input.bodyParameters?.filter((value) => value.trim()).map((value) => ({
-    type: "text",
-    text: value.trim()
-  }));
+  const parameters = input.bodyParameters?.filter((value) => value.trim()).map((value) => {
+    const trimmed = value.trim();
+    return SPANISH_DATE_PARAM.test(trimmed)
+      ? { type: "date_time", date_time: { fallback_value: trimmed } }
+      : { type: "text", text: trimmed };
+  });
 
   const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
     method: "POST",

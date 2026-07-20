@@ -1701,7 +1701,11 @@ export async function upsertMessageTemplate(input: {
         body = excluded.body,
         active = excluded.active,
         header_format = excluded.header_format,
-        header_media_id = excluded.header_media_id,
+        -- El link que devuelve Meta para el header (header_handle) es una URL firmada
+        -- y temporal: sirve para la vista previa pero falla (403) al reusarla en un envio
+        -- real. Una vez que alguien la reemplaza a mano por un link propio y estable, un
+        -- resync no debe volver a pisarla con el link efimero de Meta.
+        header_media_id = coalesce(message_templates.header_media_id, excluded.header_media_id),
         updated_at = now()
     returning id::text, label, name, language_code, category, body, active, header_format, header_media_id
   `) as MessageTemplate[];
